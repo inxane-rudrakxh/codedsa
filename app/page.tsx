@@ -188,7 +188,7 @@ export default function LoginPage() {
                   setError('');
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder="e.g. AD1354"
+                placeholder="AD1354"
                 autoFocus
                 style={{
                   width: '100%',
