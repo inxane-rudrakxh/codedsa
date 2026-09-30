@@ -154,8 +154,8 @@ export default function StudentsPage() {
           <p className="text-label" style={{ marginBottom: '16px' }}>Add Student</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '12px' }}>
             {[
-              { label: 'Roll No', key: 'roll_no', placeholder: '21' },
-              { label: 'Name', key: 'name', placeholder: 'STUDENT NAME' },
+              { label: 'Roll No', key: 'roll_no', placeholder: '' },
+              { label: 'Name', key: 'name', placeholder: '' },
             ].map(({ label, key, placeholder }) => (
               <div key={key}>
                 <p className="text-label" style={{ marginBottom: '4px' }}>{label}</p>
