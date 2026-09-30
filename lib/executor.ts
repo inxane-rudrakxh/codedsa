@@ -145,35 +145,7 @@ export function compareOutputs(actual: string, expected: string): boolean {
 }
 
 export function checkCodeLogic(code: string, questionId: number): { valid: boolean; reason?: string } {
-  // Remove comments and whitespace for easier analysis
-  const strippedCode = code.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '').toLowerCase();
-
-  switch (questionId) {
-    case 3: // Linear Search
-      if (!strippedCode.includes('for') && !strippedCode.includes('while')) {
-        return { valid: false, reason: 'Logic Error: Linear search requires a loop to iterate through the array.' };
-      }
-      if (!strippedCode.includes('==')) {
-        return { valid: false, reason: 'Logic Error: Linear search requires a comparison (==).' };
-      }
-      break;
-    case 4: // Binary Search
-      if (!strippedCode.includes('while') && !strippedCode.includes('for')) {
-        return { valid: false, reason: 'Logic Error: Binary search requires a loop to narrow the search space.' };
-      }
-      if (!strippedCode.includes('/2') && !strippedCode.includes('/ 2') && !strippedCode.includes('>>1') && !strippedCode.includes('>> 1')) {
-        return { valid: false, reason: 'Logic Error: Binary search must divide the search space by 2.' };
-      }
-      break;
-    case 5: // Bubble Sort
-    case 6: // Insertion Sort
-    case 7: // Selection Sort
-      // Sorting algorithms generally require nested loops (or at least loops + swaps)
-      if (!strippedCode.includes('for') && !strippedCode.includes('while')) {
-        return { valid: false, reason: 'Logic Error: Sorting requires loops to iterate through elements.' };
-      }
-      break;
-  }
+  // Logic checks disabled so any valid C++ code (even hello world) compiles and runs fully.
   return { valid: true };
 }
 
