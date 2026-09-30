@@ -1,0 +1,467 @@
+﻿Unit II – DSA 30 Marks Online Coding Test 
+Coding Questions 
+
+ 
+Q1. Array Operations – Insertion 
+Write a C++ program to perform insertion of an element at a specified position in an array. 
+ 
+Q2. Array Operations – Deletion 
+Write a C++ program to perform deletion of an element from a specified position in an array. 
+ 
+Q3. Linear Search 
+Write a C++ program to search for a given element in an array using Linear Search. 
+ 
+Q4. Binary Search 
+Write a C++ program to search for a given element in a sorted array using Binary Search. 
+ 
+Q5. Bubble Sort 
+Write a C++ program to sort the elements of an array in ascending order using Bubble Sort. 
+ 
+Q6. Insertion Sort 
+Write a C++ program to sort the elements of an array in ascending order using Insertion Sort. 
+ 
+Q7. Selection Sort 
+Write a C++ program to sort the elements of an array in ascending order using Selection Sort. 
+ 
+Q8. Array Statistics 
+Write a C++ program to find the sum, average, maximum and minimum elements of an array. 
+ 
+Q9. Duplicate Elements 
+Write a C++ program to identify and display duplicate elements in an array. 
+ 
+Online Coding Test – 30 Marks 
+The test consists of 30 marks. 
+There are 9 coding questions in the question bank. 
+Any 3 programs will appear on the student's screen. 
+Each program carries 10 marks. 
+Students must solve and execute all 3 programs. 
+Each successful code execution carries 10 marks. 
+Maximum marks = 30 marks. 
+The programs will be evaluated using test cases. 
+Students must write the programs in C++. 
+The questions may be different for different students. 
+The test duration can be set to 60 minutes. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+
+Q1. Array Operations – Insertion 
+#include <iostream> 
+using namespace std; 
+ 
+int main() 
+{ 
+    int a[100], n, pos, value;              // Declare array and variables 
+ 
+    cout << "Enter number of elements: "; 
+    cin >> n;                               // Read number of elements 
+ 
+    cout << "Enter array elements: "; 
+    for(int i = 0; i < n; i++) 
+    { 
+        cin >> a[i];                        // Read array element 
+    } 
+ 
+    cout << "Enter position: "; 
+    cin >> pos;                             // Read insertion position 
+ 
+    cout << "Enter element: "; 
+    cin >> value;                           // Read new element 
+ 
+    for(int i = n; i >= pos; i--) 
+    { 
+        a[i] = a[i - 1];                    // Shift elements to right 
+    } 
+ 
+    a[pos - 1] = value;                     // Insert new element 
+ 
+    n++;                                    // Increase array size 
+ 
+    cout << "Array after insertion: "; 
+ 
+    for(int i = 0; i < n; i++) 
+    { 
+        cout << a[i] << " ";                 // Display array 
+    } 
+ 
+    return 0; 
+} 
+ 
+ 
+
+
+
+Q2. Array Operations – Deletion 
+#include <iostream> 
+using namespace std; 
+ 
+int main() 
+{ 
+    int a[100], n, pos;                     // Declare array and variables 
+ 
+    cout << "Enter number of elements: "; 
+    cin >> n;                               // Read number of elements 
+ 
+    cout << "Enter array elements: "; 
+    for(int i = 0; i < n; i++) 
+    { 
+        cin >> a[i];                        // Read array element 
+    } 
+ 
+    cout << "Enter position to delete: "; 
+    cin >> pos;                             // Read deletion position 
+ 
+    for(int i = pos - 1; i < n - 1; i++) 
+    { 
+        a[i] = a[i + 1];                    // Shift elements to left 
+    } 
+ 
+    n--;                                    // Decrease array size 
+ 
+    cout << "Array after deletion: "; 
+ 
+    for(int i = 0; i < n; i++) 
+    { 
+        cout << a[i] << " ";                 // Display array 
+    } 
+ 
+    return 0; 
+} 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+
+Q3. Linear Search 
+#include <iostream> 
+using namespace std; 
+ 
+int main() 
+{ 
+    int a[100], n, key;                     // Declare array and variables 
+ 
+    cout << "Enter number of elements: "; 
+    cin >> n;                               // Read number of elements 
+ 
+    cout << "Enter array elements: "; 
+    for(int i = 0; i < n; i++) 
+    { 
+        cin >> a[i];                        // Read array element 
+    } 
+ 
+    cout << "Enter element to search: "; 
+    cin >> key;                             // Read search element 
+ 
+    for(int i = 0; i < n; i++) 
+    { 
+        if(a[i] == key)                     // Compare element with key 
+        { 
+            cout << "Element found at position " << i + 1; 
+            return 0;                       // Stop program 
+        } 
+    } 
+ 
+    cout << "Element not found.";           // Display if element is absent 
+ 
+    return 0; 
+} 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+
+
+Q4. Binary Search 
+#include <iostream> 
+using namespace std; 
+ 
+int main() 
+{ 
+    int a[100], n, key;                     // Declare array and variables 
+    int low, high, mid;                     // Declare search variables 
+ 
+    cout << "Enter number of elements: "; 
+    cin >> n;                               // Read number of elements 
+ 
+    cout << "Enter sorted array elements: "; 
+    for(int i = 0; i < n; i++) 
+    { 
+        cin >> a[i];                        // Read sorted array 
+    } 
+    cout << "Enter element to search: "; 
+    cin >> key;                             // Read search element 
+ 
+    low = 0;                                // Set first position 
+    high = n - 1;                           // Set last position 
+ 
+    while(low <= high)                      // Repeat while range is valid 
+    { 
+        mid = (low + high) / 2;             // Find middle position 
+ 
+        if(a[mid] == key)                   // Check middle element 
+        { 
+            cout << "Element found at position " << mid + 1; 
+            return 0;                       // Stop program 
+        } 
+        else if(key < a[mid])               // Check left half 
+        { 
+            high = mid - 1;                 // Move high to left 
+        } 
+        else                                // Search right half 
+        { 
+            low = mid + 1;                  // Move low to right 
+        } 
+    } 
+    cout << "Element not found.";           // Display if element is absent 
+    return 0; 
+} 
+
+
+
+Q5. Bubble Sort 
+#include <iostream> 
+using namespace std; 
+ 
+int main() 
+{ 
+    int a[100], n, temp;                    // Declare array and variables 
+ 
+    cout << "Enter number of elements: "; 
+    cin >> n;                               // Read number of elements 
+ 
+    cout << "Enter array elements: "; 
+    for(int i = 0; i < n; i++) 
+    { 
+        cin >> a[i];                        // Read array element 
+    } 
+ 
+    for(int i = 0; i < n - 1; i++)          // Repeat passes 
+    { 
+        for(int j = 0; j < n - i - 1; j++) // Compare adjacent elements 
+        { 
+            if(a[j] > a[j + 1])             // Check wrong order 
+            { 
+                temp = a[j];                // Store first element 
+                a[j] = a[j + 1];             // Move smaller element left 
+                a[j + 1] = temp;             // Move larger element right 
+            } 
+        } 
+    } 
+ 
+    cout << "Sorted array: "; 
+ 
+    for(int i = 0; i < n; i++) 
+    { 
+        cout << a[i] << " ";                // Display sorted array 
+    } 
+ 
+    return 0; 
+} 
+
+ 
+
+ 
+
+
+
+Q6. Insertion Sort 
+#include <iostream> 
+using namespace std; 
+ 
+int main() 
+{ 
+    int a[100], n, key, j;                  // Declare array and variables 
+ 
+    cout << "Enter number of elements: "; 
+    cin >> n;                               // Read number of elements 
+ 
+    cout << "Enter array elements: "; 
+    for(int i = 0; i < n; i++) 
+    { 
+        cin >> a[i];                        // Read array element 
+    } 
+ 
+    for(int i = 1; i < n; i++)              // Start from second element 
+    { 
+        key = a[i];                         // Store current element 
+        j = i - 1;                          // Set previous position 
+ 
+        while(j >= 0 && a[j] > key)         // Check larger elements 
+        { 
+            a[j + 1] = a[j];                // Shift element to right 
+            j--;                             // Move to previous element 
+        } 
+ 
+        a[j + 1] = key;                     // Insert key at correct position 
+    } 
+ 
+    cout << "Sorted array: "; 
+ 
+    for(int i = 0; i < n; i++) 
+    { 
+        cout << a[i] << " ";                // Display sorted array 
+    } 
+ 
+    return 0; 
+} 
+ 
+ 
+ 
+
+
+
+Q7. Selection Sort 
+#include <iostream> 
+using namespace std; 
+ 
+int main() 
+{ 
+    int a[100], n, min, temp;               // Declare array and variables 
+ 
+    cout << "Enter number of elements: "; 
+    cin >> n;                               // Read number of elements 
+ 
+    cout << "Enter array elements: "; 
+    for(int i = 0; i < n; i++) 
+    { 
+        cin >> a[i];                        // Read array element 
+    } 
+ 
+    for(int i = 0; i < n - 1; i++)          // Select each position 
+    { 
+        min = i;                            // Assume current element is minimum 
+ 
+        for(int j = i + 1; j < n; j++)      // Search remaining elements 
+        { 
+            if(a[j] < a[min])               // Check for smaller element 
+            { 
+                min = j;                    // Store minimum position 
+            } 
+        } 
+ 
+        temp = a[i];                        // Store current element 
+        a[i] = a[min];                      // Put minimum at current position 
+        a[min] = temp;                      // Put current element at minimum position 
+    } 
+ 
+    cout << "Sorted array: "; 
+ 
+    for(int i = 0; i < n; i++) 
+    { 
+        cout << a[i] << " ";                // Display sorted array 
+    } 
+ 
+    return 0; 
+} 
+
+
+
+Q8. Array Statistics 
+#include <iostream> 
+using namespace std; 
+ 
+int main() 
+{ 
+    int a[100], n;                          // Declare array and size 
+    int sum = 0, max, min;                  // Declare sum, maximum and minimum 
+    float average;                          // Declare average 
+ 
+    cout << "Enter number of elements: "; 
+    cin >> n;                               // Read number of elements 
+    cout << "Enter array elements: "; 
+    for(int i = 0; i < n; i++) 
+    { 
+        cin >> a[i];                        // Read array element 
+    } 
+ 
+    max = a[0];                             // Assume first element as maximum 
+    min = a[0];                             // Assume first element as minimum 
+ 
+    for(int i = 0; i < n; i++) 
+    { 
+        sum = sum + a[i];                   // Calculate sum 
+ 
+        if(a[i] > max)                      // Check maximum 
+        { 
+            max = a[i];                     // Update maximum 
+        } 
+ 
+        if(a[i] < min)                      // Check minimum 
+        { 
+            min = a[i];                     // Update minimum 
+        } 
+    } 
+ 
+    average = (float)sum / n;               // Calculate average 
+ 
+    cout << "\nSum = " << sum;              // Display sum 
+    cout << "\nAverage = " << average;      // Display average 
+    cout << "\nMaximum = " << max;          // Display maximum 
+    cout << "\nMinimum = " << min;          // Display minimum 
+    return 0; 
+} 
+
+
+
+Q9. Duplicate Elements 
+#include <iostream> 
+using namespace std; 
+ 
+int main() 
+{ 
+    int a[100], n;                          // Declare array and size 
+    bool found = false;                     // Track duplicate element 
+ 
+    cout << "Enter number of elements: "; 
+    cin >> n;                               // Read number of elements 
+ 
+    cout << "Enter array elements: "; 
+    for(int i = 0; i < n; i++) 
+    { 
+        cin >> a[i];                        // Read array element 
+    } 
+ 
+    cout << "Duplicate elements: "; 
+ 
+    for(int i = 0; i < n; i++)              // Select each element 
+    { 
+        for(int j = i + 1; j < n; j++)      // Compare with next elements 
+        { 
+            if(a[i] == a[j])                // Check duplicate 
+            { 
+                cout << a[i] << " ";        // Display duplicate 
+                found = true;               // Mark duplicate found 
+                break;                      // Stop checking current element 
+            } 
+        } 
+    } 
+ 
+    if(found == false)                       // Check if no duplicate found 
+    { 
+        cout << "No duplicate elements";     // Display message 
+    } 
+ 
+    return 0; 
+}
