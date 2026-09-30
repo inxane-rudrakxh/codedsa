@@ -42,6 +42,11 @@ interface SessionData {
     is_submitted: number;
     remaining_seconds: number;
     integrity_warnings: number;
+    is_demo?: boolean;
+    demo_config?: {
+      demo_rolls: string[];
+      questions: Record<string, { keyword: string; solution: string; delay: number }>;
+    };
   };
   student: { roll_no: string; name: string; division: string };
   questions: Question[];
@@ -57,6 +62,21 @@ int main() {
     
     return 0;
 }`;
+
+const demoBtnStyle = {
+  padding: '6px 12px',
+  background: 'transparent',
+  border: '1px solid var(--border)',
+  borderRadius: '3px',
+  color: 'var(--text-secondary)',
+  fontSize: '10px',
+  fontWeight: 600,
+  letterSpacing: '0.05em',
+  textTransform: 'uppercase' as const,
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
+  fontFamily: 'inherit',
+};
 
 export default function WorkspacePage() {
   const router = useRouter();
@@ -80,6 +100,12 @@ export default function WorkspacePage() {
   const [consoleOpen, setConsoleOpen] = useState(true);
   const [submitScores, setSubmitScores] = useState<Record<number, number>>({});
   const [showFinalScreen, setShowFinalScreen] = useState(false);
+  
+  // Demo Mode State
+  const [demoActive, setDemoActive] = useState(false);
+  const [demoCode, setDemoCode] = useState('');
+  const [demoPlaying, setDemoPlaying] = useState(false);
+  const [demoIndex, setDemoIndex] = useState(0);
 
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const tokenRef = useRef<string>('');
@@ -132,6 +158,35 @@ export default function WorkspacePage() {
       })
       .catch(() => router.push('/'));
   }, [router]);
+
+  // Handle active question change
+  useEffect(() => {
+    setDemoActive(false);
+    setDemoPlaying(false);
+    setDemoCode('');
+    setDemoIndex(0);
+  }, [activeQuestion]);
+
+  // Demo playback loop
+  useEffect(() => {
+    if (!demoActive || !demoPlaying || !sessionData?.session.demo_config) return;
+    const currentQuestion = sessionData.questions[activeQuestion];
+    const demoSetup = sessionData.session.demo_config.questions[currentQuestion.id];
+    if (!demoSetup) return;
+
+    const solutionLines = demoSetup.solution.split('\n');
+    if (demoIndex >= solutionLines.length) {
+      setDemoPlaying(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setDemoCode(prev => prev + (prev ? '\n' : '') + solutionLines[demoIndex]);
+      setDemoIndex(prev => prev + 1);
+    }, demoSetup.delay || 500);
+
+    return () => clearTimeout(timer);
+  }, [demoActive, demoPlaying, demoIndex, sessionData, activeQuestion]);
 
   // Timer countdown
   useEffect(() => {
@@ -536,9 +591,29 @@ export default function WorkspacePage() {
                       height="100%"
                       language="cpp"
                       theme="vs-dark"
-                      value={codes[currentQuestion.id] || STARTER_CODE}
+                      value={demoActive ? demoCode : (codes[currentQuestion.id] || STARTER_CODE)}
                       onChange={(val) => {
                         if (isSubmitted) return;
+                        
+                        // Demo Mode intercept
+                        if (sessionData?.session.is_demo && sessionData.session.demo_config) {
+                          const demoSetup = sessionData.session.demo_config.questions[currentQuestion.id];
+                          if (demoSetup && val?.trim() === demoSetup.keyword) {
+                            setDemoActive(true);
+                            setDemoPlaying(true);
+                            setDemoCode('');
+                            setDemoIndex(0);
+                            return;
+                          }
+                        }
+
+                        if (demoActive) {
+                          // Allow editing demo code? Or just disable it?
+                          // The user shouldn't edit during playback, but if they do, we can just update demoCode.
+                          setDemoCode(val || '');
+                          return;
+                        }
+
                         setCodes(prev => ({ ...prev, [currentQuestion.id]: val || '' }));
                       }}
                       options={{
@@ -584,53 +659,78 @@ export default function WorkspacePage() {
                       background: 'var(--surface-1)',
                       flexShrink: 0,
                     }}>
-                      <button
-                        id="run-code-btn"
-                        onClick={handleRunCode}
-                        disabled={running || submitting}
-                        style={{
-                          padding: '8px 20px',
-                          background: 'transparent',
-                          border: '1px solid var(--border)',
-                          borderRadius: '3px',
-                          color: running ? 'var(--text-muted)' : 'var(--text-secondary)',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          letterSpacing: '0.10em',
-                          textTransform: 'uppercase',
-                          cursor: running ? 'not-allowed' : 'pointer',
-                          transition: 'all 0.15s ease',
-                          fontFamily: 'inherit',
-                        }}
-                      >
-                        {running ? '◌ Running...' : '▷ Run Code'}
-                      </button>
+                      {demoActive ? (
+                        <>
+                          <div style={{ padding: '4px 8px', background: 'var(--accent)', color: 'white', fontSize: '10px', fontWeight: 700, borderRadius: '2px', letterSpacing: '0.05em' }}>
+                            DEMO MODE — SOLUTION PREVIEW
+                          </div>
+                          <button onClick={() => setDemoPlaying(p => !p)} style={demoBtnStyle}>
+                            {demoPlaying ? 'Pause' : 'Play'}
+                          </button>
+                          <button onClick={() => { setDemoCode(''); setDemoIndex(0); setDemoPlaying(true); }} style={demoBtnStyle}>
+                            Replay
+                          </button>
+                          <button onClick={() => { 
+                            const demoSetup = sessionData.session.demo_config?.questions[currentQuestion.id];
+                            if(demoSetup) { setDemoCode(demoSetup.solution); setDemoIndex(demoSetup.solution.split('\n').length); setDemoPlaying(false); }
+                          }} style={demoBtnStyle}>
+                            Show Complete
+                          </button>
+                          <button onClick={() => setDemoActive(false)} style={{...demoBtnStyle, marginLeft: 'auto', border: '1px solid var(--error)', color: 'var(--error)'}}>
+                            Exit Demo
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            id="run-code-btn"
+                            onClick={handleRunCode}
+                            disabled={running || submitting}
+                            style={{
+                              padding: '8px 20px',
+                              background: 'transparent',
+                              border: '1px solid var(--border)',
+                              borderRadius: '3px',
+                              color: running ? 'var(--text-muted)' : 'var(--text-secondary)',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              letterSpacing: '0.10em',
+                              textTransform: 'uppercase',
+                              cursor: running ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.15s ease',
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            {running ? '◌ Running...' : '▷ Run Code'}
+                          </button>
 
-                      <button
-                        id="submit-btn"
-                        onClick={() => setShowSubmitConfirm(true)}
-                        disabled={submitting || running}
-                        style={{
-                          padding: '8px 20px',
-                          background: submitting ? 'var(--surface-2)' : 'var(--accent)',
-                          border: '1px solid transparent',
-                          borderRadius: '3px',
-                          color: submitting ? 'var(--text-muted)' : '#fff',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          letterSpacing: '0.10em',
-                          textTransform: 'uppercase',
-                          cursor: submitting ? 'not-allowed' : 'pointer',
-                          transition: 'all 0.15s ease',
-                          fontFamily: 'inherit',
-                        }}
-                      >
-                        {submitting ? 'Submitting...' : 'Submit'}
-                      </button>
+                          <button
+                            id="submit-btn"
+                            onClick={() => setShowSubmitConfirm(true)}
+                            disabled={submitting || running}
+                            style={{
+                              padding: '8px 20px',
+                              background: submitting ? 'var(--surface-2)' : 'var(--accent)',
+                              border: '1px solid transparent',
+                              borderRadius: '3px',
+                              color: submitting ? 'var(--text-muted)' : '#fff',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              letterSpacing: '0.10em',
+                              textTransform: 'uppercase',
+                              cursor: submitting ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.15s ease',
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            {submitting ? 'Submitting...' : 'Submit'}
+                          </button>
 
-                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                        Ctrl+Enter to run
-                      </span>
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                            Ctrl+Enter to run
+                          </span>
+                        </>
+                      )}
                     </div>
                   )}
 

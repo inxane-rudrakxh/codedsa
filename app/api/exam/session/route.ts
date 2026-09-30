@@ -73,10 +73,26 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // Get demo config
+  const { data: demoSetting } = await supabase.from('settings').select('value').eq('key', 'demo_config').maybeSingle();
+  let demoConfig = null;
+  let isDemo = false;
+  if (demoSetting?.value) {
+    try {
+      const parsed = JSON.parse(demoSetting.value);
+      if (parsed.demo_rolls && parsed.demo_rolls.includes(student?.roll_no)) {
+        isDemo = true;
+        demoConfig = parsed;
+      }
+    } catch (e) {}
+  }
+
   return NextResponse.json({
     session: {
       ...session,
       remaining_seconds: Math.floor(remaining),
+      is_demo: isDemo,
+      demo_config: demoConfig
     },
     student,
     questions: formattedQuestions,
