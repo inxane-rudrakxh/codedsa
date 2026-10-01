@@ -159,6 +159,26 @@ export default function WorkspacePage() {
       .catch(() => router.push('/'));
   }, [router]);
 
+  // Anti-Cheat Tab Warning
+  const [showWarning, setShowWarning] = useState(false);
+  useEffect(() => {
+    if (demoActive) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setWarningCount(prev => prev + 1);
+        setShowWarning(true);
+        const token = localStorage.getItem('session_token');
+        if (token) {
+          fetch('/api/exam/warning', { method: 'POST' }).catch(console.error);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [demoActive]);
+
   // Handle active question change
   useEffect(() => {
     setDemoActive(false);
@@ -755,6 +775,62 @@ export default function WorkspacePage() {
           onConfirm={handleSubmitQuestion}
           questionTitle={currentQuestion?.title || ''}
         />
+      )}
+
+      {/* Anti-Cheat Warning Modal */}
+      {showWarning && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          backdropFilter: 'blur(4px)',
+        }}>
+          <div className="animate-fade-up" style={{
+            background: 'var(--surface-1)',
+            border: '1px solid var(--error)',
+            padding: '32px',
+            borderRadius: '8px',
+            maxWidth: '400px',
+            width: '100%',
+            boxShadow: '0 10px 30px rgba(239, 68, 68, 0.2)',
+          }}>
+            <h3 style={{
+              color: 'var(--error)',
+              fontSize: '20px',
+              fontWeight: 600,
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <span style={{ fontSize: '24px' }}>⚠️</span> Integrity Warning
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6, marginBottom: '24px' }}>
+              We detected that you switched tabs or left the exam window. This activity has been recorded.
+              Repeated violations may result in automatic exam failure.
+            </p>
+            <button
+              onClick={() => setShowWarning(false)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                background: 'var(--error)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                letterSpacing: '0.05em'
+              }}
+            >
+              I Understand
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

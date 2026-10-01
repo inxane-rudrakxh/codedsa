@@ -100,13 +100,16 @@ export function compareOutputs(actual: string, expected: string): boolean {
   // Fallback 1: Substring match (ignoring exact formatting)
   if (normActual.includes(normExpected)) return true;
 
-  // Fallback 2: Token sequence matching
-  // This allows students to print arbitrary prompts like "Enter array: " before the output
-  const actualTokens = normActual.split(/\s+/).filter(Boolean);
-  const expectedTokens = normExpected.split(/\s+/).filter(Boolean);
+  // Helper to extract only alphanumeric words
+  const extractAlphanumeric = (str: string) => 
+    str.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+
+  const actualTokens = extractAlphanumeric(normActual);
+  const expectedTokens = extractAlphanumeric(normExpected);
 
   if (expectedTokens.length === 0) return false;
 
+  // Fallback 2: Token sequence matching (ignoring punctuation and case)
   for (let i = 0; i <= actualTokens.length - expectedTokens.length; i++) {
     let match = true;
     for (let j = 0; j < expectedTokens.length; j++) {
@@ -118,20 +121,32 @@ export function compareOutputs(actual: string, expected: string): boolean {
     if (match) return true;
   }
 
-  // Fallback 3: Numeric-only subsequence matching (for when words are mixed in)
+  // Fallback 3: Subsequence matching (allows extra words in between)
+  // e.g., Expected: "found 5", Actual: "element is found at position 5"
+  let expectedIndex = 0;
+  for (let i = 0; i < actualTokens.length; i++) {
+    if (actualTokens[i] === expectedTokens[expectedIndex]) {
+      expectedIndex++;
+      if (expectedIndex === expectedTokens.length) {
+        return true; // All expected tokens found in order
+      }
+    }
+  }
+
+  // Fallback 4: Numeric-only subsequence matching (for when words are completely different but math is right)
   const isNumeric = (str: string) => /^-?\d+(\.\d+)?$/.test(str);
-  if (expectedTokens.every(isNumeric)) {
+  const expectedNums = expectedTokens.filter(isNumeric);
+  
+  if (expectedNums.length > 0) {
     const actualNums = actualTokens.filter(isNumeric);
-    for (let i = 0; i <= actualNums.length - expectedTokens.length; i++) {
-      let match = true;
-      for (let j = 0; j < expectedTokens.length; j++) {
-        // Compare mathematically if possible to handle 2.80 vs 2.8
-        if (parseFloat(actualNums[i + j]) !== parseFloat(expectedTokens[j])) {
-          match = false;
-          break;
+    let numIndex = 0;
+    for (let i = 0; i < actualNums.length; i++) {
+      if (parseFloat(actualNums[i]) === parseFloat(expectedNums[numIndex])) {
+        numIndex++;
+        if (numIndex === expectedNums.length) {
+          return true;
         }
       }
-      if (match) return true;
     }
   }
 
