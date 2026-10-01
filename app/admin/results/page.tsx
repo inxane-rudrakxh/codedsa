@@ -12,6 +12,9 @@ interface ResultRow {
   q1_score: number | null;
   q2_score: number | null;
   q3_score: number | null;
+  q1_code: string | null;
+  q2_code: string | null;
+  q3_code: string | null;
   total_score: number;
   end_time: string | null;
   is_submitted: number | null;
@@ -24,6 +27,7 @@ export default function ResultsPage() {
   const [divFilter, setDivFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'roll' | 'score'>('roll');
+  const [selectedCode, setSelectedCode] = useState<{name: string, q: number, code: string} | null>(null);
 
   const getToken = () => localStorage.getItem('admin_token') || '';
 
@@ -164,15 +168,32 @@ export default function ResultsPage() {
                     <td style={tdStyle}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>{r.roll_no}</span></td>
                     <td style={tdStyle}><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.name}</span></td>
                     <td style={tdStyle}><span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{r.division}</span></td>
-                    {[r.q1_score, r.q2_score, r.q3_score].map((score, si) => (
+                    {[
+                      { score: r.q1_score, code: r.q1_code, idx: 1 },
+                      { score: r.q2_score, code: r.q2_code, idx: 2 },
+                      { score: r.q3_score, code: r.q3_code, idx: 3 },
+                    ].map((item, si) => (
                       <td key={si} style={tdStyle}>
-                        <span style={{
-                          fontFamily: 'JetBrains Mono, monospace',
-                          fontSize: '13px',
-                          color: score !== null ? (score >= 8 ? 'var(--success)' : score >= 5 ? 'var(--warning)' : 'var(--error)') : 'var(--text-muted)',
-                        }}>
-                          {score !== null ? score : '—'}
-                        </span>
+                        {item.score !== null ? (
+                          <button
+                            onClick={() => setSelectedCode({ name: r.name, q: item.idx, code: item.code || '' })}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: '13px',
+                              color: item.score >= 8 ? 'var(--success)' : item.score >= 5 ? 'var(--warning)' : 'var(--error)',
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                              textDecorationStyle: 'dotted',
+                              textUnderlineOffset: '4px',
+                            }}
+                          >
+                            {item.score}
+                          </button>
+                        ) : (
+                          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', color: 'var(--text-muted)' }}>—</span>
+                        )}
                       </td>
                     ))}
                     <td style={tdStyle}>
@@ -195,6 +216,68 @@ export default function ResultsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Code Viewer Modal */}
+      {selectedCode && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          backdropFilter: 'blur(4px)',
+          padding: '20px',
+        }}>
+          <div className="animate-fade-up" style={{
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            width: '100%',
+            maxWidth: '800px',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            <div style={{
+              padding: '16px 24px',
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <h3 style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600 }}>
+                {selectedCode.name} - Question {selectedCode.q}
+              </h3>
+              <button
+                onClick={() => setSelectedCode(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ padding: '24px', overflow: 'auto', flex: 1, background: '#0d1117' }}>
+              <pre style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '13px',
+                color: '#c9d1d9',
+                margin: 0,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}>
+                {selectedCode.code || '// No code submitted'}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

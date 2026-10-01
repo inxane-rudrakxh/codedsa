@@ -25,6 +25,9 @@ export async function GET(request: NextRequest) {
     let q1_score = null;
     let q2_score = null;
     let q3_score = null;
+    let q1_code = null;
+    let q2_code = null;
+    let q3_code = null;
 
     if (session) {
       const sessionAssigned = assigned?.filter(a => a.session_id === session.id) || [];
@@ -36,15 +39,15 @@ export async function GET(request: NextRequest) {
 
       if (aq1) {
         const sub1 = sessionSubmissions.find(s => s.question_id === aq1.question_id);
-        if (sub1) q1_score = sub1.score;
+        if (sub1) { q1_score = sub1.score; q1_code = sub1.code; }
       }
       if (aq2) {
         const sub2 = sessionSubmissions.find(s => s.question_id === aq2.question_id);
-        if (sub2) q2_score = sub2.score;
+        if (sub2) { q2_score = sub2.score; q2_code = sub2.code; }
       }
       if (aq3) {
         const sub3 = sessionSubmissions.find(s => s.question_id === aq3.question_id);
-        if (sub3) q3_score = sub3.score;
+        if (sub3) { q3_score = sub3.score; q3_code = sub3.code; }
       }
     }
 
@@ -63,6 +66,9 @@ export async function GET(request: NextRequest) {
       q1_score,
       q2_score,
       q3_score,
+      q1_code,
+      q2_code,
+      q3_code,
       total_score
     };
   });
