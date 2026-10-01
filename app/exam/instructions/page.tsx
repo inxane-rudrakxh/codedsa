@@ -7,6 +7,7 @@ export default function InstructionsPage() {
   const router = useRouter();
   const [checked, setChecked] = useState(false);
   const [studentName, setStudentName] = useState('');
+  const [sessionStatus, setSessionStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('session_token');
@@ -14,24 +15,36 @@ export default function InstructionsPage() {
       router.push('/');
       return;
     }
-    // Fetch session to show student name
-    fetch('/api/exam/session', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.student) setStudentName(data.student.name);
-        if (!data.session || data.session.status === 'expired') router.push('/');
-        // Redirect to workspace if already started
-        if (data.submissions && Object.keys(data.submissions).length > 0) {
-          // Still allow going to workspace
-        }
+
+    const checkSession = () => {
+      fetch('/api/exam/session', {
+        headers: { Authorization: `Bearer ${token}` },
       })
-      .catch(() => router.push('/'));
+        .then(r => r.json())
+        .then(data => {
+          if (data.student) setStudentName(data.student.name);
+          if (!data.session || data.session.status === 'expired') {
+            router.push('/');
+            return;
+          }
+          setSessionStatus(data.session.status);
+          
+          if (data.submissions && Object.keys(data.submissions).length > 0) {
+            // Still allow going to workspace if they already started
+          }
+        })
+        .catch(() => router.push('/'));
+    };
+
+    checkSession();
+    const interval = setInterval(checkSession, 3000);
+    return () => clearInterval(interval);
   }, [router]);
 
   const handleStart = () => {
-    router.push('/exam/workspace');
+    if (sessionStatus === 'active') {
+      router.push('/exam/workspace');
+    }
   };
 
   return (
@@ -190,27 +203,68 @@ export default function InstructionsPage() {
             </span>
           </label>
 
-          <button
-            id="begin-exam-btn"
-            onClick={handleStart}
-            disabled={!checked}
-            style={{
+          {sessionStatus === 'pending_approval' ? (
+            <div style={{
               width: '100%',
               padding: '15px',
-              background: checked ? 'var(--text-primary)' : 'var(--surface-2)',
-              border: '1px solid transparent',
+              background: 'var(--warning-dim)',
+              border: '1px solid var(--warning)',
               borderRadius: '4px',
-              color: checked ? 'var(--bg)' : 'var(--text-muted)',
-              fontSize: '12px',
-              fontWeight: 600,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              cursor: checked ? 'pointer' : 'not-allowed',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            Begin Exam
-          </button>
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+            }}>
+              <span className="spinner" style={{
+                width: '20px',
+                height: '20px',
+                border: '2px solid var(--warning)',
+                borderTopColor: 'transparent',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }}></span>
+              <style>{`
+                @keyframes spin {
+                  to { transform: rotate(360deg); }
+                }
+              `}</style>
+              <span style={{
+                color: 'var(--warning)',
+                fontSize: '12px',
+                fontWeight: 600,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+              }}>
+                Waiting for Admin Approval...
+              </span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Please wait in this lobby. The exam will start automatically.
+              </span>
+            </div>
+          ) : (
+            <button
+              id="begin-exam-btn"
+              onClick={handleStart}
+              disabled={!checked}
+              style={{
+                width: '100%',
+                padding: '15px',
+                background: checked ? 'var(--text-primary)' : 'var(--surface-2)',
+                border: '1px solid transparent',
+                borderRadius: '4px',
+                color: checked ? 'var(--bg)' : 'var(--text-muted)',
+                fontSize: '12px',
+                fontWeight: 600,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                cursor: checked ? 'pointer' : 'not-allowed',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              Begin Exam
+            </button>
+          )}
         </div>
       </div>
     </main>

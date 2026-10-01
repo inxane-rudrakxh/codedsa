@@ -6,7 +6,9 @@ interface DashboardData {
   total_students: number;
   started: number;
   submitted: number;
+  pending_requests: number;
   active_sessions: Array<{
+    session_id: string;
     roll_no: string;
     name: string;
     division: string;
@@ -45,6 +47,19 @@ export default function AdminDashboard() {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
+  const handleAction = async (sessionId: string, action: 'approve' | 'reject') => {
+    const token = localStorage.getItem('admin_token');
+    await fetch('/api/admin/approve', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}` 
+      },
+      body: JSON.stringify({ session_id: sessionId, action })
+    });
+    fetchData(); // Refresh immediately
+  };
+
   if (loading) {
     return <LoadingState />;
   }
@@ -61,7 +76,7 @@ export default function AdminDashboard() {
       {/* Stats */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '1px',
         background: 'var(--border)',
         border: '1px solid var(--border)',
@@ -71,6 +86,7 @@ export default function AdminDashboard() {
       }}>
         {[
           { label: 'Registered', value: data?.total_students || 0, color: 'var(--text-primary)' },
+          { label: 'Pending Approval', value: data?.pending_requests || 0, color: 'var(--warning)' },
           { label: 'Started', value: data?.started || 0, color: 'var(--accent)' },
           { label: 'Submitted', value: data?.submitted || 0, color: 'var(--success)' },
         ].map(({ label, value, color }) => (
@@ -173,7 +189,12 @@ export default function AdminDashboard() {
                     </span>
                   </td>
                   <td style={tdStyle}>
-                    <StatusPill status={session.status} />
+                    <StatusPill 
+                      status={session.status} 
+                      sessionId={session.session_id}
+                      onApprove={(id) => handleAction(id, 'approve')}
+                      onReject={(id) => handleAction(id, 'reject')}
+                    />
                   </td>
                 </tr>
               ))}
@@ -185,11 +206,51 @@ export default function AdminDashboard() {
   );
 }
 
-function StatusPill({ status }: { status: string }) {
+function StatusPill({ status, sessionId, onApprove, onReject }: { status: string, sessionId?: string, onApprove?: (id: string) => void, onReject?: (id: string) => void }) {
+  if (status === 'pending_approval' && sessionId && onApprove && onReject) {
+    return (
+      <div style={{ display: 'flex', gap: '6px' }}>
+        <button
+          onClick={() => onApprove(sessionId)}
+          style={{
+            fontSize: '9px',
+            fontWeight: 700,
+            letterSpacing: '0.10em',
+            color: 'var(--success)',
+            background: 'var(--success-dim)',
+            border: '1px solid var(--success)',
+            padding: '3px 7px',
+            borderRadius: '2px',
+            cursor: 'pointer'
+          }}
+        >
+          APPROVE
+        </button>
+        <button
+          onClick={() => onReject(sessionId)}
+          style={{
+            fontSize: '9px',
+            fontWeight: 700,
+            letterSpacing: '0.10em',
+            color: 'var(--error)',
+            background: 'var(--error-dim)',
+            border: '1px solid var(--error)',
+            padding: '3px 7px',
+            borderRadius: '2px',
+            cursor: 'pointer'
+          }}
+        >
+          REJECT
+        </button>
+      </div>
+    );
+  }
+
   const config = {
     active: { label: 'ACTIVE', color: 'var(--accent)', bg: 'var(--accent-dim)' },
     submitted: { label: 'SUBMITTED', color: 'var(--success)', bg: 'var(--success-dim)' },
     expired: { label: 'EXPIRED', color: 'var(--error)', bg: 'var(--error-dim)' },
+    pending_approval: { label: 'PENDING', color: 'var(--warning)', bg: 'var(--warning-dim)' },
   }[status] || { label: status.toUpperCase(), color: 'var(--text-muted)', bg: 'var(--surface-2)' };
 
   return (

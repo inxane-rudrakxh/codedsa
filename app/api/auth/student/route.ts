@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
         id: sessionId,
         student_roll: roll_no.trim(),
         start_time: startTime,
-        status: 'active',
+        status: 'pending_approval',
         is_submitted: 0
       });
 

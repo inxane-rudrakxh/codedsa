@@ -29,8 +29,14 @@ export async function GET(request: NextRequest) {
     .limit(50);
 
   const activeSessions = [];
+  let pending_requests = 0;
+
   if (sessions) {
     for (const session of sessions) {
+      if (session.status === 'pending_approval') {
+        pending_requests++;
+      }
+
       const elapsed = (Date.now() - new Date(session.start_time).getTime()) / 1000;
       const remaining = Math.max(0, durationMinutes * 60 - elapsed);
       const { count: submittedCount } = await supabase.from('submissions').select('*', { count: 'exact', head: true }).eq('session_id', session.id);
@@ -38,10 +44,11 @@ export async function GET(request: NextRequest) {
       const studentData = session.students as any;
 
       activeSessions.push({
+        session_id: session.id,
         roll_no: session.student_roll,
         name: studentData?.name,
         division: studentData?.division,
-        status: session.is_submitted ? 'submitted' : (remaining <= 0 ? 'expired' : 'active'),
+        status: session.status === 'pending_approval' ? 'pending_approval' : (session.is_submitted ? 'submitted' : (remaining <= 0 ? 'expired' : 'active')),
         remaining_seconds: Math.floor(remaining),
         integrity_warnings: session.integrity_warnings,
         submitted_count: submittedCount || 0,
@@ -53,6 +60,7 @@ export async function GET(request: NextRequest) {
     total_students: total_students || 0,
     started,
     submitted,
+    pending_requests,
     active_sessions: activeSessions,
   });
 }
