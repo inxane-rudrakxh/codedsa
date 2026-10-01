@@ -79,8 +79,12 @@ export async function POST(request: NextRequest) {
       // Assign 3 random questions
       const { data: enabledQuestions } = await supabase.from('questions').select('id').eq('is_enabled', 1);
       if (enabledQuestions) {
-        const shuffled = enabledQuestions.sort(() => Math.random() - 0.5);
-        const assigned = shuffled.slice(0, 3);
+        // Fisher-Yates shuffle for true randomness
+        for (let i = enabledQuestions.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [enabledQuestions[i], enabledQuestions[j]] = [enabledQuestions[j], enabledQuestions[i]];
+        }
+        const assigned = enabledQuestions.slice(0, 3);
 
         if (assigned.length > 0) {
           await supabase.from('assigned_questions').insert(
