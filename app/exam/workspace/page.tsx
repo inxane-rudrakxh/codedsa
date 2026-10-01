@@ -1076,41 +1076,61 @@ function ConsolePanel({
                 {results.test_results.map((tc, i) => (
                   <div key={i} style={{
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '6px 10px',
+                    flexDirection: 'column',
+                    padding: '8px 12px',
                     background: tc.passed ? 'var(--success-dim)' : 'var(--error-dim)',
-                    borderRadius: '3px',
+                    borderRadius: '4px',
                     border: `1px solid ${tc.passed ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
                   }}>
-                    <span style={{
-                      fontSize: '12px',
-                      color: tc.passed ? 'var(--success)' : 'var(--error)',
-                      fontWeight: 700,
-                      minWidth: '12px',
-                    }}>
-                      {tc.passed ? '✓' : '✕'}
-                    </span>
-                    <span style={{
-                      fontSize: '11px',
-                      color: 'var(--text-secondary)',
-                      fontFamily: 'JetBrains Mono, monospace',
-                      flex: 1,
-                    }}>
-                      Test Case {i + 1}
-                    </span>
-                    <span style={{
-                      fontSize: '10px',
-                      color: tc.passed ? 'var(--success)' : 'var(--error)',
-                      fontWeight: 600,
-                      letterSpacing: '0.06em',
-                    }}>
-                      {tc.passed ? 'PASSED' : 'FAILED'}
-                    </span>
-                    {!tc.passed && tc.actual_output && (
-                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
-                        Got: {tc.actual_output.slice(0, 30)}{tc.actual_output.length > 30 ? '...' : ''}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{
+                        fontSize: '12px',
+                        color: tc.passed ? 'var(--success)' : 'var(--error)',
+                        fontWeight: 700,
+                        minWidth: '12px',
+                      }}>
+                        {tc.passed ? '✓' : '✕'}
                       </span>
+                      <span style={{
+                        fontSize: '11px',
+                        color: 'var(--text-secondary)',
+                        fontFamily: 'JetBrains Mono, monospace',
+                        flex: 1,
+                      }}>
+                        Test Case {i + 1}
+                      </span>
+                      <span style={{
+                        fontSize: '10px',
+                        color: tc.passed ? 'var(--success)' : 'var(--error)',
+                        fontWeight: 600,
+                        letterSpacing: '0.06em',
+                      }}>
+                        {tc.passed ? 'PASSED' : 'FAILED'}
+                      </span>
+                    </div>
+                    
+                    {!tc.passed && (
+                      <div style={{ 
+                        marginTop: '8px', 
+                        paddingTop: '8px', 
+                        borderTop: '1px solid rgba(239,68,68,0.1)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px'
+                      }}>
+                        <div>
+                          <span style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Input:</span>
+                          <pre style={{ margin: '2px 0 0 0', fontSize: '10px', color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'pre-wrap' }}>{tc.input || '(no input)'}</pre>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Expected Output:</span>
+                          <pre style={{ margin: '2px 0 0 0', fontSize: '10px', color: 'var(--success)', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'pre-wrap' }}>{tc.expected_output}</pre>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Your Output:</span>
+                          <pre style={{ margin: '2px 0 0 0', fontSize: '10px', color: 'var(--error)', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'pre-wrap' }}>{tc.actual_output || '(no output)'}</pre>
+                        </div>
+                      </div>
                     )}
                   </div>
                 ))}
