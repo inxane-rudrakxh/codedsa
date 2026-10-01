@@ -361,6 +361,20 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+      
+      {/* Built by signature */}
+      <div style={{
+        position: 'absolute',
+        bottom: '20px',
+        right: '24px',
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: '11px',
+        fontWeight: 500,
+        color: 'var(--text-muted)',
+        letterSpacing: '0.04em',
+      }}>
+        Built by inxanerudrakxh
+      </div>
     </main>
   );
 }
