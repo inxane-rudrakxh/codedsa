@@ -21,12 +21,25 @@ const MAX_OUTPUT_BYTES = 64 * 1024; // 64KB
 
 export async function compileAndRun(code: string, input: string): Promise<ExecutionResult> {
   const startTime = Date.now();
+  
+  // Sanitize code by removing markdown blocks (```cpp and ```) if a student copy-pastes them
+  let sanitizedCode = code.trim();
+  if (sanitizedCode.startsWith('```')) {
+    const firstNewline = sanitizedCode.indexOf('\n');
+    if (firstNewline !== -1) {
+      sanitizedCode = sanitizedCode.substring(firstNewline + 1);
+    }
+    if (sanitizedCode.endsWith('```')) {
+      sanitizedCode = sanitizedCode.substring(0, sanitizedCode.length - 3).trim();
+    }
+  }
+
   try {
     const res = await fetch('https://wandbox.org/api/compile.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        code: code,
+        code: sanitizedCode,
         compiler: 'gcc-head',
         stdin: input
       }),
