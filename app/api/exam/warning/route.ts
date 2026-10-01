@@ -14,21 +14,21 @@ export async function POST(request: NextRequest) {
   }
 
   // Increment integrity warnings
-  const { data, error } = await supabase.rpc('increment_warning', { s_id: payload.sessionId });
+  const { data, error } = await supabase.rpc('increment_warning', { s_id: payload.session_id });
 
   if (error) {
     // Fallback if RPC doesn't exist
     const { data: session } = await supabase
       .from('exam_sessions')
       .select('integrity_warnings')
-      .eq('id', payload.sessionId)
+      .eq('id', payload.session_id)
       .single();
       
     if (session) {
       await supabase
         .from('exam_sessions')
         .update({ integrity_warnings: (session.integrity_warnings || 0) + 1 })
-        .eq('id', payload.sessionId);
+        .eq('id', payload.session_id);
     }
   }
 
