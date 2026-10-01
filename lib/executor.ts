@@ -20,70 +20,64 @@ const EXEC_TIMEOUT_MS = 2000;
 const MAX_OUTPUT_BYTES = 64 * 1024; // 64KB
 
 export async function compileAndRun(code: string, input: string): Promise<ExecutionResult> {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'codedsa-'));
-  const srcFile = path.join(tmpDir, 'main.cpp');
-  const binFile = path.join(tmpDir, 'main');
-  const inputFile = path.join(tmpDir, 'input.txt');
-
+  const startTime = Date.now();
   try {
-    // Write source and input
-    await fs.writeFile(srcFile, code, 'utf8');
-    await fs.writeFile(inputFile, input, 'utf8');
+    const res = await fetch('https://wandbox.org/api/compile.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: code,
+        compiler: 'gcc-head',
+        stdin: input
+      }),
+      // Set an abort controller timeout for fetch just in case
+      signal: AbortSignal.timeout(10000)
+    });
 
-    // Compile
-    try {
-      await execAsync(`g++ -std=c++17 -O2 -o "${binFile}" "${srcFile}" 2>&1`, {
-        timeout: COMPILE_TIMEOUT_MS,
-        maxBuffer: MAX_OUTPUT_BYTES,
-      });
-    } catch (err: unknown) {
-      const error = err as { stdout?: string; message?: string };
+    if (!res.ok) {
+      return { success: false, compile_error: 'API Error: Failed to contact compilation server.' };
+    }
+
+    const data = await res.json();
+    const executionTime = Date.now() - startTime;
+
+    // Check for compilation errors
+    if (data.compiler_error) {
       return {
         success: false,
-        compile_error: (error.stdout || error.message || 'Compilation failed').trim(),
+        compile_error: data.compiler_error.trim(),
       };
     }
 
-    // Execute
-    const startTime = Date.now();
-    try {
-      const { stdout } = await execAsync(
-        `"${binFile}" < "${inputFile}" 2>&1`,
-        {
-          timeout: EXEC_TIMEOUT_MS,
-          maxBuffer: MAX_OUTPUT_BYTES,
-        }
-      );
-      const executionTime = Date.now() - startTime;
+    // Check for runtime errors
+    if (data.status !== '0' && !data.program_output) {
       return {
         success: true,
-        output: stdout.trim(),
+        output: '',
+        stderr: (data.program_error || 'Runtime error').trim(),
         execution_time: executionTime,
       };
-    } catch (err: unknown) {
-      const error = err as { killed?: boolean; stdout?: string; stderr?: string; message?: string };
-      if (error.killed) {
-        return {
-          success: false,
-          timed_out: true,
-          compile_error: 'Time Limit Exceeded (2 seconds)',
-          output: '',
-        };
-      }
+    }
+
+    // Success (even if status != 0, if there's output we can check it)
+    return {
+      success: true,
+      output: (data.program_output || '').trim(),
+      stderr: (data.program_error || '').trim(),
+      execution_time: executionTime,
+    };
+  } catch (err: any) {
+    if (err.name === 'TimeoutError') {
       return {
-        success: true,
-        output: (error.stdout || '').trim(),
-        stderr: (error.stderr || error.message || '').trim(),
-        execution_time: Date.now() - startTime,
+        success: false,
+        timed_out: true,
+        compile_error: 'Time Limit Exceeded',
       };
     }
-  } finally {
-    // Cleanup
-    try {
-      await fs.rm(tmpDir, { recursive: true, force: true });
-    } catch {
-      // ignore cleanup errors
-    }
+    return {
+      success: false,
+      compile_error: 'Internal Error: ' + err.message,
+    };
   }
 }
 
