@@ -36,12 +36,11 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === 'login') {
-    // Check for existing active session
+    // Check for existing session
     const { data: existingSessions } = await supabase
       .from('exam_sessions')
       .select('id, start_time, status, is_submitted')
       .eq('student_roll', roll_no.trim())
-      .neq('status', 'expired')
       .order('start_time', { ascending: false })
       .limit(1);
     
@@ -50,6 +49,10 @@ export async function POST(request: NextRequest) {
     let sessionId: string;
 
     if (existingSession) {
+      if (existingSession.is_submitted === 1 || existingSession.status === 'expired' || existingSession.status === 'completed') {
+        return NextResponse.json({ error: 'You have already completed the exam. Multiple attempts are not allowed.' }, { status: 403 });
+      }
+
       sessionId = existingSession.id;
 
       // Check if session is still valid
@@ -58,10 +61,10 @@ export async function POST(request: NextRequest) {
       const startTime = new Date(existingSession.start_time).getTime();
       const elapsed = (Date.now() - startTime) / 1000 / 60; // minutes
 
-      if (elapsed >= durationMinutes && !existingSession.is_submitted) {
+      if (elapsed >= durationMinutes) {
         // Expire the session
         await supabase.from('exam_sessions').update({ status: 'expired', is_submitted: 1 }).eq('id', sessionId);
-        existingSession.status = 'expired';
+        return NextResponse.json({ error: 'Your exam time has expired.' }, { status: 403 });
       }
     } else {
       // Create new session
