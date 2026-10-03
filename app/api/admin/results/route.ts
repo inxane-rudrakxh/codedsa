@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
   }
 
   await prisma.submission.update({
-    where: { id: parseInt(submission_id) },
+    where: { id: submission_id },
     data: { marks_awarded: parseInt(marks_awarded) }
   });
 
