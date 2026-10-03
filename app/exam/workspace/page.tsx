@@ -586,7 +586,13 @@ export default function WorkspacePage() {
                   </div>
 
                   {/* Monaco Editor */}
-                  <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+                  <div 
+                    style={{ flex: 1, overflow: 'hidden', position: 'relative' }}
+                    onCopy={e => { e.preventDefault(); setIntegrityWarning("Copying is disabled during the exam."); setTimeout(() => setIntegrityWarning(null), 3000); }}
+                    onPaste={e => { e.preventDefault(); setIntegrityWarning("Pasting is disabled during the exam."); setTimeout(() => setIntegrityWarning(null), 3000); }}
+                    onCut={e => { e.preventDefault(); }}
+                    onContextMenu={e => e.preventDefault()}
+                  >
                     <MonacoEditor
                       height="100%"
                       language="cpp"

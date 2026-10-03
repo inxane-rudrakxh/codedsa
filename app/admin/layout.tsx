@@ -25,8 +25,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   const nav = [
     { href: '/admin/dashboard', label: 'Dashboard' },
+    { href: '/admin/branches', label: 'Branches' },
+    { href: '/admin/subjects', label: 'Subjects' },
     { href: '/admin/students', label: 'Students' },
+    { href: '/admin/teachers', label: 'Teachers' },
     { href: '/admin/questions', label: 'Questions' },
+    { href: '/admin/tests', label: 'Tests' },
     { href: '/admin/results', label: 'Results' },
     { href: '/admin/settings', label: 'Settings' },
   ];
@@ -53,7 +57,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           color: 'var(--text-secondary)',
           letterSpacing: '0.04em',
           minWidth: 'fit-content',
-        }}>CODE//DSA</span>
+        }}>ZCOER PLATFORM</span>
 
         <div style={{ height: '16px', width: '1px', background: 'var(--border)' }} />
 

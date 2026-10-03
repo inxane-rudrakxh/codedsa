@@ -15,6 +15,9 @@ interface ResultRow {
   q1_code: string | null;
   q2_code: string | null;
   q3_code: string | null;
+  q1_sub_id: number | null;
+  q2_sub_id: number | null;
+  q3_sub_id: number | null;
   total_score: number;
   end_time: string | null;
   is_submitted: number | null;
@@ -27,11 +30,11 @@ export default function ResultsPage() {
   const [divFilter, setDivFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'roll' | 'score'>('roll');
-  const [selectedCode, setSelectedCode] = useState<{name: string, q: number, code: string} | null>(null);
+  const [selectedCode, setSelectedCode] = useState<{name: string, q: number, code: string, sub_id: number, score: number} | null>(null);
 
   const getToken = () => localStorage.getItem('admin_token') || '';
 
-  useEffect(() => {
+  const fetchResults = () => {
     fetch('/api/admin/results', {
       headers: { Authorization: `Bearer ${getToken()}` },
     })
@@ -40,7 +43,21 @@ export default function ResultsPage() {
         setResults(data.results || []);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchResults();
   }, []);
+
+  const handleUpdateScore = async (sub_id: number, marks: number) => {
+    await fetch('/api/admin/results', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ submission_id: sub_id, marks_awarded: marks })
+    });
+    setSelectedCode(null);
+    fetchResults();
+  };
 
   const exportCSV = () => {
     const rows = ['Roll,Name,Division,Q1,Q2,Q3,Total,Status'];
@@ -169,14 +186,14 @@ export default function ResultsPage() {
                     <td style={tdStyle}><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.name}</span></td>
                     <td style={tdStyle}><span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{r.division}</span></td>
                     {[
-                      { score: r.q1_score, code: r.q1_code, idx: 1 },
-                      { score: r.q2_score, code: r.q2_code, idx: 2 },
-                      { score: r.q3_score, code: r.q3_code, idx: 3 },
+                      { score: r.q1_score, code: r.q1_code, idx: 1, sub_id: r.q1_sub_id },
+                      { score: r.q2_score, code: r.q2_code, idx: 2, sub_id: r.q2_sub_id },
+                      { score: r.q3_score, code: r.q3_code, idx: 3, sub_id: r.q3_sub_id },
                     ].map((item, si) => (
                       <td key={si} style={tdStyle}>
                         {item.score !== null ? (
                           <button
-                            onClick={() => setSelectedCode({ name: r.name, q: item.idx, code: item.code || '' })}
+                            onClick={() => setSelectedCode({ name: r.name, q: item.idx, code: item.code || '', sub_id: item.sub_id as number, score: item.score as number })}
                             style={{
                               background: 'transparent',
                               border: 'none',
@@ -250,18 +267,28 @@ export default function ResultsPage() {
               <h3 style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600 }}>
                 {selectedCode.name} - Question {selectedCode.q}
               </h3>
-              <button
-                onClick={() => setSelectedCode(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  fontSize: '20px',
-                  cursor: 'pointer',
-                }}
-              >
-                ×
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Score (out of 10):</span>
+                  <input 
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={selectedCode.score}
+                    onChange={e => setSelectedCode({ ...selectedCode, score: parseInt(e.target.value) || 0 })}
+                    style={{ ...filterInput, width: '60px', padding: '4px 8px' }}
+                  />
+                  <button onClick={() => handleUpdateScore(selectedCode.sub_id, selectedCode.score)} style={{ ...primaryBtn, padding: '4px 12px' }}>
+                    Save
+                  </button>
+                </div>
+                <button
+                  onClick={() => setSelectedCode(null)}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '20px', cursor: 'pointer' }}
+                >
+                  ×
+                </button>
+              </div>
             </div>
             <div style={{ padding: '24px', overflow: 'auto', flex: 1, background: '#0d1117' }}>
               <pre style={{
@@ -328,6 +355,18 @@ const outlineBtn: React.CSSProperties = {
   border: '1px solid var(--border)',
   borderRadius: '3px',
   color: 'var(--text-secondary)',
+  fontSize: '11px',
+  fontWeight: 600,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase' as const,
+  cursor: 'pointer',
+};
+const primaryBtn: React.CSSProperties = {
+  padding: '8px 16px',
+  background: 'var(--text-primary)',
+  border: '1px solid transparent',
+  borderRadius: '3px',
+  color: 'var(--bg)',
   fontSize: '11px',
   fontWeight: 600,
   letterSpacing: '0.08em',

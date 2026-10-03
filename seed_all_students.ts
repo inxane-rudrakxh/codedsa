@@ -1,7 +1,8 @@
-import re
-import sqlite3
+import { PrismaClient } from '@prisma/client'
 
-ocr_text = """
+const prisma = new PrismaClient()
+
+const ocrText = `
 AD1401 KAMBLE SAMITI SACHIN
 AD1402 NEMANE KARTIK HARIDAS
 AD1403 ROHIT ANNASAHEB INGLE 
@@ -11,7 +12,7 @@ AD1406 KHARAT HARSHAD ANKUSH
 AD1407 BAGADE YASHODIP VIJAY
 AD1408 GAIKWAD SARVESH NARAYAN
 AD1409 JALINDAR BABASAHEB TAMBE A
-D1410 GAGARE SHRAVANI GORAKSHANATH
+AD1410 GAGARE SHRAVANI GORAKSHANATH
 AD1411 BOBADE PRERNA DHANAJI 
 AD1412 METANGALE ROHAN VIJAY
 AD1413 VARSHA MALLIKARJUN SHELKE 
@@ -144,35 +145,64 @@ AD1369 TANVI RAHUL JADHAV
 AD1370 SHIVKUMAR DATTA YEWALE
 AD1371 AJAY TULSHIDAS BOPPAWAD
 AD1372 SAI SUNIL SHELAR
-"""
+`
 
-# Extract all ADXXXX followed by names
-pattern = r"(AD1[34]\d{2})\s+([A-Z\s]+?)(?=\s+AD1[34]\d{2}|$)"
-matches = re.findall(pattern, ocr_text.replace('\n', ' '))
+async function main() {
+  const pattern = /(AD1[34]\d{2})\s+([A-Z\s]+?)(?=\s+AD1[34]\d{2}|$)/g
+  const normalizedText = ocrText.replace(/\n/g, ' ')
+  
+  let match
+  let inserted = 0
+  
+  const aids = await prisma.branch.upsert({
+    where: { code: 'AI&DS' },
+    update: {},
+    create: { code: 'AI&DS', name: 'Artificial Intelligence and Data Science' }
+  })
+  
+  const divD = await prisma.division.upsert({
+    where: { name: 'D' },
+    update: {},
+    create: { name: 'D' }
+  })
+  
+  const divC = await prisma.division.upsert({
+    where: { name: 'C' },
+    update: {},
+    create: { name: 'C' }
+  })
 
-conn = sqlite3.connect('data/codedsa.db')
-c = conn.cursor()
+  while ((match = pattern.exec(normalizedText)) !== null) {
+    const roll = match[1].trim()
+    const name = match[2].trim()
+    const division = roll.startsWith('AD14') ? divD.id : divC.id
 
-# Clear existing students and their sessions/code saves
-c.execute("DELETE FROM integrity_events")
-c.execute("DELETE FROM test_results")
-c.execute("DELETE FROM submissions")
-c.execute("DELETE FROM code_saves")
-c.execute("DELETE FROM assigned_questions")
-c.execute("DELETE FROM exam_sessions")
-c.execute("DELETE FROM students")
+    await prisma.user.upsert({
+      where: { email: `${roll.toLowerCase()}@zcoer.edu.in` },
+      update: { full_name: name },
+      create: {
+        id: `student-${roll}`,
+        email: `${roll.toLowerCase()}@zcoer.edu.in`,
+        full_name: name,
+        role: 'STUDENT',
+        status: 'ACTIVE',
+        student: {
+          create: {
+            roll_number: roll,
+            branch_id: aids.id,
+            division_id: division
+          }
+        }
+      }
+    })
+    inserted++
+  }
+  
+  console.log(`Inserted ${inserted} students into Prisma V2!`)
+}
 
-inserted = 0
-for match in matches:
-    roll = match[0].strip()
-    name = match[1].strip()
-    division = "D" if roll.startswith("AD14") else "C"
-    
-    # insert
-    c.execute("INSERT OR IGNORE INTO students (roll_no, name, division, branch) VALUES (?, ?, ?, ?)", (roll, name, division, "AI&DS"))
-    inserted += 1
-
-conn.commit()
-conn.close()
-
-print(f"Inserted {inserted} students!")
+main()
+  .catch(console.error)
+  .finally(async () => {
+    await prisma.$disconnect()
+  })

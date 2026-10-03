@@ -1,20 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { verifyAdminToken } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { verifyAuthToken } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const payload = await verifyAdminToken(token);
+  const payload = await verifyAuthToken(token);
+  if (payload && payload.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized role' }, { status: 403 });
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-  const { data: questions } = await supabase.from('questions').select('*, test_cases(*)').order('id');
+  const questions = await prisma.question.findMany({
+    include: { testCases: { orderBy: { id: 'asc' } } },
+    orderBy: { id: 'asc' }
+  });
   
-  // Sort test cases if needed (they should already be part of the relationship)
-  const formatted = questions?.map(q => ({
+  // Format to match old UI expectations
+  const formatted = questions.map(q => ({
     ...q,
-    test_cases: q.test_cases.sort((a: any, b: any) => a.id - b.id)
-  })) || [];
+    statement: q.description,
+    example_input: q.sample_input,
+    example_output: q.sample_output,
+    is_enabled: 1, // dummy for old UI
+    test_cases: q.testCases.map((tc: any) => ({
+      ...tc,
+      is_visible: !tc.is_hidden ? 1 : 0,
+      weight: tc.marks,
+      type: 'hidden'
+    }))
+  }));
 
   return NextResponse.json({ questions: formatted });
 }
@@ -22,37 +35,45 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const payload = await verifyAdminToken(token);
+  const payload = await verifyAuthToken(token);
+  if (payload && payload.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized role' }, { status: 403 });
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
   const body = await request.json();
   const { action } = body;
 
   if (action === 'toggle') {
-    const { data: q } = await supabase.from('questions').select('is_enabled').eq('id', body.id).maybeSingle();
-    if (!q) return NextResponse.json({ error: 'Question not found' }, { status: 404 });
-    await supabase.from('questions').update({ is_enabled: q.is_enabled ? 0 : 1 }).eq('id', body.id);
+    // V2 doesn't use is_enabled, so just return success
     return NextResponse.json({ success: true });
   }
 
   if (action === 'update') {
     const { id, title, topic, statement, input_format, output_format, constraints, example_input, example_output } = body;
-    await supabase.from('questions').update({
-      title, topic, statement, input_format, output_format, constraints, example_input, example_output
-    }).eq('id', id);
+    await prisma.question.update({
+      where: { id: parseInt(id) },
+      data: {
+        title, topic, description: statement, input_format, output_format, constraints, sample_input: example_input, sample_output: example_output
+      }
+    });
     return NextResponse.json({ success: true });
   }
 
   if (action === 'add_test_case') {
-    const { question_id, input, expected_output, type, is_visible, weight } = body;
-    await supabase.from('test_cases').insert({
-      question_id, input, expected_output, type: type || 'hidden', is_visible: is_visible ? 1 : 0, weight: weight || 1
+    const { question_id, input, expected_output, is_visible, weight } = body;
+    await prisma.testCase.create({
+      data: {
+        question_id: parseInt(question_id),
+        input,
+        expected_output,
+        is_hidden: !is_visible,
+        marks: weight || 1
+      }
     });
     return NextResponse.json({ success: true });
   }
 
   if (action === 'delete_test_case') {
-    await supabase.from('test_cases').delete().eq('id', body.id);
+    await prisma.testCase.delete({ where: { id: parseInt(body.id) } });
     return NextResponse.json({ success: true });
   }
 

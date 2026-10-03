@@ -1,63 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { verifyAdminToken } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { verifyAuthToken } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const payload = await verifyAdminToken(token);
-  if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-
-  const { count: total_students } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('is_active', 1);
   
-  // Get all exam sessions to compute stats
-  const { data: allSessions } = await supabase.from('exam_sessions').select('student_roll, is_submitted');
-  const startedRolls = new Set(allSessions?.map(s => s.student_roll));
-  const started = startedRolls.size;
-  const submittedRolls = new Set(allSessions?.filter(s => s.is_submitted === 1).map(s => s.student_roll));
-  const submitted = submittedRolls.size;
+  const payload = await verifyAuthToken(token);
+  if (!payload || payload.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Invalid or unauthorized token' }, { status: 401 });
+  }
 
-  const { data: durationSetting } = await supabase.from('settings').select('value').eq('key', 'exam_duration_minutes').maybeSingle();
-  const durationMinutes = parseInt(durationSetting?.value || '60', 10);
+  const total_students = await prisma.student.count();
+  
+  const allSessions = await prisma.examSession.findMany({ select: { student_id: true, is_submitted: true } });
+  const startedIds = new Set(allSessions.map(s => s.student_id));
+  const started = startedIds.size;
+  const submittedIds = new Set(allSessions.filter(s => s.is_submitted).map(s => s.student_id));
+  const submitted = submittedIds.size;
 
-  const { data: sessions } = await supabase.from('exam_sessions')
-    .select(`
-      id, student_roll, start_time, status, is_submitted, integrity_warnings,
-      students (name, division)
-    `)
-    .order('start_time', { ascending: false })
-    .limit(50);
+  const testInfo = await prisma.test.findUnique({ where: { id: 1 } });
+  const durationMinutes = testInfo?.duration_minutes || 60;
+
+  const sessions = await prisma.examSession.findMany({
+    include: {
+      student: { include: { user: true, division: true } },
+      _count: { select: { submissions: true } }
+    },
+    orderBy: { start_time: 'desc' },
+    take: 50
+  });
 
   const activeSessions = [];
   let pending_requests = 0;
 
-  if (sessions) {
-    for (const session of sessions) {
-      if (session.status === 'pending_approval') {
-        pending_requests++;
-      }
-
-      const elapsed = (Date.now() - new Date(session.start_time).getTime()) / 1000;
-      const remaining = Math.max(0, durationMinutes * 60 - elapsed);
-      const { count: submittedCount } = await supabase.from('submissions').select('*', { count: 'exact', head: true }).eq('session_id', session.id);
-
-      const studentData = session.students as any;
-
-      activeSessions.push({
-        session_id: session.id,
-        roll_no: session.student_roll,
-        name: studentData?.name,
-        division: studentData?.division,
-        status: session.status === 'pending_approval' ? 'pending_approval' : (session.is_submitted ? 'submitted' : (remaining <= 0 ? 'expired' : 'active')),
-        remaining_seconds: Math.floor(remaining),
-        integrity_warnings: session.integrity_warnings,
-        submitted_count: submittedCount || 0,
-      });
+  for (const session of sessions) {
+    if (session.status === 'PENDING_APPROVAL') {
+      pending_requests++;
     }
+
+    const elapsed = (Date.now() - new Date(session.start_time).getTime()) / 1000;
+    const remaining = Math.max(0, durationMinutes * 60 - elapsed);
+    const submittedCount = session._count.submissions;
+
+    activeSessions.push({
+      session_id: session.id,
+      roll_no: session.student.roll_number,
+      name: session.student.user.full_name,
+      division: session.student.division?.name || 'A',
+      status: session.status === 'PENDING_APPROVAL' ? 'pending_approval' : (session.is_submitted ? 'submitted' : (remaining <= 0 ? 'expired' : 'active')),
+      remaining_seconds: Math.floor(remaining),
+      integrity_warnings: session.integrity_warnings,
+      submitted_count: submittedCount,
+    });
   }
 
   return NextResponse.json({
-    total_students: total_students || 0,
+    total_students,
     started,
     submitted,
     pending_requests,

@@ -19,6 +19,7 @@ function InstructionsPage() {
     const router = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRouter"])();
     const [checked, setChecked] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [studentName, setStudentName] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])('');
+    const [sessionStatus, setSessionStatus] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "InstructionsPage.useEffect": ()=>{
             const token = localStorage.getItem('session_token');
@@ -26,31 +27,44 @@ function InstructionsPage() {
                 router.push('/');
                 return;
             }
-            // Fetch session to show student name
-            fetch('/api/exam/session', {
-                headers: {
-                    Authorization: `Bearer ${token}`
+            const checkSession = {
+                "InstructionsPage.useEffect.checkSession": ()=>{
+                    fetch('/api/exam/session', {
+                        headers: {
+                            Authorization: `Bearer ${token}`
+                        }
+                    }).then({
+                        "InstructionsPage.useEffect.checkSession": (r)=>r.json()
+                    }["InstructionsPage.useEffect.checkSession"]).then({
+                        "InstructionsPage.useEffect.checkSession": (data)=>{
+                            if (data.student) setStudentName(data.student.name);
+                            if (!data.session || data.session.status === 'expired') {
+                                router.push('/');
+                                return;
+                            }
+                            setSessionStatus(data.session.status);
+                            if (data.submissions && Object.keys(data.submissions).length > 0) {
+                            // Still allow going to workspace if they already started
+                            }
+                        }
+                    }["InstructionsPage.useEffect.checkSession"]).catch({
+                        "InstructionsPage.useEffect.checkSession": ()=>router.push('/')
+                    }["InstructionsPage.useEffect.checkSession"]);
                 }
-            }).then({
-                "InstructionsPage.useEffect": (r)=>r.json()
-            }["InstructionsPage.useEffect"]).then({
-                "InstructionsPage.useEffect": (data)=>{
-                    if (data.student) setStudentName(data.student.name);
-                    if (!data.session || data.session.status === 'expired') router.push('/');
-                    // Redirect to workspace if already started
-                    if (data.submissions && Object.keys(data.submissions).length > 0) {
-                    // Still allow going to workspace
-                    }
-                }
-            }["InstructionsPage.useEffect"]).catch({
-                "InstructionsPage.useEffect": ()=>router.push('/')
-            }["InstructionsPage.useEffect"]);
+            }["InstructionsPage.useEffect.checkSession"];
+            checkSession();
+            const interval = setInterval(checkSession, 3000);
+            return ({
+                "InstructionsPage.useEffect": ()=>clearInterval(interval)
+            })["InstructionsPage.useEffect"];
         }
     }["InstructionsPage.useEffect"], [
         router
     ]);
     const handleStart = ()=>{
-        router.push('/exam/workspace');
+        if (sessionStatus === 'active') {
+            router.push('/exam/workspace');
+        }
     };
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("main", {
         style: {
@@ -80,7 +94,7 @@ function InstructionsPage() {
                         children: "CODE//DSA"
                     }, void 0, false, {
                         fileName: "[project]/app/exam/instructions/page.tsx",
-                        lineNumber: 47,
+                        lineNumber: 60,
                         columnNumber: 9
                     }, this),
                     studentName && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -92,13 +106,13 @@ function InstructionsPage() {
                         children: studentName
                     }, void 0, false, {
                         fileName: "[project]/app/exam/instructions/page.tsx",
-                        lineNumber: 55,
+                        lineNumber: 68,
                         columnNumber: 11
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/exam/instructions/page.tsx",
-                lineNumber: 40,
+                lineNumber: 53,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -129,7 +143,7 @@ function InstructionsPage() {
                                     children: "Exam Instructions"
                                 }, void 0, false, {
                                     fileName: "[project]/app/exam/instructions/page.tsx",
-                                    lineNumber: 71,
+                                    lineNumber: 84,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h1", {
@@ -144,7 +158,7 @@ function InstructionsPage() {
                                     children: "DSA — Unit II"
                                 }, void 0, false, {
                                     fileName: "[project]/app/exam/instructions/page.tsx",
-                                    lineNumber: 79,
+                                    lineNumber: 92,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -155,13 +169,13 @@ function InstructionsPage() {
                                     children: "S.Y. B.Tech AI&DS · Coding Assessment"
                                 }, void 0, false, {
                                     fileName: "[project]/app/exam/instructions/page.tsx",
-                                    lineNumber: 87,
+                                    lineNumber: 100,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/exam/instructions/page.tsx",
-                            lineNumber: 70,
+                            lineNumber: 83,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -206,7 +220,7 @@ function InstructionsPage() {
                                             children: label
                                         }, void 0, false, {
                                             fileName: "[project]/app/exam/instructions/page.tsx",
-                                            lineNumber: 113,
+                                            lineNumber: 126,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -219,18 +233,18 @@ function InstructionsPage() {
                                             children: value
                                         }, void 0, false, {
                                             fileName: "[project]/app/exam/instructions/page.tsx",
-                                            lineNumber: 114,
+                                            lineNumber: 127,
                                             columnNumber: 17
                                         }, this)
                                     ]
                                 }, label, true, {
                                     fileName: "[project]/app/exam/instructions/page.tsx",
-                                    lineNumber: 109,
+                                    lineNumber: 122,
                                     columnNumber: 15
                                 }, this))
                         }, void 0, false, {
                             fileName: "[project]/app/exam/instructions/page.tsx",
-                            lineNumber: 93,
+                            lineNumber: 106,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -250,7 +264,7 @@ function InstructionsPage() {
                                     children: "Before You Begin"
                                 }, void 0, false, {
                                     fileName: "[project]/app/exam/instructions/page.tsx",
-                                    lineNumber: 126,
+                                    lineNumber: 139,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -279,7 +293,7 @@ function InstructionsPage() {
                                                     children: String(i + 1).padStart(2, '0')
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/exam/instructions/page.tsx",
-                                                    lineNumber: 144,
+                                                    lineNumber: 157,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -291,24 +305,24 @@ function InstructionsPage() {
                                                     children: item
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/exam/instructions/page.tsx",
-                                                    lineNumber: 153,
+                                                    lineNumber: 166,
                                                     columnNumber: 19
                                                 }, this)
                                             ]
                                         }, i, true, {
                                             fileName: "[project]/app/exam/instructions/page.tsx",
-                                            lineNumber: 137,
+                                            lineNumber: 150,
                                             columnNumber: 17
                                         }, this))
                                 }, void 0, false, {
                                     fileName: "[project]/app/exam/instructions/page.tsx",
-                                    lineNumber: 135,
+                                    lineNumber: 148,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/exam/instructions/page.tsx",
-                            lineNumber: 125,
+                            lineNumber: 138,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("label", {
@@ -338,7 +352,7 @@ function InstructionsPage() {
                                     }
                                 }, void 0, false, {
                                     fileName: "[project]/app/exam/instructions/page.tsx",
-                                    lineNumber: 176,
+                                    lineNumber: 189,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -350,16 +364,86 @@ function InstructionsPage() {
                                     children: "I have read and understood the instructions. I acknowledge that any violation of exam integrity will be recorded."
                                 }, void 0, false, {
                                     fileName: "[project]/app/exam/instructions/page.tsx",
-                                    lineNumber: 188,
+                                    lineNumber: 201,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/exam/instructions/page.tsx",
-                            lineNumber: 164,
+                            lineNumber: 177,
                             columnNumber: 11
                         }, this),
-                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                        sessionStatus === 'pending_approval' ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                            style: {
+                                width: '100%',
+                                padding: '15px',
+                                background: 'var(--warning-dim)',
+                                border: '1px solid var(--warning)',
+                                borderRadius: '4px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                            },
+                            children: [
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                    className: "spinner",
+                                    style: {
+                                        width: '20px',
+                                        height: '20px',
+                                        border: '2px solid var(--warning)',
+                                        borderTopColor: 'transparent',
+                                        borderRadius: '50%',
+                                        animation: 'spin 1s linear infinite'
+                                    }
+                                }, void 0, false, {
+                                    fileName: "[project]/app/exam/instructions/page.tsx",
+                                    lineNumber: 219,
+                                    columnNumber: 15
+                                }, this),
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("style", {
+                                    children: `
+                @keyframes spin {
+                  to { transform: rotate(360deg); }
+                }
+              `
+                                }, void 0, false, {
+                                    fileName: "[project]/app/exam/instructions/page.tsx",
+                                    lineNumber: 227,
+                                    columnNumber: 15
+                                }, this),
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                    style: {
+                                        color: 'var(--warning)',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        letterSpacing: '0.12em',
+                                        textTransform: 'uppercase'
+                                    },
+                                    children: "Waiting for Admin Approval..."
+                                }, void 0, false, {
+                                    fileName: "[project]/app/exam/instructions/page.tsx",
+                                    lineNumber: 232,
+                                    columnNumber: 15
+                                }, this),
+                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                    style: {
+                                        fontSize: '11px',
+                                        color: 'var(--text-muted)'
+                                    },
+                                    children: "Please wait in this lobby. The exam will start automatically."
+                                }, void 0, false, {
+                                    fileName: "[project]/app/exam/instructions/page.tsx",
+                                    lineNumber: 241,
+                                    columnNumber: 15
+                                }, this)
+                            ]
+                        }, void 0, true, {
+                            fileName: "[project]/app/exam/instructions/page.tsx",
+                            lineNumber: 207,
+                            columnNumber: 13
+                        }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
                             id: "begin-exam-btn",
                             onClick: handleStart,
                             disabled: !checked,
@@ -380,28 +464,28 @@ function InstructionsPage() {
                             children: "Begin Exam"
                         }, void 0, false, {
                             fileName: "[project]/app/exam/instructions/page.tsx",
-                            lineNumber: 193,
-                            columnNumber: 11
+                            lineNumber: 246,
+                            columnNumber: 13
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/exam/instructions/page.tsx",
-                    lineNumber: 68,
+                    lineNumber: 81,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/app/exam/instructions/page.tsx",
-                lineNumber: 61,
+                lineNumber: 74,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/app/exam/instructions/page.tsx",
-        lineNumber: 38,
+        lineNumber: 51,
         columnNumber: 5
     }, this);
 }
-_s(InstructionsPage, "602seVtZpr24xiSlceAo8adUVys=", false, function() {
+_s(InstructionsPage, "GLO1vdB07ep+dnNS7wI/W3ZfAb4=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRouter"]
     ];

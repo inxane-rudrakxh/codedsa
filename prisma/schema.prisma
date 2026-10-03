@@ -1,0 +1,218 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String?   @unique
+  full_name     String
+  role          String    // ADMIN, TEACHER, STUDENT
+  password_hash String?
+  status        String    @default("ACTIVE")
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  student       Student?
+  teacher       Teacher?
+}
+
+model Branch {
+  id         Int       @id @default(autoincrement())
+  code       String    @unique
+  name       String
+  created_at DateTime  @default(now())
+  
+  students   Student[]
+}
+
+model Division {
+  id         Int       @id @default(autoincrement())
+  name       String    @unique
+  students   Student[]
+}
+
+model Student {
+  id           String    @id
+  user         User      @relation(fields: [id], references: [id], onDelete: Cascade)
+  roll_number  String    @unique
+  branch_id    Int
+  division_id  Int?
+  branch       Branch    @relation(fields: [branch_id], references: [id])
+  division     Division? @relation(fields: [division_id], references: [id])
+  created_at   DateTime  @default(now())
+  
+  examSessions ExamSession[]
+}
+
+model Teacher {
+  id           String    @id
+  user         User      @relation(fields: [id], references: [id], onDelete: Cascade)
+  department   String?
+  created_at   DateTime  @default(now())
+}
+
+model Subject {
+  id         Int       @id @default(autoincrement())
+  code       String    @unique
+  name       String
+  created_at DateTime  @default(now())
+  
+  tests      Test[]
+  questions  Question[]
+}
+
+model Test {
+  id                    Int       @id @default(autoincrement())
+  title                 String
+  description           String?
+  subject_id            Int
+  subject               Subject   @relation(fields: [subject_id], references: [id])
+  duration_minutes      Int       @default(60)
+  total_marks           Int       @default(100)
+  status                String    @default("DRAFT")
+  randomize_questions   Boolean   @default(true)
+  questions_per_student Int       @default(3)
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+  
+  testQuestions         TestQuestion[]
+  examSessions          ExamSession[]
+}
+
+model Question {
+  id            Int       @id @default(autoincrement())
+  title         String
+  slug          String    @unique
+  description   String
+  subject_id    Int
+  subject       Subject   @relation(fields: [subject_id], references: [id])
+  topic         String?
+  difficulty    String    @default("MEDIUM")
+  marks         Int       @default(10)
+  input_format  String?
+  output_format String?
+  constraints   String?
+  sample_input  String?
+  sample_output String?
+  explanation   String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  
+  testCases     TestCase[]
+  testQuestions TestQuestion[]
+  assignedQuestions AssignedQuestion[]
+  codeDrafts    CodeDraft[]
+  submissions   Submission[]
+}
+
+model TestQuestion {
+  test_id     Int
+  question_id Int
+  order_index Int @default(0)
+  
+  test        Test @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  question    Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  
+  @@id([test_id, question_id])
+}
+
+model TestCase {
+  id              Int       @id @default(autoincrement())
+  question_id     Int
+  question        Question  @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  input           String
+  expected_output String
+  is_hidden       Boolean   @default(false)
+  marks           Int       @default(0)
+  order_index     Int       @default(0)
+  created_at      DateTime  @default(now())
+  
+  submissionResults SubmissionResult[]
+}
+
+model ExamSession {
+  id                 String    @id @default(uuid())
+  test_id            Int
+  test               Test      @relation(fields: [test_id], references: [id])
+  student_id         String
+  student            Student   @relation(fields: [student_id], references: [id])
+  start_time         DateTime  @default(now())
+  end_time           DateTime?
+  status             String    @default("PENDING_APPROVAL")
+  is_submitted       Boolean   @default(false)
+  ip_address         String?
+  browser_info       String?
+  integrity_warnings Int       @default(0)
+  created_at         DateTime  @default(now())
+  
+  assignedQuestions  AssignedQuestion[]
+  codeDrafts         CodeDraft[]
+  submissions        Submission[]
+}
+
+model AssignedQuestion {
+  session_id  String
+  session     ExamSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  question_id Int
+  question    Question    @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  order_index Int         @default(0)
+  
+  @@id([session_id, question_id])
+}
+
+model CodeDraft {
+  session_id  String
+  session     ExamSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  question_id Int
+  question    Question    @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  language_id Int         @default(1)
+  source_code String?
+  updated_at  DateTime    @updatedAt
+  
+  @@id([session_id, question_id])
+}
+
+model Submission {
+  id              String    @id @default(uuid())
+  session_id      String
+  session         ExamSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  question_id     Int
+  question        Question  @relation(fields: [question_id], references: [id])
+  language_id     Int
+  source_code     String
+  status          String
+  total_test_cases Int
+  passed_test_cases Int
+  execution_time_ms Int?
+  memory_used_kb  Int?
+  error_message   String?
+  ai_feedback     String?
+  marks_awarded   Float?    @default(0)
+  created_at      DateTime  @default(now())
+  
+  submissionResults SubmissionResult[]
+}
+
+model SubmissionResult {
+  submission_id   String
+  submission      Submission @relation(fields: [submission_id], references: [id], onDelete: Cascade)
+  test_case_id    Int
+  test_case       TestCase   @relation(fields: [test_case_id], references: [id], onDelete: Cascade)
+  status          String
+  execution_time_ms Int?
+  memory_used_kb  Int?
+  actual_output   String?
+  error_message   String?
+  
+  @@id([submission_id, test_case_id])
+}
+
+model Setting {
+  key   String @id
+  value String
+}

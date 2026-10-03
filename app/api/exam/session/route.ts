@@ -1,100 +1,104 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { verifyStudentToken } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { verifyStudentSessionToken } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const payload = await verifyStudentToken(token);
+  const payload = await verifyStudentSessionToken(token);
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
   // Get session
-  const { data: sessionData } = await supabase.from('exam_sessions')
-    .select('*')
-    .eq('id', payload.session_id)
-    .eq('student_roll', payload.roll_no)
-    .maybeSingle();
+  const sessionData = await prisma.examSession.findUnique({
+    where: { id: payload.session_id },
+    include: {
+      test: true,
+      student: {
+        include: { user: true, branch: true, division: true }
+      }
+    }
+  });
 
   if (!sessionData) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   let session = sessionData;
 
   // Check if session expired
-  const { data: durationSetting } = await supabase.from('settings').select('value').eq('key', 'exam_duration_minutes').maybeSingle();
-  const durationMinutes = parseInt(durationSetting?.value || '60', 10);
+  const durationMinutes = session.test.duration_minutes || 60;
   const startTime = new Date(session.start_time).getTime();
   const elapsed = (Date.now() - startTime) / 1000; // seconds
   const remaining = Math.max(0, durationMinutes * 60 - elapsed);
 
-  if (remaining <= 0 && session.status === 'active') {
-    await supabase.from('exam_sessions').update({ status: 'expired', is_submitted: 1 }).eq('id', session.id);
-    session.status = 'expired';
-    session.is_submitted = 1;
+  if (remaining <= 0 && session.status !== 'EXPIRED' && !session.is_submitted) {
+    await prisma.examSession.update({
+      where: { id: session.id },
+      data: { status: 'EXPIRED', is_submitted: true }
+    });
+    session.status = 'EXPIRED';
+    session.is_submitted = true;
   }
 
-  // Get student
-  const { data: student } = await supabase.from('students').select('*').eq('roll_no', payload.roll_no).maybeSingle();
-
   // Get assigned questions
-  const { data: assignedRows } = await supabase.from('assigned_questions')
-    .select(`order_index, questions:question_id (*)`)
-    .eq('session_id', session.id)
-    .order('order_index');
+  const assignedRows = await prisma.assignedQuestion.findMany({
+    where: { session_id: session.id },
+    include: { question: true },
+    orderBy: { order_index: 'asc' }
+  });
 
-  const formattedQuestions = assignedRows?.map(r => ({
-    ...(r.questions as any),
+  const formattedQuestions = assignedRows.map(r => ({
+    ...r.question,
     order_index: r.order_index
-  })) || [];
+  }));
 
   // Get submissions
-  const { data: submissionRows } = await supabase.from('submissions').select('*').eq('session_id', session.id);
+  const submissionRows = await prisma.submission.findMany({
+    where: { session_id: session.id }
+  });
   const submissions: Record<number, any> = {};
-  submissionRows?.forEach(s => { submissions[s.question_id] = s; });
+  submissionRows.forEach(s => { submissions[s.question_id] = s; });
 
   // Get code saves
-  const { data: saveRows } = await supabase.from('code_saves').select('*').eq('session_id', session.id);
+  const saveRows = await prisma.codeDraft.findMany({
+    where: { session_id: session.id }
+  });
   const saves: Record<number, string> = {};
-  saveRows?.forEach(s => { saves[s.question_id] = s.code; });
+  saveRows.forEach(s => { if(s.source_code) saves[s.question_id] = s.source_code; });
 
   // Get visible test cases
   const testCases: Record<number, any[]> = {};
   if (formattedQuestions.length > 0) {
     const questionIds = formattedQuestions.map(q => q.id);
-    const { data: casesData } = await supabase.from('test_cases')
-      .select('question_id, input, expected_output, type')
-      .eq('is_visible', 1)
-      .in('question_id', questionIds);
+    const casesData = await prisma.testCase.findMany({
+      where: {
+        is_hidden: false,
+        question_id: { in: questionIds }
+      },
+      select: { question_id: true, input: true, expected_output: true }
+    });
     
     formattedQuestions.forEach(q => { testCases[q.id] = []; });
-    casesData?.forEach(c => {
+    casesData.forEach(c => {
       if (testCases[c.question_id]) {
         testCases[c.question_id].push(c);
       }
     });
   }
 
-  // Get demo config
-  const { data: demoSetting } = await supabase.from('settings').select('value').eq('key', 'demo_config').maybeSingle();
-  let demoConfig = null;
-  let isDemo = false;
-  if (demoSetting?.value) {
-    try {
-      const parsed = JSON.parse(demoSetting.value);
-      if (parsed.demo_rolls && parsed.demo_rolls.includes(student?.roll_no)) {
-        isDemo = true;
-        demoConfig = parsed;
-      }
-    } catch (e) {}
-  }
-
   return NextResponse.json({
     session: {
-      ...session,
+      id: session.id,
+      start_time: session.start_time,
+      status: session.status === 'PENDING_APPROVAL' ? 'pending_approval' : (session.is_submitted ? 'submitted' : session.status.toLowerCase()),
+      is_submitted: session.is_submitted,
       remaining_seconds: Math.floor(remaining),
-      is_demo: isDemo,
-      demo_config: demoConfig
+      test_title: session.test.title
     },
-    student,
+    student: {
+      roll_no: session.student.roll_number,
+      name: session.student.user.full_name,
+      branch: session.student.branch?.name,
+      division: session.student.division?.name
+    },
     questions: formattedQuestions,
     submissions,
     saves,

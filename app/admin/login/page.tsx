@@ -15,17 +15,17 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/auth/admin', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ identifier: username, password, role: 'ADMIN' }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'Login failed.');
         return;
       }
-      localStorage.setItem('admin_token', data.admin_token);
+      localStorage.setItem('admin_token', data.token);
       router.push('/admin/dashboard');
     } catch {
       setError('Network error. Try again.');
@@ -73,7 +73,7 @@ export default function AdminLoginPage() {
             value={username}
             onChange={e => setUsername(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            placeholder="Username"
+            placeholder="Email Address"
             autoFocus
             style={inputStyle}
           />

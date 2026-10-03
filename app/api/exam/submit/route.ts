@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { verifyStudentToken } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { verifyStudentSessionToken } from '@/lib/auth';
 import { compileAndRun, compareOutputs, checkCodeLogic } from '@/lib/executor';
-import { generateSubmissionId } from '@/lib/auth';
+import { evaluateCodeWithAI } from '@/lib/ai';
 
 export async function POST(request: NextRequest) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const payload = await verifyStudentToken(token);
+  const payload = await verifyStudentSessionToken(token);
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
   const body = await request.json();
@@ -19,21 +19,27 @@ export async function POST(request: NextRequest) {
   }
 
   // Check session
-  const { data: session } = await supabase.from('exam_sessions').select('id, status, is_submitted').eq('id', payload.session_id).maybeSingle();
-
-  if (!session || session.status !== 'active') {
+  const session = await prisma.examSession.findUnique({ where: { id: payload.session_id } });
+  if (!session || session.status === 'EXPIRED') {
     return NextResponse.json({ error: 'Session not active' }, { status: 403 });
   }
 
   // Check not already submitted
-  const { data: existing } = await supabase.from('submissions').select('id').eq('session_id', payload.session_id).eq('question_id', question_id).maybeSingle();
+  const existing = await prisma.submission.findFirst({
+    where: { session_id: payload.session_id, question_id }
+  });
   if (existing) {
     return NextResponse.json({ error: 'Already submitted' }, { status: 409 });
   }
 
   // Verify assignment
-  const { data: assigned } = await supabase.from('assigned_questions').select('session_id').eq('session_id', payload.session_id).eq('question_id', question_id).maybeSingle();
+  const assigned = await prisma.assignedQuestion.findUnique({
+    where: { session_id_question_id: { session_id: payload.session_id, question_id } }
+  });
   if (!assigned) return NextResponse.json({ error: 'Not assigned' }, { status: 403 });
+
+  const question = await prisma.question.findUnique({ where: { id: parseInt(question_id) } });
+  if (!question) return NextResponse.json({ error: 'Question not found' }, { status: 404 });
 
   // Algorithmic / structural check
   const logicCheck = checkCodeLogic(code, parseInt(question_id));
@@ -44,28 +50,24 @@ export async function POST(request: NextRequest) {
       passed_cases: 0,
       total_cases: 0,
       score: 0,
-      max_score: 10,
+      max_score: question.marks,
     });
   }
 
-  // Get ALL test cases (visible + hidden + edge)
-  const { data: testCases } = await supabase.from('test_cases').select('*').eq('question_id', question_id);
+  // Get ALL test cases
+  const testCases = await prisma.testCase.findMany({
+    where: { question_id: parseInt(question_id) }
+  });
 
-  if (!testCases) {
+  if (!testCases || testCases.length === 0) {
     return NextResponse.json({ error: 'No test cases' }, { status: 404 });
   }
 
   // Run code against all test cases
-  const results: Array<{
-    test_case_id: number;
-    passed: boolean;
-    actual_output: string;
-    execution_time: number;
-    type: string;
-  }> = [];
-
+  const results = [];
   let compileError: string | undefined;
   let compiledOk = true;
+  let totalExecTime = 0;
 
   for (const tc of testCases) {
     const result = await compileAndRun(code, tc.input);
@@ -82,89 +84,93 @@ export async function POST(request: NextRequest) {
       passed,
       actual_output: result.timed_out ? 'TLE' : (result.output || ''),
       execution_time: result.execution_time || 0,
-      type: tc.type,
     });
+    totalExecTime += result.execution_time || 0;
   }
 
-  // Calculate score (10 marks per question)
-  let score = 0;
-  let compileScore = 0;
-  let logicScore = 0;
+  const passedCases = results.filter(r => r.passed).length;
+  const passRate = testCases.length > 0 ? passedCases / testCases.length : 0;
+  
+  let marks = 0;
+  let subStatus = 'COMPILATION_ERROR';
 
   if (compiledOk) {
-    compileScore = 2; // 2 marks for compiling + basic input handling
+    marks = passRate * question.marks;
+    if (passRate === 1) subStatus = 'ACCEPTED';
+    else if (passRate > 0) subStatus = 'PARTIAL_ACCEPTED';
+    else subStatus = 'WRONG_ANSWER';
+  }
 
-    const totalCases = results.length;
-    const passedCases = results.filter(r => r.passed).length;
-    const passRate = totalCases > 0 ? passedCases / totalCases : 0;
+  // --- AI EVALUATION (Overrides baseline marks if available) ---
+  let aiFeedback = null;
+  if (compiledOk) {
+    const aiResult = await evaluateCodeWithAI(
+      question.title,
+      question.description || '', // or statement
+      code,
+      passedCases,
+      testCases.length,
+      question.marks
+    );
 
-    // Logic score: 4 marks based on test case pass rate
-    logicScore = Math.round(passRate * 4);
-
-    // Output score: 2 marks
-    const outputScore = passRate >= 1.0 ? 2 : passRate >= 0.5 ? 1 : 0;
-
-    // Edge cases: 2 marks
-    const edgeCases = results.filter(r => r.type === 'edge');
-    const passedEdge = edgeCases.filter(r => r.passed).length;
-    const edgeScore = edgeCases.length > 0
-      ? Math.round((passedEdge / edgeCases.length) * 2)
-      : (passRate >= 1.0 ? 2 : passRate >= 0.5 ? 1 : 0);
-
-    score = compileScore + logicScore + outputScore + edgeScore;
-    score = Math.min(10, score);
+    if (aiResult) {
+      marks = aiResult.score;
+      aiFeedback = aiResult.feedback;
+    }
   }
 
   // Save submission
-  const submissionId = generateSubmissionId();
-  await supabase.from('submissions').insert({
-    id: submissionId,
-    session_id: payload.session_id,
-    question_id,
-    code,
-    score,
-    compile_score: compileScore,
-    logic_score: logicScore
+  const submission = await prisma.submission.create({
+    data: {
+      session_id: payload.session_id,
+      question_id: parseInt(question_id),
+      language_id: 1,
+      source_code: code,
+      status: subStatus,
+      total_test_cases: testCases.length,
+      passed_test_cases: passedCases,
+      execution_time_ms: compiledOk ? totalExecTime : null,
+      error_message: compileError || aiFeedback,
+      marks_awarded: marks,
+      submissionResults: compiledOk && results.length > 0 ? {
+        create: results.map(r => ({
+          test_case_id: r.test_case_id,
+          status: r.passed ? 'ACCEPTED' : 'WRONG_ANSWER',
+          execution_time_ms: r.execution_time,
+          actual_output: r.actual_output,
+        }))
+      } : undefined
+    }
   });
-
-  // Save test results
-  if (compiledOk && results.length > 0) {
-    const testResultsInsert = results.map(r => ({
-      submission_id: submissionId,
-      test_case_id: r.test_case_id,
-      passed: r.passed ? 1 : 0,
-      actual_output: r.actual_output,
-      execution_time: r.execution_time
-    }));
-    await supabase.from('test_results').insert(testResultsInsert);
-  }
 
   // Auto-save final code
-  await supabase.from('code_saves').upsert({
-    session_id: payload.session_id,
-    question_id,
-    code,
-    updated_at: new Date().toISOString()
+  await prisma.codeDraft.upsert({
+    where: { session_id_question_id: { session_id: payload.session_id, question_id: parseInt(question_id) } },
+    update: { source_code: code, updated_at: new Date() },
+    create: { session_id: payload.session_id, question_id: parseInt(question_id), language_id: 1, source_code: code }
   });
 
-  // Check if all 3 questions submitted → finalize session
-  const { count: submittedCount } = await supabase.from('submissions').select('*', { count: 'exact', head: true }).eq('session_id', payload.session_id);
-  const { count: assignedCount } = await supabase.from('assigned_questions').select('*', { count: 'exact', head: true }).eq('session_id', payload.session_id);
+  // Check if all questions submitted
+  const submittedCount = await prisma.submission.count({ where: { session_id: payload.session_id } });
+  const assignedCount = await prisma.assignedQuestion.count({ where: { session_id: payload.session_id } });
 
-  if ((submittedCount || 0) >= (assignedCount || 3)) {
-    await supabase.from('exam_sessions').update({ status: 'submitted', is_submitted: 1, end_time: new Date().toISOString() }).eq('id', payload.session_id);
+  if (submittedCount >= assignedCount && assignedCount > 0) {
+    await prisma.examSession.update({
+      where: { id: payload.session_id },
+      data: { status: 'COMPLETED', is_submitted: true, end_time: new Date() }
+    });
   }
 
-  const { data: showScores } = await supabase.from('settings').select('value').eq('key', 'show_scores_immediately').maybeSingle();
+  const showScores = await prisma.setting.findUnique({ where: { key: 'show_scores_immediately' } });
 
   return NextResponse.json({
     success: true,
-    submission_id: submissionId,
-    score: showScores?.value !== '0' ? score : null,
-    max_score: 10,
+    submission_id: submission.id,
+    score: showScores?.value !== '0' ? marks : null,
+    max_score: question.marks,
     compile_error: compiledOk ? null : compileError,
-    passed_cases: results.filter(r => r.passed).length,
-    total_cases: results.length,
-    all_submitted: (submittedCount || 0) >= (assignedCount || 3),
+    passed_cases: passedCases,
+    total_cases: testCases.length,
+    all_submitted: submittedCount >= assignedCount && assignedCount > 0,
   });
 }

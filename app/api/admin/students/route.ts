@@ -1,55 +1,113 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { verifyAdminToken } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { verifyAuthToken } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const payload = await verifyAdminToken(token);
+  const payload = await verifyAuthToken(token);
+  if (payload && payload.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized role' }, { status: 403 });
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-  // Cannot order by cast in PostgREST easily, just order by roll_no string
-  const { data: students } = await supabase.from('students').select('*').order('roll_no');
-  return NextResponse.json({ students: students || [] });
+  const studentsData = await prisma.student.findMany({
+    include: {
+      user: true,
+      branch: true,
+      division: true
+    },
+    orderBy: { roll_number: 'asc' }
+  });
+
+  const formatted = studentsData.map(s => ({
+    roll_no: s.roll_number,
+    name: s.user.full_name,
+    branch: s.branch.name,
+    division: s.division?.name || 'A',
+    is_active: s.user.status === 'ACTIVE' ? 1 : 0
+  }));
+
+  return NextResponse.json({ students: formatted });
 }
 
 export async function POST(request: NextRequest) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const payload = await verifyAdminToken(token);
+  const payload = await verifyAuthToken(token);
+  if (payload && payload.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized role' }, { status: 403 });
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
   const body = await request.json();
   const { action, students, roll_no, name, division, branch } = body;
 
+  const ensureBranchDiv = async (branchCode: string, divName: string) => {
+    let b = await prisma.branch.findUnique({ where: { code: branchCode } });
+    if (!b) b = await prisma.branch.create({ data: { code: branchCode, name: branchCode } });
+    
+    let d = await prisma.division.findUnique({ where: { name: divName } });
+    if (!d) d = await prisma.division.create({ data: { name: divName } });
+    return { branch_id: b.id, division_id: d.id };
+  };
+
   if (action === 'import') {
     if (students && students.length > 0) {
-      await supabase.from('students').upsert(
-        students.map((s: any) => ({
-          roll_no: s.roll_no,
-          name: s.name,
-          division: s.division,
-          branch: s.branch || 'AI&DS'
-        }))
-      );
+      for (const s of students) {
+        const { branch_id, division_id } = await ensureBranchDiv(s.branch || 'AI&DS', s.division || 'A');
+        const roll = s.roll_no.toUpperCase();
+        
+        await prisma.user.upsert({
+          where: { email: `${roll.toLowerCase()}@zcoer.edu.in` },
+          update: { full_name: s.name },
+          create: {
+            id: `student-${roll}`,
+            email: `${roll.toLowerCase()}@zcoer.edu.in`,
+            full_name: s.name,
+            role: 'STUDENT',
+            status: 'ACTIVE',
+            student: {
+              create: {
+                roll_number: roll,
+                branch_id,
+                division_id
+              }
+            }
+          }
+        });
+      }
     }
     return NextResponse.json({ success: true, count: students?.length || 0 });
   }
 
   if (action === 'add') {
-    await supabase.from('students').upsert({
-      roll_no,
-      name,
-      division,
-      branch: branch || 'AI&DS'
+    const { branch_id, division_id } = await ensureBranchDiv(branch || 'AI&DS', division || 'A');
+    const roll = roll_no.toUpperCase();
+    await prisma.user.upsert({
+      where: { email: `${roll.toLowerCase()}@zcoer.edu.in` },
+      update: { full_name: name },
+      create: {
+        id: `student-${roll}`,
+        email: `${roll.toLowerCase()}@zcoer.edu.in`,
+        full_name: name,
+        role: 'STUDENT',
+        status: 'ACTIVE',
+        student: {
+          create: { roll_number: roll, branch_id, division_id }
+        }
+      }
     });
     return NextResponse.json({ success: true });
   }
 
   if (action === 'toggle') {
-    const { data: current } = await supabase.from('students').select('is_active').eq('roll_no', roll_no).maybeSingle();
-    if (!current) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
-    await supabase.from('students').update({ is_active: current.is_active ? 0 : 1 }).eq('roll_no', roll_no);
+    const studentData = await prisma.student.findUnique({
+      where: { roll_number: roll_no.toUpperCase() },
+      include: { user: true }
+    });
+    if (!studentData) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+    
+    await prisma.user.update({
+      where: { id: studentData.id },
+      data: { status: studentData.user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE' }
+    });
     return NextResponse.json({ success: true });
   }
 
