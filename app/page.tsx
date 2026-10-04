@@ -100,7 +100,7 @@ export default function LoginPage() {
             letterSpacing: '0.04em',
           }}
         >
-          CODE//EXAM
+          CODE//ZEAL
         </span>
         <span className="text-label">S.Y. B.Tech AI&DS</span>
       </header>
@@ -135,7 +135,7 @@ export default function LoginPage() {
                 marginBottom: '12px'
               }}
             >
-              CODE//EXAM
+              CODE//ZEAL
             </h1>
             <p
               style={{
@@ -383,19 +383,7 @@ export default function LoginPage() {
         </div>
       </div>
       
-      {/* Built by signature */}
-      <div style={{
-        position: 'absolute',
-        bottom: '20px',
-        right: '24px',
-        fontFamily: 'JetBrains Mono, monospace',
-        fontSize: '11px',
-        fontWeight: 500,
-        color: 'var(--text-muted)',
-        letterSpacing: '0.04em',
-      }}>
-        <p>Built for secure, standardized coding assessments.</p>
-      </div>
+
     </main>
   );
 }

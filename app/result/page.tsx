@@ -81,7 +81,7 @@ export default function ResultPage() {
           fontWeight: 500,
           color: 'var(--text-secondary)',
           letterSpacing: '0.04em',
-        }}>CODE//EXAM</span>
+        }}>CODE//ZEAL</span>
         <span className="text-label">Exam Complete</span>
       </header>
 

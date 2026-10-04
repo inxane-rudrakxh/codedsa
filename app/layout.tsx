@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CODE//EXAM — Unit II Coding Assessment",
-  description: "S.Y. B.Tech AI&DS — DSA Unit II Online Coding Test",
+  title: "CODE//ZEAL — Unit II Coding Assessment",
+  description: "S.Y. B.Tech AI&DS — ZEAL Unit II Online Coding Test",
 };
 
 export default function RootLayout({

@@ -11,7 +11,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [userInfo, setUserInfo] = useState<{ name: string; role: string } | null>(null);
 
   useEffect(() => {
-    if (pathname === '/admin/login') { setChecking(false); return; }
+    if (pathname === '/admin/login' || pathname === '/admin/signup') { setChecking(false); return; }
     const token = localStorage.getItem('admin_token');
     if (!token) { router.push('/admin/login'); return; }
     
@@ -26,9 +26,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     setChecking(false);
   }, [pathname, router]);
 
-  if (pathname === '/admin/login') return <>{children}</>;
+  if (pathname === '/admin/login' || pathname === '/admin/signup') return <>{children}</>;
   if (checking) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-color)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <p style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)', fontSize: '13px' }}>Verifying...</p>
     </div>
   );
@@ -46,7 +46,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   ].filter(item => item.showFor === 'all' || isAdmin);
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-color)', display: 'flex', flexDirection: 'column' }}>
       <header style={{
         height: '52px',
         borderBottom: '1px solid var(--border)',
@@ -66,7 +66,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             fontWeight: 500,
             color: 'var(--text-secondary)',
             letterSpacing: '0.04em',
-          }}>CODE//EXAM</span>
+          }}>CODE//ZEAL</span>
           {userInfo && (
             <span style={{
               fontSize: '9px',

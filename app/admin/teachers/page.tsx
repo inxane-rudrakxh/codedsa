@@ -98,7 +98,7 @@ export default function TeachersPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
             {[
               { label: 'Full Name', key: 'full_name', placeholder: 'Prof. Kiran K.' },
-              { label: 'Email Address', key: 'email', placeholder: 'kirank@zcoer.edu.in' },
+              { label: 'Email Address', key: 'email', placeholder: 'faculty@college.edu' },
               { label: 'Password', key: 'password', placeholder: 'Minimum 6 characters', type: 'password' },
               { label: 'Department', key: 'department', placeholder: 'e.g. Computer Engineering' },
               { label: 'Subject', key: 'subject', placeholder: 'e.g. Data Structures' },

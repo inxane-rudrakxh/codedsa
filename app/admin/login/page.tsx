@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -61,7 +62,7 @@ export default function AdminLoginPage() {
             fontWeight: 700,
             color: 'var(--text-primary)',
             letterSpacing: '-0.02em',
-          }}>CODE//EXAM</h1>
+          }}>CODE//ZEAL</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
             Faculty Administration Panel
           </p>
@@ -126,21 +127,18 @@ export default function AdminLoginPage() {
           {loading ? 'Authenticating...' : 'Login'}
         </button>
 
-        <p style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
-          Default: kirank / kiran123
-        </p>
+
+        <div style={{ marginTop: '24px', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+            New faculty member?{' '}
+            <Link href="/admin/signup" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+              Create Account
+            </Link>
+          </p>
+        </div>
       </div>
 
-      <div style={{
-        position: 'absolute',
-        bottom: '16px',
-        right: '24px',
-        fontSize: '11px',
-        color: 'var(--text-muted)',
-        fontFamily: 'JetBrains Mono, monospace'
-      }}>
-        <p>Built for secure, standardized coding assessments.</p>
-      </div>
+
     </main>
   );
 }
