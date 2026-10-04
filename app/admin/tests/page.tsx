@@ -12,7 +12,14 @@ export default function TestsPage() {
   const [editData, setEditData] = useState<any>({});
   
   const [isCreating, setIsCreating] = useState(false);
-  const [newData, setNewData] = useState({ title: '', subject_id: '', duration_minutes: 60, total_marks: 30, questions_per_student: 3 });
+  const [newData, setNewData] = useState({ title: '', subject_id: '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'] });
+  
+  const SUPPORTED_LANGS = [
+    { id: 'c', label: 'C' },
+    { id: 'cpp', label: 'C++' },
+    { id: 'python', label: 'Python' },
+    { id: 'java', label: 'Java' },
+  ];
 
   const getToken = () => localStorage.getItem('admin_token') || '';
 
@@ -41,7 +48,7 @@ export default function TestsPage() {
       body: JSON.stringify({ action: 'create_test', ...newData }),
     });
     setIsCreating(false);
-    setNewData({ title: '', subject_id: subjects[0]?.id.toString() || '', duration_minutes: 60, total_marks: 30, questions_per_student: 3 });
+    setNewData({ title: '', subject_id: subjects[0]?.id.toString() || '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'] });
     fetchData();
   };
 
@@ -112,6 +119,29 @@ export default function TestsPage() {
               <p className="text-label" style={{ marginBottom: '4px' }}>Questions Assigned per Student</p>
               <input type="number" value={newData.questions_per_student} onChange={e => setNewData(p => ({ ...p, questions_per_student: parseInt(e.target.value) || 0 }))} style={inputStyle} />
             </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <p className="text-label" style={{ marginBottom: '4px' }}>Allowed Languages</p>
+              <div style={{ display: 'flex', gap: '16px' }}>
+                {SUPPORTED_LANGS.map(lang => (
+                  <label key={lang.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={newData.allowed_languages.includes(lang.id)}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setNewData(p => ({
+                          ...p,
+                          allowed_languages: checked 
+                            ? [...p.allowed_languages, lang.id] 
+                            : p.allowed_languages.filter(l => l !== lang.id)
+                        }));
+                      }}
+                    />
+                    {lang.label}
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button onClick={() => setIsCreating(false)} style={outlineBtn}>Cancel</button>
@@ -128,6 +158,7 @@ export default function TestsPage() {
                 <div>
                   <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>{test.title}</h2>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{test.subject?.name} · {test.duration_minutes} Mins · {test.total_marks} Marks · {test.questions_per_student} Qs/Student</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Languages: {test.allowed_languages?.join(', ') || 'c, cpp, python, java'}</p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', padding: '4px 8px', borderRadius: '3px', background: test.status === 'PUBLISHED' ? 'var(--success-dim)' : 'var(--surface-2)', color: test.status === 'PUBLISHED' ? 'var(--success)' : 'var(--text-muted)' }}>
@@ -163,6 +194,32 @@ export default function TestsPage() {
                     <div>
                       <p className="text-label" style={{ marginBottom: '4px' }}>Qs per Student</p>
                       <input type="number" value={editData.questions_per_student} onChange={e => setEditData((p: any) => ({ ...p, questions_per_student: parseInt(e.target.value) || 0 }))} style={inputStyle} />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <p className="text-label" style={{ marginBottom: '4px' }}>Allowed Languages</p>
+                      <div style={{ display: 'flex', gap: '16px' }}>
+                        {SUPPORTED_LANGS.map(lang => {
+                          const langs = editData.allowed_languages || ['c', 'cpp', 'python', 'java'];
+                          return (
+                            <label key={lang.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                              <input 
+                                type="checkbox" 
+                                checked={langs.includes(lang.id)}
+                                onChange={e => {
+                                  const checked = e.target.checked;
+                                  setEditData((p: any) => ({
+                                    ...p,
+                                    allowed_languages: checked 
+                                      ? [...langs, lang.id] 
+                                      : langs.filter((l: string) => l !== lang.id)
+                                  }));
+                                }}
+                              />
+                              {lang.label}
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>

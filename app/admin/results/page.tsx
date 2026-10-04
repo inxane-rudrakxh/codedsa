@@ -2,6 +2,28 @@
 
 import { useEffect, useState } from 'react';
 
+interface TestSummary {
+  id: string;
+  title: string;
+  subject: string;
+  status: string;
+  marks_published: boolean;
+  session_count: number;
+}
+
+interface QuestionResult {
+  question_id: string;
+  question_title: string;
+  order_index: number;
+  submission_id: string | null;
+  source_code: string | null;
+  status: string | null;
+  passed_test_cases: number | null;
+  total_test_cases: number | null;
+  marks_awarded: number | null;
+  max_marks: number;
+}
+
 interface ResultRow {
   roll_no: string;
   name: string;
@@ -9,91 +31,122 @@ interface ResultRow {
   branch: string;
   session_id: string | null;
   status: string | null;
-  q1_score: number | null;
-  q2_score: number | null;
-  q3_score: number | null;
-  q1_code: string | null;
-  q2_code: string | null;
-  q3_code: string | null;
-  q1_sub_id: number | null;
-  q2_sub_id: number | null;
-  q3_sub_id: number | null;
-  total_score: number;
+  is_submitted: number;
+  start_time: string | null;
   end_time: string | null;
-  is_submitted: number | null;
+  integrity_warnings: number;
+  questions: QuestionResult[];
+  total_score: number;
+  max_total: number;
 }
 
 export default function ResultsPage() {
+  const [tests, setTests] = useState<TestSummary[]>([]);
+  const [selectedTestId, setSelectedTestId] = useState<string>('');
+  const [selectedTest, setSelectedTest] = useState<any>(null);
   const [results, setResults] = useState<ResultRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [testsLoading, setTestsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [divFilter, setDivFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [sortBy, setSortBy] = useState<'roll' | 'score'>('roll');
-  const [selectedCode, setSelectedCode] = useState<{name: string, q: number, code: string, sub_id: number, score: number} | null>(null);
+  const [selectedCode, setSelectedCode] = useState<{
+    name: string; roll: string; q: QuestionResult; editMarks: number;
+  } | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [reportData, setReportData] = useState<any[] | null>(null);
 
   const getToken = () => localStorage.getItem('admin_token') || '';
 
-  const fetchResults = () => {
-    fetch('/api/admin/results', {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    })
-      .then(r => r.json())
-      .then(data => {
-        setResults(data.results || []);
-        setLoading(false);
-      });
-  };
-
+  // Load tests list
   useEffect(() => {
-    fetchResults();
+    fetch('/api/admin/results', { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(r => r.json())
+      .then(data => { setTests(data.tests || []); setTestsLoading(false); });
   }, []);
 
-  const handleUpdateScore = async (sub_id: number, marks: number) => {
+  const loadResults = async (testId: string) => {
+    setLoading(true);
+    setResults([]);
+    setReportData(null);
+    const res = await fetch(`/api/admin/results?test_id=${testId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    const data = await res.json();
+    setResults(data.results || []);
+    setSelectedTest(data.test || null);
+    setLoading(false);
+  };
+
+  const handleSelectTest = (id: string) => {
+    setSelectedTestId(id);
+    if (id) loadResults(id);
+  };
+
+  const handleUpdateMarks = async () => {
+    if (!selectedCode) return;
+    if (!selectedCode.q.submission_id) return;
     await fetch('/api/admin/results', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ submission_id: sub_id, marks_awarded: marks })
+      body: JSON.stringify({ action: 'update_marks', submission_id: selectedCode.q.submission_id, marks_awarded: selectedCode.editMarks }),
     });
     setSelectedCode(null);
-    fetchResults();
+    loadResults(selectedTestId);
+  };
+
+  const handleGenerateReport = async () => {
+    setGenerating(true);
+    const res = await fetch('/api/admin/results', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ action: 'generate_report', test_id: selectedTestId }),
+    });
+    const data = await res.json();
+    if (data.success) { setReportData(data.data); }
+    setGenerating(false);
+  };
+
+  const handlePublishMarks = async () => {
+    await fetch('/api/admin/tests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ action: 'publish_marks', id: selectedTestId }),
+    });
+    // Reload test info
+    setTests(prev => prev.map(t => t.id === selectedTestId ? { ...t, marks_published: true } : t));
+    setSelectedTest((prev: any) => prev ? { ...prev, marks_published: true } : prev);
   };
 
   const exportCSV = () => {
-    const rows = ['Roll,Name,Division,Q1,Q2,Q3,Total,Status'];
-    filtered.forEach(r => {
-      rows.push([
-        r.roll_no, r.name, r.division,
-        r.q1_score ?? '', r.q2_score ?? '', r.q3_score ?? '',
-        r.total_score,
-        r.is_submitted ? 'Submitted' : (r.session_id ? 'Active' : 'Not Started'),
-      ].join(','));
-    });
+    if (!reportData) return;
+    const keys = Object.keys(reportData[0] || {});
+    const rows = [keys.join(','), ...reportData.map(r => keys.map(k => `"${r[k] ?? ''}"`).join(','))];
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'results.csv';
+    a.download = `${selectedTest?.title || 'results'}_marks.csv`;
     a.click();
   };
 
-  const filtered = results
-    .filter(r => {
-      const matchSearch = !search || r.name.toLowerCase().includes(search.toLowerCase()) || r.roll_no.includes(search);
-      const matchDiv = divFilter === 'all' || r.division === divFilter;
-      const studentStatus = r.is_submitted ? 'submitted' : (r.session_id ? 'active' : 'not_started');
-      const matchStatus = statusFilter === 'all' || studentStatus === statusFilter;
-      return matchSearch && matchDiv && matchStatus;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'score') return b.total_score - a.total_score;
-      return parseInt(a.roll_no) - parseInt(b.roll_no);
-    });
+  const divisions = [...new Set(results.map(r => r.division).filter(Boolean))];
 
-  const totalSubmitted = results.filter(r => r.is_submitted).length;
-  const avgScore = totalSubmitted > 0
-    ? Math.round(results.filter(r => r.is_submitted).reduce((acc, r) => acc + r.total_score, 0) / totalSubmitted)
-    : 0;
+  const filtered = results.filter(r => {
+    const matchSearch = !search || r.name.toLowerCase().includes(search.toLowerCase()) || r.roll_no.toLowerCase().includes(search.toLowerCase());
+    const matchDiv = divFilter === 'all' || r.division === divFilter;
+    const sStatus = r.is_submitted ? 'submitted' : (r.session_id ? 'active' : 'not_started');
+    const matchStatus = statusFilter === 'all' || sStatus === statusFilter;
+    return matchSearch && matchDiv && matchStatus;
+  });
+
+  const submittedCount = results.filter(r => r.is_submitted).length;
+  const avgScore = submittedCount > 0
+    ? (results.filter(r => r.is_submitted).reduce((acc, r) => acc + r.total_score, 0) / submittedCount).toFixed(1)
+    : '—';
+
+  const maxQuestions = Math.max(...results.map(r => r.questions.length), 0);
+  const qHeaders = Array.from({ length: maxQuestions }, (_, i) => `Q${i + 1}`);
 
   return (
     <div>
@@ -102,204 +155,182 @@ export default function ResultsPage() {
           <p className="text-label" style={{ marginBottom: '8px' }}>Evaluation</p>
           <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Results</h1>
         </div>
-        <button onClick={exportCSV} style={outlineBtn}>Export CSV</button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {selectedTestId && !selectedTest?.marks_published && (
+            <button onClick={handlePublishMarks} style={{ ...outlineBtn, color: 'var(--success)', borderColor: 'var(--success)' }}>
+              Publish Marks to Students
+            </button>
+          )}
+          {selectedTestId && (
+            <button onClick={handleGenerateReport} disabled={generating} style={outlineBtn}>
+              {generating ? 'Generating...' : 'Generate Report'}
+            </button>
+          )}
+          {reportData && (
+            <button onClick={exportCSV} style={primaryBtn}>Download CSV</button>
+          )}
+        </div>
       </div>
 
-      {/* Summary */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '1px',
-        background: 'var(--border)',
-        border: '1px solid var(--border)',
-        borderRadius: '4px',
-        overflow: 'hidden',
-        marginBottom: '24px',
-      }}>
-        {[
-          { label: 'Total Students', value: results.length },
-          { label: 'Submitted', value: totalSubmitted },
-          { label: 'Avg Score', value: totalSubmitted > 0 ? `${avgScore}/30` : '—' },
-        ].map(({ label, value }) => (
-          <div key={label} style={{ padding: '20px', background: 'var(--surface-1)' }}>
-            <p className="text-label" style={{ marginBottom: '4px' }}>{label}</p>
-            <p style={{
-              fontSize: '28px',
-              fontWeight: 700,
-              fontFamily: 'JetBrains Mono, monospace',
-              color: 'var(--text-primary)',
-            }}>{value}</p>
+      {/* Test selector */}
+      <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '4px' }}>
+        <p className="text-label" style={{ marginBottom: '8px' }}>Select Test</p>
+        {testsLoading ? (
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Loading tests...</p>
+        ) : tests.length === 0 ? (
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No tests found. Create a test first.</p>
+        ) : (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {tests.map(t => (
+              <button
+                key={t.id}
+                onClick={() => handleSelectTest(t.id)}
+                style={{
+                  padding: '8px 14px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px', fontWeight: 500,
+                  background: selectedTestId === t.id ? 'var(--text-primary)' : 'var(--surface-2)',
+                  color: selectedTestId === t.id ? 'var(--bg)' : 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                {t.title}
+                {t.marks_published && <span style={{ marginLeft: '6px', fontSize: '9px', color: selectedTestId === t.id ? 'rgba(255,255,255,0.7)' : 'var(--success)' }}>✓ PUBLISHED</span>}
+              </button>
+            ))}
           </div>
-        ))}
+        )}
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <input
-          type="text"
-          placeholder="Search..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{ ...filterInput, width: '220px' }}
-        />
-        <select value={divFilter} onChange={e => setDivFilter(e.target.value)} style={filterInput}>
-          <option value="all">All Divisions</option>
-          <option value="AIDS A">AIDS A</option>
-          <option value="AIDS B">AIDS B</option>
-        </select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={filterInput}>
-          <option value="all">All Status</option>
-          <option value="submitted">Submitted</option>
-          <option value="active">Active</option>
-          <option value="not_started">Not Started</option>
-        </select>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value as 'roll' | 'score')} style={filterInput}>
-          <option value="roll">Sort: Roll No</option>
-          <option value="score">Sort: Score (High)</option>
-        </select>
-      </div>
+      {selectedTestId && (
+        <>
+          {/* Stats */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: 'var(--border)', border: '1px solid var(--border)', borderRadius: '4px', overflow: 'hidden', marginBottom: '20px' }}>
+            {[
+              { label: 'Total Students', value: results.length },
+              { label: 'Submitted', value: submittedCount },
+              { label: 'Avg Score', value: submittedCount > 0 ? `${avgScore}/${selectedTest?.total_marks || '?'}` : '—' },
+              { label: 'Marks Published', value: selectedTest?.marks_published ? 'YES' : 'NO' },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ padding: '16px 20px', background: 'var(--surface-1)' }}>
+                <p className="text-label" style={{ marginBottom: '4px' }}>{label}</p>
+                <p style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-primary)' }}>{value}</p>
+              </div>
+            ))}
+          </div>
 
-      {/* Table */}
-      <div style={{ border: '1px solid var(--border)', borderRadius: '4px', overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
-          <thead>
-            <tr style={{ background: 'var(--surface-2)' }}>
-              {['Roll', 'Name', 'Division', 'Q1', 'Q2', 'Q3', 'Total', 'Status'].map(h => (
-                <th key={h} style={thStyle}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading...</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No results found</td></tr>
-            ) : (
-              filtered.map((r, i) => {
-                const status = r.is_submitted ? 'submitted' : (r.session_id ? 'active' : 'not_started');
-                return (
-                  <tr key={r.roll_no} style={{
-                    borderBottom: i < filtered.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                    background: 'var(--surface-1)',
-                  }}>
-                    <td style={tdStyle}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>{r.roll_no}</span></td>
-                    <td style={tdStyle}><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.name}</span></td>
-                    <td style={tdStyle}><span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{r.division}</span></td>
-                    {[
-                      { score: r.q1_score, code: r.q1_code, idx: 1, sub_id: r.q1_sub_id },
-                      { score: r.q2_score, code: r.q2_code, idx: 2, sub_id: r.q2_sub_id },
-                      { score: r.q3_score, code: r.q3_code, idx: 3, sub_id: r.q3_sub_id },
-                    ].map((item, si) => (
-                      <td key={si} style={tdStyle}>
-                        {item.score !== null ? (
-                          <button
-                            onClick={() => setSelectedCode({ name: r.name, q: item.idx, code: item.code || '', sub_id: item.sub_id as number, score: item.score as number })}
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              fontFamily: 'JetBrains Mono, monospace',
-                              fontSize: '13px',
-                              color: item.score >= 8 ? 'var(--success)' : item.score >= 5 ? 'var(--warning)' : 'var(--error)',
-                              cursor: 'pointer',
-                              textDecoration: 'underline',
-                              textDecorationStyle: 'dotted',
-                              textUnderlineOffset: '4px',
-                            }}
-                          >
-                            {item.score}
-                          </button>
+          {/* Filters */}
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <input type="text" placeholder="Search by name or roll..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...filterInput, flex: 1, maxWidth: '260px' }} />
+            <select value={divFilter} onChange={e => setDivFilter(e.target.value)} style={filterInput}>
+              <option value="all">All Divisions</option>
+              {divisions.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={filterInput}>
+              <option value="all">All Status</option>
+              <option value="submitted">Submitted</option>
+              <option value="active">Active</option>
+              <option value="not_started">Not Started</option>
+            </select>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>{filtered.length} students</span>
+          </div>
+
+          {/* Table */}
+          <div style={{ border: '1px solid var(--border)', borderRadius: '4px', overflow: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+              <thead>
+                <tr style={{ background: 'var(--surface-2)' }}>
+                  {['Roll', 'Name', 'Div', ...qHeaders, 'Total', 'Status', 'Warnings'].map(h => (
+                    <th key={h} style={thStyle}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={7 + qHeaders.length} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading results...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={7 + qHeaders.length} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No results found.</td></tr>
+                ) : filtered.map((r, i) => {
+                  const sStatus = r.is_submitted ? 'submitted' : (r.session_id ? 'active' : 'not_started');
+                  return (
+                    <tr key={r.roll_no} style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border-subtle)' : 'none', background: 'var(--surface-1)' }}>
+                      <td style={tdStyle}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--text-primary)' }}>{r.roll_no}</span></td>
+                      <td style={tdStyle}><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.name}</span></td>
+                      <td style={tdStyle}><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.division}</span></td>
+                      {qHeaders.map((_, qi) => {
+                        const q = r.questions.find(q => q.order_index === qi);
+                        return (
+                          <td key={qi} style={tdStyle}>
+                            {q && q.submission_id ? (
+                              <button
+                                onClick={() => setSelectedCode({ name: r.name, roll: r.roll_no, q, editMarks: q.marks_awarded ?? 0 })}
+                                style={{
+                                  background: 'transparent', border: 'none', cursor: 'pointer',
+                                  fontFamily: 'JetBrains Mono, monospace', fontSize: '13px',
+                                  textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '3px',
+                                  color: q.marks_awarded === null ? 'var(--text-muted)' : q.marks_awarded >= q.max_marks * 0.7 ? 'var(--success)' : q.marks_awarded >= q.max_marks * 0.4 ? 'var(--warning, #f0a500)' : 'var(--error)',
+                                }}
+                              >
+                                {q.marks_awarded !== null ? `${q.marks_awarded}/${q.max_marks}` : `?/${q.max_marks}`}
+                              </button>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '13px' }}>—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td style={tdStyle}>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', fontWeight: 600, color: r.is_submitted ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                          {r.is_submitted ? `${r.total_score}/${r.max_total}` : '—'}
+                        </span>
+                      </td>
+                      <td style={tdStyle}><StatusPill status={sStatus} /></td>
+                      <td style={tdStyle}>
+                        {r.integrity_warnings > 0 ? (
+                          <span style={{ fontSize: '11px', color: 'var(--error)', fontFamily: 'JetBrains Mono, monospace' }}>⚠ {r.integrity_warnings}</span>
                         ) : (
-                          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', color: 'var(--text-muted)' }}>—</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>—</span>
                         )}
                       </td>
-                    ))}
-                    <td style={tdStyle}>
-                      <span style={{
-                        fontFamily: 'JetBrains Mono, monospace',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        color: r.is_submitted ? 'var(--text-primary)' : 'var(--text-muted)',
-                      }}>
-                        {r.is_submitted ? r.total_score : '—'}<span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{r.is_submitted ? '/30' : ''}</span>
-                      </span>
-                    </td>
-                    <td style={tdStyle}>
-                      <StatusPill status={status} />
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
-      {/* Code Viewer Modal */}
+      {/* Code Viewer + Marks Editor Modal */}
       {selectedCode && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          backdropFilter: 'blur(4px)',
-          padding: '20px',
-        }}>
-          <div className="animate-fade-up" style={{
-            background: 'var(--surface-1)',
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            width: '100%',
-            maxWidth: '800px',
-            maxHeight: '90vh',
-            display: 'flex',
-            flexDirection: 'column',
-          }}>
-            <div style={{
-              padding: '16px 24px',
-              borderBottom: '1px solid var(--border)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
-              <h3 style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600 }}>
-                {selectedCode.name} - Question {selectedCode.q}
-              </h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(4px)', padding: '20px' }}>
+          <div className="animate-fade-up" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', width: '100%', maxWidth: '860px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 600 }}>
+                  {selectedCode.roll} · {selectedCode.name} — Q{selectedCode.q.order_index + 1}: {selectedCode.q.question_title}
+                </h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  {selectedCode.q.passed_test_cases}/{selectedCode.q.total_test_cases} test cases passed
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Score (out of 10):</span>
-                  <input 
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Marks (/{selectedCode.q.max_marks}):</span>
+                  <input
                     type="number"
                     min="0"
-                    max="10"
-                    value={selectedCode.score}
-                    onChange={e => setSelectedCode({ ...selectedCode, score: parseInt(e.target.value) || 0 })}
-                    style={{ ...filterInput, width: '60px', padding: '4px 8px' }}
+                    max={selectedCode.q.max_marks}
+                    value={selectedCode.editMarks}
+                    onChange={e => setSelectedCode({ ...selectedCode, editMarks: parseFloat(e.target.value) || 0 })}
+                    style={{ ...filterInput, width: '70px', padding: '4px 8px' }}
                   />
-                  <button onClick={() => handleUpdateScore(selectedCode.sub_id, selectedCode.score)} style={{ ...primaryBtn, padding: '4px 12px' }}>
-                    Save
-                  </button>
+                  <button onClick={handleUpdateMarks} style={{ ...primaryBtn, padding: '6px 14px' }}>Save</button>
                 </div>
-                <button
-                  onClick={() => setSelectedCode(null)}
-                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '20px', cursor: 'pointer' }}
-                >
-                  ×
-                </button>
+                <button onClick={() => setSelectedCode(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '22px', cursor: 'pointer' }}>×</button>
               </div>
             </div>
             <div style={{ padding: '24px', overflow: 'auto', flex: 1, background: '#0d1117' }}>
-              <pre style={{
-                fontFamily: 'JetBrains Mono, monospace',
-                fontSize: '13px',
-                color: '#c9d1d9',
-                margin: 0,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}>
-                {selectedCode.code || '// No code submitted'}
+              <pre style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', color: '#c9d1d9', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {selectedCode.q.source_code || '// No code submitted'}
               </pre>
             </div>
           </div>
@@ -316,60 +347,11 @@ function StatusPill({ status }: { status: string }) {
     not_started: { label: 'NOT STARTED', color: 'var(--text-muted)', bg: 'var(--surface-2)' },
   };
   const c = config[status] || config.not_started;
-  return (
-    <span style={{
-      fontSize: '9px',
-      fontWeight: 700,
-      letterSpacing: '0.10em',
-      color: c.color,
-      background: c.bg,
-      padding: '3px 7px',
-      borderRadius: '2px',
-    }}>{c.label}</span>
-  );
+  return <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.10em', color: c.color, background: c.bg, padding: '3px 7px', borderRadius: '2px' }}>{c.label}</span>;
 }
 
-const thStyle: React.CSSProperties = {
-  padding: '10px 14px',
-  textAlign: 'left',
-  fontSize: '10px',
-  fontWeight: 600,
-  letterSpacing: '0.10em',
-  textTransform: 'uppercase' as const,
-  color: 'var(--text-muted)',
-  borderBottom: '1px solid var(--border)',
-};
-const tdStyle: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'middle' };
-const filterInput: React.CSSProperties = {
-  padding: '8px 12px',
-  background: 'var(--surface-1)',
-  border: '1px solid var(--border)',
-  borderRadius: '3px',
-  color: 'var(--text-secondary)',
-  fontSize: '13px',
-  outline: 'none',
-};
-const outlineBtn: React.CSSProperties = {
-  padding: '8px 16px',
-  background: 'transparent',
-  border: '1px solid var(--border)',
-  borderRadius: '3px',
-  color: 'var(--text-secondary)',
-  fontSize: '11px',
-  fontWeight: 600,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase' as const,
-  cursor: 'pointer',
-};
-const primaryBtn: React.CSSProperties = {
-  padding: '8px 16px',
-  background: 'var(--text-primary)',
-  border: '1px solid transparent',
-  borderRadius: '3px',
-  color: 'var(--bg)',
-  fontSize: '11px',
-  fontWeight: 600,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase' as const,
-  cursor: 'pointer',
-};
+const thStyle: React.CSSProperties = { padding: '10px 14px', textAlign: 'left', fontSize: '10px', fontWeight: 600, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' };
+const tdStyle: React.CSSProperties = { padding: '10px 14px', verticalAlign: 'middle' };
+const filterInput: React.CSSProperties = { padding: '8px 12px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--text-secondary)', fontSize: '13px', outline: 'none' };
+const outlineBtn: React.CSSProperties = { padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' };
+const primaryBtn: React.CSSProperties = { padding: '8px 16px', background: 'var(--text-primary)', border: '1px solid transparent', borderRadius: '3px', color: 'var(--bg)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' };

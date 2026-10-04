@@ -55,7 +55,15 @@ export async function GET(request: NextRequest) {
     where: { session_id: session.id }
   });
   const submissions: Record<string, any> = {};
-  submissionRows.forEach(s => { submissions[s.question_id] = s; });
+  submissionRows.forEach(s => { 
+    if (!session.test.marks_published) {
+      // Hide marks and AI feedback if not published
+      const { marks_awarded, ai_feedback, ...rest } = s;
+      submissions[s.question_id] = rest;
+    } else {
+      submissions[s.question_id] = s; 
+    }
+  });
 
   // Get code saves
   const saveRows = await prisma.codeDraft.findMany({
@@ -91,7 +99,9 @@ export async function GET(request: NextRequest) {
       status: session.status === 'PENDING_APPROVAL' ? 'pending_approval' : (session.is_submitted ? 'submitted' : session.status.toLowerCase()),
       is_submitted: session.is_submitted,
       remaining_seconds: Math.floor(remaining),
-      test_title: session.test.title
+      test_title: session.test.title,
+      marks_published: session.test.marks_published,
+      allowed_languages: session.test.allowed_languages,
     },
     student: {
       roll_no: session.student.roll_number,

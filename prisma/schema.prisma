@@ -53,7 +53,11 @@ model Teacher {
   id           String    @id @map("_id") @db.ObjectId
   user         User      @relation(fields: [id], references: [id], onDelete: Cascade)
   department   String?
+  subject      String?
   created_at   DateTime  @default(now())
+
+  tests        Test[]
+  questions    Question[]
 }
 
 model Subject {
@@ -72,16 +76,22 @@ model Test {
   description           String?
   subject_id            String    @db.ObjectId
   subject               Subject   @relation(fields: [subject_id], references: [id])
+  teacher_id            String?   @db.ObjectId
+  teacher               Teacher?  @relation(fields: [teacher_id], references: [id])
   duration_minutes      Int       @default(60)
   total_marks           Int       @default(100)
   status                String    @default("DRAFT")
+  marks_published       Boolean   @default(false)
   randomize_questions   Boolean   @default(true)
   questions_per_student Int       @default(3)
+  target_division       String?
+  allowed_languages     String[]  @default(["c", "cpp", "python", "java"])
   created_at            DateTime  @default(now())
   updated_at            DateTime  @updatedAt
   
   testQuestions         TestQuestion[]
   examSessions          ExamSession[]
+  marksReports          MarksReport[]
 }
 
 model Question {
@@ -91,6 +101,8 @@ model Question {
   description   String
   subject_id    String    @db.ObjectId
   subject       Subject   @relation(fields: [subject_id], references: [id])
+  teacher_id    String?   @db.ObjectId
+  teacher       Teacher?  @relation(fields: [teacher_id], references: [id])
   topic         String?
   difficulty    String    @default("MEDIUM")
   marks         Int       @default(10)
@@ -214,6 +226,15 @@ model SubmissionResult {
   error_message   String?
   
   @@unique([submission_id, test_case_id])
+}
+
+model MarksReport {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  test_id      String    @db.ObjectId
+  test         Test      @relation(fields: [test_id], references: [id])
+  generated_at DateTime  @default(now())
+  generated_by String
+  data         String    // JSON stringified report data
 }
 
 model Setting {

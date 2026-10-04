@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
   const body = await request.json();
-  const { question_id, code } = body;
+  const { question_id, code, language } = body;
 
   if (!question_id || !code) {
     return NextResponse.json({ error: 'question_id and code are required' }, { status: 400 });
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
   let totalExecTime = 0;
 
   for (const tc of testCases) {
-    const result = await compileAndRun(code, tc.input);
+    const result = await compileAndRun(code, tc.input, language || 'cpp');
 
     if (!result.success && result.compile_error && !result.timed_out) {
       compileError = result.compile_error;
@@ -119,12 +119,15 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const langMap: Record<string, number> = { 'c': 1, 'cpp': 2, 'python': 3, 'java': 4 };
+  const langId = langMap[(language || 'cpp').toLowerCase()] || 2;
+
   // Save submission
   const submission = await prisma.submission.create({
     data: {
       session_id: payload.session_id,
       question_id: question_id,
-      language_id: 1,
+      language_id: langId,
       source_code: code,
       status: subStatus,
       total_test_cases: testCases.length,
@@ -147,10 +150,9 @@ export async function POST(request: NextRequest) {
   await prisma.codeDraft.upsert({
     where: { session_id_question_id: { session_id: payload.session_id, question_id: question_id } },
     update: { source_code: code, updated_at: new Date() },
-    create: { session_id: payload.session_id, question_id: question_id, language_id: 1, source_code: code }
+    create: { session_id: payload.session_id, question_id: question_id, language_id: langId, source_code: code }
   });
 
-  // Check if all questions submitted
   const submittedCount = await prisma.submission.count({ where: { session_id: payload.session_id } });
   const assignedCount = await prisma.assignedQuestion.count({ where: { session_id: payload.session_id } });
 
@@ -161,12 +163,13 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const showScores = await prisma.setting.findUnique({ where: { key: 'show_scores_immediately' } });
+  // Fetch test to check if marks should be published immediately
+  const testInfo = await prisma.test.findUnique({ where: { id: session.test_id } });
 
   return NextResponse.json({
     success: true,
     submission_id: submission.id,
-    score: showScores?.value !== '0' ? marks : null,
+    score: testInfo?.marks_published ? marks : null,
     max_score: question.marks,
     compile_error: compiledOk ? null : compileError,
     passed_cases: passedCases,

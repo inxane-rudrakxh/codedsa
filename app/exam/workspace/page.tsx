@@ -42,6 +42,7 @@ interface SessionData {
     is_submitted: number;
     remaining_seconds: number;
     integrity_warnings: number;
+    allowed_languages?: string[];
     is_demo?: boolean;
     demo_config?: {
       demo_rolls: string[];
@@ -83,6 +84,7 @@ export default function WorkspacePage() {
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [activeQuestion, setActiveQuestion] = useState(0);
   const [codes, setCodes] = useState<Record<number, string>>({});
+  const [language, setLanguage] = useState<string>('cpp');
   const [runResults, setRunResults] = useState<{
     compile_error?: string;
     test_results: TestCaseResult[];
@@ -139,6 +141,10 @@ export default function WorkspacePage() {
         setSessionData(data);
         setTimeRemaining(data.session.remaining_seconds);
         setWarningCount(data.session.integrity_warnings);
+        
+        if (data.session.allowed_languages && data.session.allowed_languages.length > 0) {
+          setLanguage(data.session.allowed_languages[0]);
+        }
 
         // Initialize codes from saves
         const initialCodes: Record<number, string> = {};
@@ -238,9 +244,31 @@ export default function WorkspacePage() {
     return () => { if (saveTimerRef.current) clearInterval(saveTimerRef.current); };
   }, [sessionData, activeQuestion, codes, loading, getToken]);
 
+  const lastWarningRef = useRef<number>(0);
+
   // Integrity monitoring
   useEffect(() => {
     if (!sessionData) return;
+
+    // Try to enter fullscreen on mount
+    const requestFullscreen = () => {
+      if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    };
+    
+    // Some browsers require interaction, so we also listen for the first click
+    const firstClick = () => {
+      requestFullscreen();
+      document.removeEventListener('click', firstClick);
+    };
+    document.addEventListener('click', firstClick);
+
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        reportIntegrity('fullscreen_exit');
+      }
+    };
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -252,16 +280,55 @@ export default function WorkspacePage() {
       reportIntegrity('window_blur');
     };
 
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      reportIntegrity('right_click');
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+P, Ctrl+S
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
+        (e.ctrlKey && (e.key === 'U' || e.key === 'C' || e.key === 'V' || e.key === 'X' || e.key === 'P' || e.key === 'S'))
+      ) {
+        e.preventDefault();
+        reportIntegrity('forbidden_key');
+      }
+    };
+
+    const handleCopyPaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      reportIntegrity('copy_paste_attempt');
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('copy', handleCopyPaste);
+    document.addEventListener('paste', handleCopyPaste);
+    document.addEventListener('cut', handleCopyPaste);
 
     return () => {
+      document.removeEventListener('click', firstClick);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('copy', handleCopyPaste);
+      document.removeEventListener('paste', handleCopyPaste);
+      document.removeEventListener('cut', handleCopyPaste);
     };
   }, [sessionData]);
 
   const reportIntegrity = async (event_type: string) => {
+    const now = Date.now();
+    if (now - lastWarningRef.current < 2000) return; // Prevent spamming
+    lastWarningRef.current = now;
+
     const token = getToken();
     if (!token) return;
     try {
@@ -272,7 +339,17 @@ export default function WorkspacePage() {
       });
       const data = await res.json();
       setWarningCount(data.warnings);
-      setIntegrityWarning(`Leaving the exam window has been detected.`);
+      
+      const eventMap: Record<string, string> = {
+        'tab_hidden': 'Leaving the exam tab',
+        'window_blur': 'Switching away from the exam window',
+        'fullscreen_exit': 'Exiting fullscreen mode',
+        'right_click': 'Right-clicking',
+        'forbidden_key': 'Using forbidden keyboard shortcuts',
+        'copy_paste_attempt': 'Copying or pasting'
+      };
+      
+      setIntegrityWarning(`${eventMap[event_type] || 'A forbidden action'} has been detected.`);
       setTimeout(() => setIntegrityWarning(null), 5000);
     } catch {}
   };
@@ -304,7 +381,7 @@ export default function WorkspacePage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ question_id: question.id, code }),
+        body: JSON.stringify({ question_id: question.id, code, language }),
       });
       const data = await res.json();
       setRunResults(data);
@@ -323,7 +400,7 @@ export default function WorkspacePage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${getToken()}`,
       },
-      body: JSON.stringify({ question_id: questionId, code }),
+      body: JSON.stringify({ question_id: questionId, code, language }),
     });
     const data = await res.json();
     if (data.success) {
@@ -555,11 +632,29 @@ export default function WorkspacePage() {
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        main.cpp
+                        Source Code
                       </span>
-                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '2px' }}>
-                        C++17
-                      </span>
+                      <select
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value)}
+                        disabled={isSubmitted}
+                        style={{
+                          background: 'var(--surface-2)',
+                          color: 'var(--text-primary)',
+                          border: 'none',
+                          padding: '2px 6px',
+                          borderRadius: '2px',
+                          fontSize: '11px',
+                          outline: 'none',
+                          cursor: isSubmitted ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {(sessionData.session.allowed_languages || ['c', 'cpp', 'python', 'java']).map(l => (
+                          <option key={l} value={l}>
+                            {l === 'cpp' ? 'C++' : l === 'c' ? 'C' : l === 'python' ? 'Python' : 'Java'}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     {isSubmitted ? (
                       <span style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600, letterSpacing: '0.08em' }}>
@@ -595,7 +690,7 @@ export default function WorkspacePage() {
                   >
                     <MonacoEditor
                       height="100%"
-                      language="cpp"
+                      language={language === 'c' ? 'c' : language === 'cpp' ? 'cpp' : language === 'python' ? 'python' : 'java'}
                       theme="vs-dark"
                       value={demoActive ? demoCode : (codes[currentQuestion.id] || STARTER_CODE)}
                       onChange={(val) => {

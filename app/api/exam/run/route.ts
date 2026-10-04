@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
   const body = await request.json();
-  const { question_id, code } = body;
+  const { question_id, code, language } = body;
 
   if (!question_id || !code) {
     return NextResponse.json({ error: 'question_id and code are required' }, { status: 400 });
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   let compiledOk = true;
 
   for (const tc of testCases) {
-    const result = await compileAndRun(code, tc.input);
+    const result = await compileAndRun(code, tc.input, language || 'cpp');
 
     if (!result.success && result.compile_error && !result.timed_out) {
       compileError = result.compile_error;

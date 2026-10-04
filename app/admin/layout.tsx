@@ -8,11 +8,21 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [checking, setChecking] = useState(true);
+  const [userInfo, setUserInfo] = useState<{ name: string; role: string } | null>(null);
 
   useEffect(() => {
     if (pathname === '/admin/login') { setChecking(false); return; }
     const token = localStorage.getItem('admin_token');
     if (!token) { router.push('/admin/login'); return; }
+    
+    // Decode token to get user info (JWT is base64)
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const decoded = JSON.parse(atob(parts[1]));
+        setUserInfo({ name: decoded.email || 'User', role: decoded.role || 'TEACHER' });
+      }
+    } catch {}
     setChecking(false);
   }, [pathname, router]);
 
@@ -23,47 +33,61 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     </div>
   );
 
+  const isAdmin = userInfo?.role === 'ADMIN';
+
   const nav = [
-    { href: '/admin/dashboard', label: 'Dashboard' },
-    { href: '/admin/branches', label: 'Branches' },
-    { href: '/admin/subjects', label: 'Subjects' },
-    { href: '/admin/students', label: 'Students' },
-    { href: '/admin/teachers', label: 'Teachers' },
-    { href: '/admin/questions', label: 'Questions' },
-    { href: '/admin/tests', label: 'Tests' },
-    { href: '/admin/results', label: 'Results' },
-    { href: '/admin/settings', label: 'Settings' },
-  ];
+    { href: '/admin/dashboard', label: 'Dashboard', showFor: 'all' },
+    { href: '/admin/questions', label: 'Questions', showFor: 'all' },
+    { href: '/admin/tests', label: 'Tests', showFor: 'all' },
+    { href: '/admin/results', label: 'Results', showFor: 'all' },
+    { href: '/admin/students', label: 'Students', showFor: 'admin' },
+    { href: '/admin/teachers', label: 'Teachers', showFor: 'admin' },
+    { href: '/admin/settings', label: 'Settings', showFor: 'admin' },
+  ].filter(item => item.showFor === 'all' || isAdmin);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-      {/* Top nav */}
       <header style={{
         height: '52px',
         borderBottom: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'center',
-        padding: '0 32px',
-        gap: '32px',
+        padding: '0 24px',
+        gap: '24px',
         background: 'var(--surface-1)',
         position: 'sticky',
         top: 0,
         zIndex: 100,
       }}>
-        <span style={{
-          fontFamily: 'JetBrains Mono, monospace',
-          fontSize: '13px',
-          fontWeight: 500,
-          color: 'var(--text-secondary)',
-          letterSpacing: '0.04em',
-          minWidth: 'fit-content',
-        }}>ZCOER PLATFORM</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 'fit-content' }}>
+          <span style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '13px',
+            fontWeight: 500,
+            color: 'var(--text-secondary)',
+            letterSpacing: '0.04em',
+          }}>CODE//DSA</span>
+          {userInfo && (
+            <span style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.12em',
+              color: isAdmin ? 'var(--accent)' : 'var(--warning, #f0a500)',
+              background: isAdmin ? 'var(--accent-dim)' : 'rgba(240,165,0,0.12)',
+              padding: '2px 7px',
+              borderRadius: '2px',
+              textTransform: 'uppercase',
+            }}>
+              {userInfo.role}
+            </span>
+          )}
+        </div>
 
         <div style={{ height: '16px', width: '1px', background: 'var(--border)' }} />
 
-        <nav style={{ display: 'flex', gap: '4px' }}>
+        <nav style={{ display: 'flex', gap: '2px' }}>
           {nav.map(({ href, label }) => {
-            const active = pathname === href;
+            const active = pathname === href || pathname.startsWith(href + '/');
             return (
               <Link key={href} href={href} style={{
                 padding: '6px 12px',
@@ -83,7 +107,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <span className="text-label">Admin</span>
+          {userInfo && (
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              {userInfo.name}
+            </span>
+          )}
           <button
             onClick={() => {
               localStorage.removeItem('admin_token');
@@ -93,9 +121,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               fontSize: '11px',
               color: 'var(--text-muted)',
               background: 'none',
-              border: 'none',
+              border: '1px solid var(--border)',
+              borderRadius: '3px',
               cursor: 'pointer',
-              padding: '4px 8px',
+              padding: '4px 10px',
+              letterSpacing: '0.04em',
             }}
           >
             Logout

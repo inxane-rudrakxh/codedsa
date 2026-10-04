@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { verifyAuthToken } from '@/lib/auth';
+import { getAdminUser } from '@/lib/permissions';
 
 export async function POST(request: NextRequest) {
-  const token = request.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const payload = await verifyAuthToken(token);
-  if (!payload || payload.role !== 'ADMIN') return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+  const payload = await getAdminUser(request);
+  if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
   const { session_id, action } = body;
@@ -16,17 +14,35 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Verify the session belongs to a test this user can manage
+    const session = await prisma.examSession.findUnique({
+      where: { id: session_id },
+      include: { test: true }
+    });
+    if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+
+    // Teacher can only approve sessions for their own tests
+    if (payload.role === 'TEACHER' && session.test.teacher_id !== payload.user_id) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     if (action === 'approve') {
-      await prisma.examSession.updateMany({
-        where: { id: session_id, status: 'PENDING_APPROVAL' },
+      await prisma.examSession.update({
+        where: { id: session_id },
         data: { status: 'ACTIVE', start_time: new Date() }
       });
       return NextResponse.json({ success: true });
     }
 
     if (action === 'reject') {
-      await prisma.examSession.deleteMany({
-        where: { id: session_id, status: 'PENDING_APPROVAL' }
+      await prisma.examSession.delete({ where: { id: session_id } });
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === 'force_submit') {
+      await prisma.examSession.update({
+        where: { id: session_id },
+        data: { status: 'COMPLETED', is_submitted: true, end_time: new Date() }
       });
       return NextResponse.json({ success: true });
     }

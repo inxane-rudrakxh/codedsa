@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation';
 interface ResultData {
   student: { roll_no: string; name: string; division: string; branch: string };
   questions: Array<{ id: string; title: string; order_index: number }>;
-  submissions: Array<{ question_id: string; score: number; submitted_at: string }>;
-  total_score: number;
+  submissions: Array<{ question_id: string; score: number | null; submitted_at: string }>;
+  total_score: number | null;
   submitted_at: string | null;
+  marks_published: boolean;
 }
 
 export default function ResultPage() {
@@ -28,14 +29,16 @@ export default function ResultPage() {
         if (!d.session) { router.push('/'); return; }
 
         const questions = d.questions || [];
-        const submissionMap: Record<string, { score: number; submitted_at: string }> = d.submissions || {};
+        const submissionMap: Record<string, any> = d.submissions || {};
         const submissions = Object.entries(submissionMap).map(([qid, s]) => ({
           question_id: qid,
-          score: (s as { score: number; submitted_at: string }).score,
-          submitted_at: (s as { score: number; submitted_at: string }).submitted_at,
+          score: s.marks_awarded ?? null,
+          submitted_at: s.created_at,
         }));
 
-        const totalScore = submissions.reduce((acc, s) => acc + (s.score || 0), 0);
+        const totalScore = d.session?.marks_published 
+          ? submissions.reduce((acc, s) => acc + (s.score || 0), 0)
+          : null;
 
         setData({
           student: d.student,
@@ -43,6 +46,7 @@ export default function ResultPage() {
           submissions,
           total_score: totalScore,
           submitted_at: d.session.end_time || new Date().toISOString(),
+          marks_published: d.session?.marks_published || false,
         });
         setLoading(false);
       })
@@ -59,7 +63,7 @@ export default function ResultPage() {
 
   if (!data) return null;
 
-  const scoreMap: Record<string, number> = {};
+  const scoreMap: Record<string, number | null> = {};
   data.submissions.forEach(s => { scoreMap[s.question_id] = s.score; });
 
   return (
@@ -150,14 +154,22 @@ export default function ResultPage() {
                   fontSize: '20px',
                   fontWeight: 600,
                   fontFamily: 'JetBrains Mono, monospace',
-                  color: scoreMap[q.id] !== undefined ? 'var(--text-primary)' : 'var(--text-muted)',
+                  color: scoreMap[q.id] !== null && scoreMap[q.id] !== undefined ? 'var(--text-primary)' : 'var(--text-muted)',
                 }}>
-                  {scoreMap[q.id] !== undefined ? scoreMap[q.id] : '—'}
-                  <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400 }}>/10</span>
+                  {data.marks_published && scoreMap[q.id] !== null && scoreMap[q.id] !== undefined ? scoreMap[q.id] : '—'}
+                  {data.marks_published && <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400 }}>/10</span>}
                 </span>
               </div>
             ))}
           </div>
+
+          {!data.marks_published && (
+            <div style={{ padding: '16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '4px', marginBottom: '32px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                Scores are currently hidden. They will be available here once published by your teacher.
+              </p>
+            </div>
+          )}
 
           {/* Total */}
           <div style={{
@@ -183,14 +195,16 @@ export default function ResultPage() {
                 fontSize: '48px',
                 fontWeight: 700,
                 fontFamily: 'JetBrains Mono, monospace',
-                color: 'var(--text-primary)',
+                color: data.marks_published ? 'var(--text-primary)' : 'var(--text-muted)',
                 letterSpacing: '-0.02em',
               }}>
-                {data.total_score}
+                {data.marks_published && data.total_score !== null ? data.total_score : '—'}
               </span>
-              <span style={{ fontSize: '20px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
-                /30
-              </span>
+              {data.marks_published && (
+                <span style={{ fontSize: '20px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
+                  /30
+                </span>
+              )}
             </div>
           </div>
         </div>

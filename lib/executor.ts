@@ -19,7 +19,7 @@ const COMPILE_TIMEOUT_MS = 5000;
 const EXEC_TIMEOUT_MS = 2000;
 const MAX_OUTPUT_BYTES = 64 * 1024; // 64KB
 
-export async function compileAndRun(code: string, input: string): Promise<ExecutionResult> {
+export async function compileAndRun(code: string, input: string, language: string = 'cpp'): Promise<ExecutionResult> {
   const startTime = Date.now();
   
   // Sanitize code by removing markdown blocks (```cpp and ```) if a student copy-pastes them
@@ -34,13 +34,22 @@ export async function compileAndRun(code: string, input: string): Promise<Execut
     }
   }
 
+  const compilerMap: Record<string, string> = {
+    'c': 'gcc-head-c',
+    'cpp': 'gcc-head',
+    'python': 'cpython-head',
+    'java': 'openjdk-head'
+  };
+
+  const compiler = compilerMap[language.toLowerCase()] || 'gcc-head';
+
   try {
     const res = await fetch('https://wandbox.org/api/compile.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         code: sanitizedCode,
-        compiler: 'gcc-head',
+        compiler: compiler,
         stdin: input
       }),
       // Set an abort controller timeout for fetch just in case
