@@ -58,7 +58,6 @@ export async function POST(request: NextRequest) {
           where: { email: `${roll.toLowerCase()}@zcoer.edu.in` },
           update: { full_name: s.name },
           create: {
-            id: `student-${roll}`,
             email: `${roll.toLowerCase()}@zcoer.edu.in`,
             full_name: s.name,
             role: 'STUDENT',
@@ -84,7 +83,6 @@ export async function POST(request: NextRequest) {
       where: { email: `${roll.toLowerCase()}@zcoer.edu.in` },
       update: { full_name: name },
       create: {
-        id: `student-${roll}`,
         email: `${roll.toLowerCase()}@zcoer.edu.in`,
         full_name: name,
         role: 'STUDENT',
