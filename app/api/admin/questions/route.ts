@@ -30,10 +30,22 @@ export async function POST(request: NextRequest) {
   const { action } = body;
 
   if (action === 'create') {
-    const { title, topic, description, input_format, output_format, constraints, sample_input, sample_output, explanation, marks, difficulty, subject_id } = body;
+    const { title, topic, description, input_format, output_format, constraints, sample_input, sample_output, explanation, marks, difficulty, subject_name } = body;
     
+    // Process Subject by Name
+    let subject_id = body.subject_id;
+    if (subject_name) {
+      let subj = await prisma.subject.findFirst({ where: { name: subject_name } });
+      if (!subj) {
+        subj = await prisma.subject.create({ 
+          data: { name: subject_name, code: subject_name.toUpperCase().replace(/[^A-Z0-9]/g, '_') } 
+        });
+      }
+      subject_id = subj.id;
+    }
+
     if (!title || !description || !subject_id) {
-      return NextResponse.json({ error: 'title, description, and subject_id are required' }, { status: 400 });
+      return NextResponse.json({ error: 'title, description, and subject are required' }, { status: 400 });
     }
 
     // Teacher gets a unique slug based on their id+timestamp

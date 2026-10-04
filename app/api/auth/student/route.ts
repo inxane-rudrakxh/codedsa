@@ -72,8 +72,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Your exam time has expired.' }, { status: 403 });
       }
     } else {
+      // Fetch tests that are PUBLISHED and either have no target_division or match the student's division
       const activeTest = await prisma.test.findFirst({
-        where: { status: 'PUBLISHED' },
+        where: { 
+          status: 'PUBLISHED',
+          OR: [
+            { target_division: null },
+            { target_division: '' },
+            { target_division: studentRecord.division?.name }
+          ]
+        },
         orderBy: { id: 'desc' }
       });
 

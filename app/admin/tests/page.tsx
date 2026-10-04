@@ -6,13 +6,14 @@ export default function TestsPage() {
   const [tests, setTests] = useState<any[]>([]);
   const [allQuestions, setAllQuestions] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [divisions, setDivisions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editData, setEditData] = useState<any>({});
   
   const [isCreating, setIsCreating] = useState(false);
-  const [newData, setNewData] = useState({ title: '', subject_name: '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'] });
+  const [newData, setNewData] = useState({ title: '', subject_name: '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'], target_division: '' });
   
   const SUPPORTED_LANGS = [
     { id: 'c', label: 'C' },
@@ -32,6 +33,7 @@ export default function TestsPage() {
       setTests(data.tests || []);
       setAllQuestions(data.allQuestions || []);
       setSubjects(data.subjects || []);
+      setDivisions(data.divisions || []);
       if (data.subjects && data.subjects.length > 0 && !newData.subject_name) {
         setNewData(prev => ({ ...prev, subject_name: data.subjects[0].name }));
       }
@@ -48,7 +50,7 @@ export default function TestsPage() {
       body: JSON.stringify({ action: 'create_test', ...newData }),
     });
     setIsCreating(false);
-    setNewData({ title: '', subject_name: subjects[0]?.name || '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'] });
+    setNewData({ title: '', subject_name: subjects[0]?.name || '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'], target_division: '' });
     fetchData();
   };
 
@@ -117,6 +119,13 @@ export default function TestsPage() {
               <p className="text-label" style={{ marginBottom: '4px' }}>Questions Assigned per Student</p>
               <input type="number" value={newData.questions_per_student} onChange={e => setNewData(p => ({ ...p, questions_per_student: parseInt(e.target.value) || 0 }))} style={inputStyle} />
             </div>
+            <div>
+              <p className="text-label" style={{ marginBottom: '4px' }}>Target Division</p>
+              <select value={newData.target_division} onChange={e => setNewData(p => ({ ...p, target_division: e.target.value }))} style={inputStyle}>
+                <option value="">All Divisions</option>
+                {divisions.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+              </select>
+            </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <p className="text-label" style={{ marginBottom: '4px' }}>Allowed Languages</p>
               <div style={{ display: 'flex', gap: '16px' }}>
@@ -155,7 +164,10 @@ export default function TestsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                 <div>
                   <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>{test.title}</h2>
-                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{test.subject?.name} · {test.duration_minutes} Mins · {test.total_marks} Marks · {test.questions_per_student} Qs/Student</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    {test.subject?.name} · {test.duration_minutes} Mins · {test.total_marks} Marks · {test.questions_per_student} Qs/Student 
+                    {test.target_division ? ` · Div: ${test.target_division}` : ''}
+                  </p>
                   <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Languages: {test.allowed_languages?.join(', ') || 'c, cpp, python, java'}</p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
