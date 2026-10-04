@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   const submittedIds = new Set(allSessions.filter(s => s.is_submitted).map(s => s.student_id));
   const submitted = submittedIds.size;
 
-  const testInfo = await prisma.test.findUnique({ where: { id: 1 } });
+  const testInfo = await prisma.test.findFirst();
   const durationMinutes = testInfo?.duration_minutes || 60;
 
   const sessions = await prisma.examSession.findMany({

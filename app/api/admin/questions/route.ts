@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   if (action === 'update') {
     const { id, title, topic, statement, input_format, output_format, constraints, example_input, example_output } = body;
     await prisma.question.update({
-      where: { id: parseInt(id) },
+      where: { id: id },
       data: {
         title, topic, description: statement, input_format, output_format, constraints, sample_input: example_input, sample_output: example_output
       }
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     const { question_id, input, expected_output, is_visible, weight } = body;
     await prisma.testCase.create({
       data: {
-        question_id: parseInt(question_id),
+        question_id: question_id,
         input,
         expected_output,
         is_hidden: !is_visible,
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === 'delete_test_case') {
-    await prisma.testCase.delete({ where: { id: parseInt(body.id) } });
+    await prisma.testCase.delete({ where: { id: body.id } });
     return NextResponse.json({ success: true });
   }
 

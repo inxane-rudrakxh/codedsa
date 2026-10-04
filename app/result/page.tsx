@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 
 interface ResultData {
   student: { roll_no: string; name: string; division: string; branch: string };
-  questions: Array<{ id: number; title: string; order_index: number }>;
-  submissions: Array<{ question_id: number; score: number; submitted_at: string }>;
+  questions: Array<{ id: string; title: string; order_index: number }>;
+  submissions: Array<{ question_id: string; score: number; submitted_at: string }>;
   total_score: number;
   submitted_at: string | null;
 }
@@ -28,9 +28,9 @@ export default function ResultPage() {
         if (!d.session) { router.push('/'); return; }
 
         const questions = d.questions || [];
-        const submissionMap: Record<number, { score: number; submitted_at: string }> = d.submissions || {};
+        const submissionMap: Record<string, { score: number; submitted_at: string }> = d.submissions || {};
         const submissions = Object.entries(submissionMap).map(([qid, s]) => ({
-          question_id: parseInt(qid),
+          question_id: qid,
           score: (s as { score: number; submitted_at: string }).score,
           submitted_at: (s as { score: number; submitted_at: string }).submitted_at,
         }));
@@ -59,7 +59,7 @@ export default function ResultPage() {
 
   if (!data) return null;
 
-  const scoreMap: Record<number, number> = {};
+  const scoreMap: Record<string, number> = {};
   data.submissions.forEach(s => { scoreMap[s.question_id] = s.score; });
 
   return (

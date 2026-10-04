@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const test = await prisma.test.create({
       data: {
         title,
-        subject_id: parseInt(subject_id),
+        subject_id: subject_id,
         duration_minutes: parseInt(duration_minutes),
         total_marks: parseInt(total_marks),
         questions_per_student: parseInt(questions_per_student),
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
   if (action === 'update_test') {
     const { id, title, duration_minutes, total_marks, questions_per_student, status } = body;
     await prisma.test.update({
-      where: { id: parseInt(id) },
+      where: { id: id },
       data: {
         title,
         duration_minutes: parseInt(duration_minutes),
@@ -72,11 +72,11 @@ export async function POST(request: NextRequest) {
 
   if (action === 'assign_question') {
     const { test_id, question_id } = body;
-    const count = await prisma.testQuestion.count({ where: { test_id: parseInt(test_id) } });
+    const count = await prisma.testQuestion.count({ where: { test_id: test_id } });
     await prisma.testQuestion.create({
       data: {
-        test_id: parseInt(test_id),
-        question_id: parseInt(question_id),
+        test_id: test_id,
+        question_id: question_id,
         order_index: count
       }
     });
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     const { test_id, question_id } = body;
     await prisma.testQuestion.delete({
       where: {
-        test_id_question_id: { test_id: parseInt(test_id), question_id: parseInt(question_id) }
+        test_id_question_id: { test_id: test_id, question_id: question_id }
       }
     });
     return NextResponse.json({ success: true });

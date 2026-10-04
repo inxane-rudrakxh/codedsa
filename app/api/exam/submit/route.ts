@@ -38,11 +38,11 @@ export async function POST(request: NextRequest) {
   });
   if (!assigned) return NextResponse.json({ error: 'Not assigned' }, { status: 403 });
 
-  const question = await prisma.question.findUnique({ where: { id: parseInt(question_id) } });
+  const question = await prisma.question.findUnique({ where: { id: question_id } });
   if (!question) return NextResponse.json({ error: 'Question not found' }, { status: 404 });
 
   // Algorithmic / structural check
-  const logicCheck = checkCodeLogic(code, parseInt(question_id));
+  const logicCheck = checkCodeLogic(code, question_id);
   if (!logicCheck.valid) {
     return NextResponse.json({
       success: false,
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
   // Get ALL test cases
   const testCases = await prisma.testCase.findMany({
-    where: { question_id: parseInt(question_id) }
+    where: { question_id: question_id }
   });
 
   if (!testCases || testCases.length === 0) {
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
   const submission = await prisma.submission.create({
     data: {
       session_id: payload.session_id,
-      question_id: parseInt(question_id),
+      question_id: question_id,
       language_id: 1,
       source_code: code,
       status: subStatus,
@@ -145,9 +145,9 @@ export async function POST(request: NextRequest) {
 
   // Auto-save final code
   await prisma.codeDraft.upsert({
-    where: { session_id_question_id: { session_id: payload.session_id, question_id: parseInt(question_id) } },
+    where: { session_id_question_id: { session_id: payload.session_id, question_id: question_id } },
     update: { source_code: code, updated_at: new Date() },
-    create: { session_id: payload.session_id, question_id: parseInt(question_id), language_id: 1, source_code: code }
+    create: { session_id: payload.session_id, question_id: question_id, language_id: 1, source_code: code }
   });
 
   // Check if all questions submitted

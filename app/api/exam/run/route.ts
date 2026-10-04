@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   if (!assigned) return NextResponse.json({ error: 'Question not assigned' }, { status: 403 });
 
   // Algorithmic / structural check
-  const logicCheck = checkCodeLogic(code, parseInt(question_id));
+  const logicCheck = checkCodeLogic(code, question_id);
   if (!logicCheck.valid) {
     return NextResponse.json({
       success: false,
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
   // Get visible test cases only for run
   const testCases = await prisma.testCase.findMany({
-    where: { question_id: parseInt(question_id), is_hidden: false }
+    where: { question_id: question_id, is_hidden: false }
   });
 
   if (!testCases || testCases.length === 0) {

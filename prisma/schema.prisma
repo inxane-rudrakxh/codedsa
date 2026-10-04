@@ -1,7 +1,6 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("POSTGRES_PRISMA_URL")
-  directUrl = env("POSTGRES_URL_NON_POOLING")
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -9,7 +8,7 @@ generator client {
 }
 
 model User {
-  id            String    @id @default(uuid())
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
   email         String?   @unique
   full_name     String
   role          String    // ADMIN, TEACHER, STUDENT
@@ -23,7 +22,7 @@ model User {
 }
 
 model Branch {
-  id         Int       @id @default(autoincrement())
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
   code       String    @unique
   name       String
   created_at DateTime  @default(now())
@@ -32,17 +31,17 @@ model Branch {
 }
 
 model Division {
-  id         Int       @id @default(autoincrement())
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
   name       String    @unique
   students   Student[]
 }
 
 model Student {
-  id           String    @id
+  id           String    @id @map("_id") @db.ObjectId
   user         User      @relation(fields: [id], references: [id], onDelete: Cascade)
   roll_number  String    @unique
-  branch_id    Int
-  division_id  Int?
+  branch_id    String    @db.ObjectId
+  division_id  String?   @db.ObjectId
   branch       Branch    @relation(fields: [branch_id], references: [id])
   division     Division? @relation(fields: [division_id], references: [id])
   created_at   DateTime  @default(now())
@@ -51,14 +50,14 @@ model Student {
 }
 
 model Teacher {
-  id           String    @id
+  id           String    @id @map("_id") @db.ObjectId
   user         User      @relation(fields: [id], references: [id], onDelete: Cascade)
   department   String?
   created_at   DateTime  @default(now())
 }
 
 model Subject {
-  id         Int       @id @default(autoincrement())
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
   code       String    @unique
   name       String
   created_at DateTime  @default(now())
@@ -68,10 +67,10 @@ model Subject {
 }
 
 model Test {
-  id                    Int       @id @default(autoincrement())
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
   title                 String
   description           String?
-  subject_id            Int
+  subject_id            String    @db.ObjectId
   subject               Subject   @relation(fields: [subject_id], references: [id])
   duration_minutes      Int       @default(60)
   total_marks           Int       @default(100)
@@ -86,11 +85,11 @@ model Test {
 }
 
 model Question {
-  id            Int       @id @default(autoincrement())
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
   title         String
   slug          String    @unique
   description   String
-  subject_id    Int
+  subject_id    String    @db.ObjectId
   subject       Subject   @relation(fields: [subject_id], references: [id])
   topic         String?
   difficulty    String    @default("MEDIUM")
@@ -112,19 +111,20 @@ model Question {
 }
 
 model TestQuestion {
-  test_id     Int
-  question_id Int
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  test_id     String    @db.ObjectId
+  question_id String    @db.ObjectId
   order_index Int @default(0)
   
   test        Test @relation(fields: [test_id], references: [id], onDelete: Cascade)
   question    Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
   
-  @@id([test_id, question_id])
+  @@unique([test_id, question_id])
 }
 
 model TestCase {
-  id              Int       @id @default(autoincrement())
-  question_id     Int
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  question_id     String    @db.ObjectId
   question        Question  @relation(fields: [question_id], references: [id], onDelete: Cascade)
   input           String
   expected_output String
@@ -137,10 +137,10 @@ model TestCase {
 }
 
 model ExamSession {
-  id                 String    @id @default(uuid())
-  test_id            Int
+  id                 String    @id @default(uuid()) @map("_id")
+  test_id            String    @db.ObjectId
   test               Test      @relation(fields: [test_id], references: [id])
-  student_id         String
+  student_id         String    @db.ObjectId
   student            Student   @relation(fields: [student_id], references: [id])
   start_time         DateTime  @default(now())
   end_time           DateTime?
@@ -157,32 +157,34 @@ model ExamSession {
 }
 
 model AssignedQuestion {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
   session_id  String
   session     ExamSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
-  question_id Int
+  question_id String    @db.ObjectId
   question    Question    @relation(fields: [question_id], references: [id], onDelete: Cascade)
   order_index Int         @default(0)
   
-  @@id([session_id, question_id])
+  @@unique([session_id, question_id])
 }
 
 model CodeDraft {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
   session_id  String
   session     ExamSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
-  question_id Int
+  question_id String    @db.ObjectId
   question    Question    @relation(fields: [question_id], references: [id], onDelete: Cascade)
   language_id Int         @default(1)
   source_code String?
   updated_at  DateTime    @updatedAt
   
-  @@id([session_id, question_id])
+  @@unique([session_id, question_id])
 }
 
 model Submission {
-  id              String    @id @default(uuid())
+  id              String    @id @default(uuid()) @map("_id")
   session_id      String
   session         ExamSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
-  question_id     Int
+  question_id     String    @db.ObjectId
   question        Question  @relation(fields: [question_id], references: [id])
   language_id     Int
   source_code     String
@@ -200,9 +202,10 @@ model Submission {
 }
 
 model SubmissionResult {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
   submission_id   String
   submission      Submission @relation(fields: [submission_id], references: [id], onDelete: Cascade)
-  test_case_id    Int
+  test_case_id    String    @db.ObjectId
   test_case       TestCase   @relation(fields: [test_case_id], references: [id], onDelete: Cascade)
   status          String
   execution_time_ms Int?
@@ -210,10 +213,10 @@ model SubmissionResult {
   actual_output   String?
   error_message   String?
   
-  @@id([submission_id, test_case_id])
+  @@unique([submission_id, test_case_id])
 }
 
 model Setting {
-  key   String @id
+  key   String @id @map("_id")
   value String
 }

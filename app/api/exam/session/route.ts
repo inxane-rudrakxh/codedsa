@@ -54,18 +54,18 @@ export async function GET(request: NextRequest) {
   const submissionRows = await prisma.submission.findMany({
     where: { session_id: session.id }
   });
-  const submissions: Record<number, any> = {};
+  const submissions: Record<string, any> = {};
   submissionRows.forEach(s => { submissions[s.question_id] = s; });
 
   // Get code saves
   const saveRows = await prisma.codeDraft.findMany({
     where: { session_id: session.id }
   });
-  const saves: Record<number, string> = {};
+  const saves: Record<string, string> = {};
   saveRows.forEach(s => { if(s.source_code) saves[s.question_id] = s.source_code; });
 
   // Get visible test cases
-  const testCases: Record<number, any[]> = {};
+  const testCases: Record<string, any[]> = {};
   if (formattedQuestions.length > 0) {
     const questionIds = formattedQuestions.map(q => q.id);
     const casesData = await prisma.testCase.findMany({

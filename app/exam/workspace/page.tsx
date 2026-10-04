@@ -148,9 +148,9 @@ export default function WorkspacePage() {
         setCodes(initialCodes);
 
         // Restore submission scores
-        const scores: Record<number, number> = {};
+        const scores: Record<string, number> = {};
         Object.entries(data.submissions).forEach(([qid, sub]) => {
-          scores[parseInt(qid)] = sub.score;
+          scores[qid] = sub.score;
         });
         setSubmitScores(scores);
 
