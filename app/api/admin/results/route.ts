@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
     try {
       await prisma.$transaction([
         prisma.submission.deleteMany({ where: { session_id } }),
-        prisma.codeSave.deleteMany({ where: { session_id } }),
+        prisma.codeDraft.deleteMany({ where: { session_id } }),
         prisma.assignedQuestion.deleteMany({ where: { session_id } }),
         prisma.examSession.delete({ where: { id: session_id } })
       ]);

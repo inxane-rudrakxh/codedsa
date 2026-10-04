@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Password is required.' }, { status: 400 });
     }
 
-    const passwordMatch = await bcrypt.compare(password, studentRecord.user.password_hash);
+    const passwordMatch = await bcrypt.compare(password, studentRecord.user.password_hash || '');
     if (!passwordMatch) {
       return NextResponse.json({ error: 'Invalid password.' }, { status: 401 });
     }
