@@ -3,6 +3,7 @@
 
 :root {
   /* Cloudflare Sandbox-inspired Minimalist Dark Theme */
+  --bg: #000000;
   --bg-color: #000000;
   --bg-gradient: #000000;
   --surface-1: #0A0A0A;

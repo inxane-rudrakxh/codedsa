@@ -12,7 +12,7 @@ export default function TestsPage() {
   const [editData, setEditData] = useState<any>({});
   
   const [isCreating, setIsCreating] = useState(false);
-  const [newData, setNewData] = useState({ title: '', subject_id: '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'] });
+  const [newData, setNewData] = useState({ title: '', subject_name: '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'] });
   
   const SUPPORTED_LANGS = [
     { id: 'c', label: 'C' },
@@ -32,8 +32,8 @@ export default function TestsPage() {
       setTests(data.tests || []);
       setAllQuestions(data.allQuestions || []);
       setSubjects(data.subjects || []);
-      if (data.subjects && data.subjects.length > 0 && !newData.subject_id) {
-        setNewData(prev => ({ ...prev, subject_id: data.subjects[0].id.toString() }));
+      if (data.subjects && data.subjects.length > 0 && !newData.subject_name) {
+        setNewData(prev => ({ ...prev, subject_name: data.subjects[0].name }));
       }
     }
     setLoading(false);
@@ -48,7 +48,7 @@ export default function TestsPage() {
       body: JSON.stringify({ action: 'create_test', ...newData }),
     });
     setIsCreating(false);
-    setNewData({ title: '', subject_id: subjects[0]?.id.toString() || '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'] });
+    setNewData({ title: '', subject_name: subjects[0]?.name || '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'] });
     fetchData();
   };
 
@@ -103,9 +103,7 @@ export default function TestsPage() {
             </div>
             <div>
               <p className="text-label" style={{ marginBottom: '4px' }}>Subject</p>
-              <select value={newData.subject_id} onChange={e => setNewData(p => ({ ...p, subject_id: e.target.value }))} style={inputStyle}>
-                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <input value={newData.subject_name || ''} onChange={e => setNewData(p => ({ ...p, subject_name: e.target.value }))} style={inputStyle} placeholder="e.g. Data Structures" />
             </div>
             <div>
               <p className="text-label" style={{ marginBottom: '4px' }}>Duration (Mins)</p>

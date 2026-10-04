@@ -34,6 +34,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    if (action === 'approve_all') {
+      const scope = payload.role === 'TEACHER' ? { test: { teacher_id: payload.user_id } } : {};
+      await prisma.examSession.updateMany({
+        where: { status: 'PENDING_APPROVAL', ...scope },
+        data: { status: 'ACTIVE', start_time: new Date() }
+      });
+      return NextResponse.json({ success: true });
+    }
+
     if (action === 'reject') {
       await prisma.examSession.delete({ where: { id: session_id } });
       return NextResponse.json({ success: true });

@@ -47,7 +47,7 @@ export default function AdminDashboard() {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  const handleAction = async (sessionId: string, action: 'approve' | 'reject') => {
+  const handleAction = async (sessionId: string, action: 'approve' | 'reject' | 'approve_all' | 'force_submit') => {
     const token = localStorage.getItem('admin_token');
     await fetch('/api/admin/approve', {
       method: 'POST',
@@ -55,7 +55,7 @@ export default function AdminDashboard() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}` 
       },
-      body: JSON.stringify({ session_id: sessionId, action })
+      body: JSON.stringify({ session_id: sessionId || 'all', action })
     });
     fetchData(); // Refresh immediately
   };
@@ -107,20 +107,39 @@ export default function AdminDashboard() {
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <p className="text-label">Active Sessions</p>
-          <button
-            onClick={fetchData}
-            style={{
-              fontSize: '11px',
-              color: 'var(--text-muted)',
-              background: 'none',
-              border: '1px solid var(--border)',
-              borderRadius: '3px',
-              padding: '4px 10px',
-              cursor: 'pointer',
-            }}
-          >
-            Refresh
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {data?.pending_requests ? (
+              <button
+                onClick={() => handleAction('', 'approve_all')}
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--success)',
+                  background: 'var(--success-dim)',
+                  border: '1px solid var(--success)',
+                  borderRadius: '3px',
+                  padding: '4px 10px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                Approve All Pending ({data.pending_requests})
+              </button>
+            ) : null}
+            <button
+              onClick={fetchData}
+              style={{
+                fontSize: '11px',
+                color: 'var(--text-muted)',
+                background: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: '3px',
+                padding: '4px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         <div style={{

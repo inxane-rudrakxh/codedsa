@@ -43,10 +43,23 @@ export async function POST(request: NextRequest) {
   const { action } = body;
 
   if (action === 'create_test') {
-    const { title, description, subject_id, duration_minutes, total_marks, questions_per_student, target_division, allowed_languages } = body;
+    const { title, description, subject_name, duration_minutes, total_marks, questions_per_student, target_division, allowed_languages } = body;
     
     // Get teacher id: if teacher, use their own id; if admin and they specify teacher_id, use that
     const teacher_id = payload.role === 'TEACHER' ? payload.user_id : (body.teacher_id || null);
+    
+    // Process Subject by Name
+    let subject_id = body.subject_id;
+    if (subject_name) {
+      let subj = await prisma.subject.findFirst({ where: { name: subject_name } });
+      if (!subj) {
+        subj = await prisma.subject.create({ 
+          data: { name: subject_name, code: subject_name.toUpperCase().replace(/[^A-Z0-9]/g, '_') } 
+        });
+      }
+      subject_id = subj.id;
+    }
+    if (!subject_id) return NextResponse.json({ error: 'Subject is required' }, { status: 400 });
     
     const test = await prisma.test.create({
       data: {
