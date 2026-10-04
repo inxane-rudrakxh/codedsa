@@ -2,22 +2,48 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #080808;
-  --surface-1: #101010;
-  --surface-2: #151515;
-  --border: #292929;
-  --border-subtle: #1a1a1a;
-  --text-primary: #F5F5F5;
-  --text-secondary: #9A9A9A;
-  --text-muted: #666666;
-  --accent: #4F7CFF;
-  --accent-dim: rgba(79, 124, 255, 0.12);
-  --success: #22C55E;
-  --success-dim: rgba(34, 197, 94, 0.12);
-  --warning: #F59E0B;
-  --warning-dim: rgba(245, 158, 11, 0.12);
-  --error: #EF4444;
-  --error-dim: rgba(239, 68, 68, 0.12);
+  /* Rich Dark Aesthetic */
+  --bg: #0b0c10;
+  --bg-gradient: radial-gradient(circle at top right, #1f2833 0%, #0b0c10 60%);
+  --surface-1: rgba(31, 40, 51, 0.65);
+  --surface-2: rgba(31, 40, 51, 0.85);
+  
+  --border: rgba(102, 252, 241, 0.2);
+  --border-subtle: rgba(102, 252, 241, 0.1);
+  --border-glow: rgba(102, 252, 241, 0.5);
+
+  --text-primary: #ffffff;
+  --text-secondary: #c5c6c7;
+  --text-muted: #8b929a;
+
+  /* Neon Cyan Accent */
+  --accent: #66fcf1;
+  --accent-hover: #45a29e;
+  --accent-dim: rgba(102, 252, 241, 0.12);
+  
+  /* Status Colors */
+  --success: #10b981;
+  --success-dim: rgba(16, 185, 129, 0.15);
+  --warning: #f59e0b;
+  --warning-dim: rgba(245, 158, 11, 0.15);
+  --error: #ef4444;
+  --error-dim: rgba(239, 68, 68, 0.15);
+}
+
+.glass {
+  background: var(--surface-1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.glass-panel {
+  background: var(--surface-2);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
 }
 
 * {
@@ -32,7 +58,8 @@ html {
 }
 
 body {
-  background: var(--bg);
+  background: var(--bg-gradient);
+  background-attachment: fixed;
   color: var(--text-primary);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 14px;

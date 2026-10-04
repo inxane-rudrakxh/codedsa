@@ -37,15 +37,27 @@ export default function AdminLoginPage() {
   return (
     <main style={{
       minHeight: '100vh',
-      background: 'var(--bg)',
+      background: 'var(--bg-gradient)',
+      backgroundAttachment: 'fixed',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       padding: '40px 20px',
     }}>
-      <div className="animate-fade-up" style={{ maxWidth: '360px', width: '100%' }}>
-        <div style={{ marginBottom: '48px' }}>
+      <div className="animate-fade-up glass-panel" style={{ maxWidth: '400px', width: '100%', padding: '40px 32px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+        <div style={{ marginBottom: '48px', position: 'relative' }}>
+          <div style={{
+            position: 'absolute',
+            top: '-20px',
+            left: '-20px',
+            width: '80px',
+            height: '80px',
+            background: 'var(--accent)',
+            filter: 'blur(60px)',
+            opacity: 0.25,
+            zIndex: 0
+          }} />
           <p style={{
             fontSize: '10px',
             fontWeight: 600,
@@ -56,11 +68,14 @@ export default function AdminLoginPage() {
           }}>Admin</p>
           <h1 style={{
             fontFamily: 'JetBrains Mono, monospace',
-            fontSize: '32px',
-            fontWeight: 500,
+            fontSize: '36px',
+            fontWeight: 700,
             color: 'var(--text-primary)',
             letterSpacing: '-0.02em',
-          }}>CODE//DSA</h1>
+            position: 'relative',
+            zIndex: 1,
+            textShadow: '0 0 15px var(--border-glow)'
+          }}>CODE//EXAM</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
             Faculty Administration Panel
           </p>
@@ -99,16 +114,29 @@ export default function AdminLoginPage() {
           style={{
             width: '100%',
             padding: '13px',
-            background: loading ? 'var(--surface-2)' : 'var(--text-primary)',
+            background: loading ? 'var(--surface-2)' : 'var(--accent)',
             border: '1px solid transparent',
             borderRadius: '4px',
-            color: loading ? 'var(--text-muted)' : 'var(--bg)',
+            color: loading ? 'var(--text-muted)' : '#000',
             fontSize: '11px',
-            fontWeight: 600,
+            fontWeight: 700,
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
             cursor: loading ? 'not-allowed' : 'pointer',
-            transition: 'all 0.15s ease',
+            transition: 'all 0.2s ease',
+            boxShadow: loading ? 'none' : '0 0 15px var(--accent-dim)'
+          }}
+          onMouseOver={(e) => {
+            if (!loading) {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 0 20px var(--border-glow)';
+            }
+          }}
+          onMouseOut={(e) => {
+            if (!loading) {
+              e.currentTarget.style.transform = 'none';
+              e.currentTarget.style.boxShadow = '0 0 15px var(--accent-dim)';
+            }
           }}
         >
           {loading ? 'Authenticating...' : 'Login'}
@@ -127,7 +155,7 @@ export default function AdminLoginPage() {
         color: 'var(--text-muted)',
         fontFamily: 'JetBrains Mono, monospace'
       }}>
-        Built by inxanerudrakxh
+        <p>Built for secure, standardized coding assessments.</p>
       </div>
     </main>
   );

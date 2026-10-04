@@ -63,7 +63,7 @@ export default function InstructionsPage() {
           fontWeight: 500,
           color: 'var(--text-secondary)',
           letterSpacing: '0.04em',
-        }}>CODE//DSA</span>
+        }}>CODE//EXAM</span>
         {studentName && (
           <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
             {studentName}

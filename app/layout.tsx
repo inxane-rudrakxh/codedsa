@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CODE//DSA — Unit II Coding Assessment",
+  title: "CODE//EXAM — Unit II Coding Assessment",
   description: "S.Y. B.Tech AI&DS — DSA Unit II Online Coding Test",
 };
 

@@ -100,7 +100,7 @@ export default function LoginPage() {
             letterSpacing: '0.04em',
           }}
         >
-          CODE//DSA
+          CODE//EXAM
         </span>
         <span className="text-label">S.Y. B.Tech AI&DS</span>
       </header>
@@ -123,19 +123,33 @@ export default function LoginPage() {
           }}
         >
           {/* Brand block */}
-          <div style={{ marginBottom: '56px' }}>
+          <div style={{ marginBottom: '56px', position: 'relative' }}>
+            <div style={{
+              position: 'absolute',
+              top: '-20px',
+              left: '-20px',
+              width: '100px',
+              height: '100px',
+              background: 'var(--accent)',
+              filter: 'blur(80px)',
+              opacity: 0.3,
+              zIndex: 0
+            }} />
             <h1
               style={{
+                position: 'relative',
+                zIndex: 1,
                 fontFamily: 'JetBrains Mono, monospace',
-                fontSize: '42px',
-                fontWeight: 500,
+                fontSize: '48px',
+                fontWeight: 700,
                 color: 'var(--text-primary)',
-                letterSpacing: '-0.02em',
+                letterSpacing: '-0.03em',
                 lineHeight: 1,
                 marginBottom: '12px',
+                textShadow: '0 0 20px var(--border-glow)'
               }}
             >
-              CODE//DSA
+              CODE//EXAM
             </h1>
             <p
               style={{
@@ -230,16 +244,29 @@ export default function LoginPage() {
                   width: '100%',
                   padding: '14px',
                   marginTop: '8px',
-                  background: loading || !rollNo.trim() ? 'var(--surface-2)' : 'var(--text-primary)',
+                  background: loading || !rollNo.trim() ? 'var(--surface-2)' : 'var(--accent)',
                   border: '1px solid transparent',
                   borderRadius: '4px',
-                  color: loading || !rollNo.trim() ? 'var(--text-muted)' : 'var(--bg)',
+                  color: loading || !rollNo.trim() ? 'var(--text-muted)' : '#000',
                   fontSize: '12px',
-                  fontWeight: 600,
+                  fontWeight: 700,
                   letterSpacing: '0.12em',
                   textTransform: 'uppercase',
                   cursor: loading || !rollNo.trim() ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.15s ease',
+                  transition: 'all 0.2s ease',
+                  boxShadow: loading || !rollNo.trim() ? 'none' : '0 0 15px var(--accent-dim)',
+                }}
+                onMouseOver={(e) => {
+                  if (!loading && rollNo.trim()) {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 0 20px var(--border-glow)';
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (!loading && rollNo.trim()) {
+                    e.currentTarget.style.transform = 'none';
+                    e.currentTarget.style.boxShadow = '0 0 15px var(--accent-dim)';
+                  }
                 }}
               >
                 {loading ? 'Searching...' : 'Continue'}
@@ -249,12 +276,11 @@ export default function LoginPage() {
             <div className="animate-fade-up">
               {/* Student card */}
               <div
+                className="glass-panel"
                 style={{
-                  padding: '20px',
-                  border: '1px solid var(--border)',
-                  borderRadius: '4px',
-                  background: 'var(--surface-1)',
+                  padding: '24px',
                   marginBottom: '20px',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
                 }}
               >
                 <p className="text-label" style={{ marginBottom: '16px' }}>
@@ -311,16 +337,27 @@ export default function LoginPage() {
                   style={{
                     flex: 2,
                     padding: '13px',
-                    background: loading ? 'var(--surface-2)' : 'var(--accent)',
+                    background: loading ? 'var(--surface-2)' : 'var(--success)',
                     border: '1px solid transparent',
                     borderRadius: '4px',
-                    color: loading ? 'var(--text-muted)' : '#fff',
+                    color: loading ? 'var(--text-muted)' : '#000',
                     fontSize: '12px',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     letterSpacing: '0.12em',
                     textTransform: 'uppercase',
                     cursor: loading ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.15s ease',
+                    transition: 'all 0.2s ease',
+                    boxShadow: loading ? 'none' : '0 0 15px var(--success-dim)'
+                  }}
+                  onMouseOver={(e) => {
+                    if (!loading) {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    if (!loading) {
+                      e.currentTarget.style.transform = 'none';
+                    }
                   }}
                 >
                   {loading ? 'Starting...' : 'Start Exam'}
@@ -340,7 +377,7 @@ export default function LoginPage() {
             }}
           >
             {[
-              { label: 'Language', value: 'C++' },
+              { label: 'Platform', value: 'Multi-Lang' },
               { label: 'Duration', value: '60 Min' },
               { label: 'Marks', value: '30' },
             ].map(({ label, value }) => (
@@ -373,7 +410,7 @@ export default function LoginPage() {
         color: 'var(--text-muted)',
         letterSpacing: '0.04em',
       }}>
-        Built by inxanerudrakxh
+        <p>Built for secure, standardized coding assessments.</p>
       </div>
     </main>
   );

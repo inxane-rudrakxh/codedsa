@@ -912,7 +912,7 @@ function TopBar({
         fontWeight: 500,
         color: 'var(--text-secondary)',
         letterSpacing: '0.04em',
-      }}>CODE//DSA</span>
+      }}>CODE//EXAM</span>
 
       <div style={{ height: '16px', width: '1px', background: 'var(--border)' }} />
 

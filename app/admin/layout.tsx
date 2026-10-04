@@ -66,7 +66,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             fontWeight: 500,
             color: 'var(--text-secondary)',
             letterSpacing: '0.04em',
-          }}>CODE//DSA</span>
+          }}>CODE//EXAM</span>
           {userInfo && (
             <span style={{
               fontSize: '9px',
