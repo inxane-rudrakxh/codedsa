@@ -108,7 +108,7 @@ function LoginPage() {
                             color: 'var(--text-secondary)',
                             letterSpacing: '0.04em'
                         },
-                        children: "CODE//DSA"
+                        children: "CODE//EXAM"
                     }, void 0, false, {
                         fileName: "[project]/app/page.tsx",
                         lineNumber: 94,
@@ -151,14 +151,14 @@ function LoginPage() {
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h1", {
                                     style: {
                                         fontFamily: 'JetBrains Mono, monospace',
-                                        fontSize: '42px',
-                                        fontWeight: 500,
+                                        fontSize: '48px',
+                                        fontWeight: 700,
                                         color: 'var(--text-primary)',
-                                        letterSpacing: '-0.02em',
+                                        letterSpacing: '-0.03em',
                                         lineHeight: 1,
                                         marginBottom: '12px'
                                     },
-                                    children: "CODE//DSA"
+                                    children: "CODE//EXAM"
                                 }, void 0, false, {
                                     fileName: "[project]/app/page.tsx",
                                     lineNumber: 127,
@@ -274,16 +274,27 @@ function LoginPage() {
                                         width: '100%',
                                         padding: '14px',
                                         marginTop: '8px',
-                                        background: loading || !rollNo.trim() ? 'var(--surface-2)' : 'var(--text-primary)',
+                                        background: loading || !rollNo.trim() ? 'var(--surface-2)' : 'var(--accent)',
                                         border: '1px solid transparent',
                                         borderRadius: '4px',
-                                        color: loading || !rollNo.trim() ? 'var(--text-muted)' : 'var(--bg)',
+                                        color: loading || !rollNo.trim() ? 'var(--text-muted)' : '#000',
                                         fontSize: '12px',
-                                        fontWeight: 600,
+                                        fontWeight: 700,
                                         letterSpacing: '0.12em',
                                         textTransform: 'uppercase',
                                         cursor: loading || !rollNo.trim() ? 'not-allowed' : 'pointer',
-                                        transition: 'all 0.15s ease'
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: 'none'
+                                    },
+                                    onMouseOver: (e)=>{
+                                        if (!loading && rollNo.trim()) {
+                                            e.currentTarget.style.background = 'var(--accent-hover)';
+                                        }
+                                    },
+                                    onMouseOut: (e)=>{
+                                        if (!loading && rollNo.trim()) {
+                                            e.currentTarget.style.background = 'var(--accent)';
+                                        }
                                     },
                                     children: loading ? 'Searching...' : 'Continue'
                                 }, void 0, false, {
@@ -300,12 +311,11 @@ function LoginPage() {
                             className: "animate-fade-up",
                             children: [
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                    className: "glass-panel",
                                     style: {
-                                        padding: '20px',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '4px',
-                                        background: 'var(--surface-1)',
-                                        marginBottom: '20px'
+                                        padding: '24px',
+                                        marginBottom: '20px',
+                                        background: 'var(--surface-1)'
                                     },
                                     children: [
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -316,7 +326,7 @@ function LoginPage() {
                                             children: "Student Verified"
                                         }, void 0, false, {
                                             fileName: "[project]/app/page.tsx",
-                                            lineNumber: 260,
+                                            lineNumber: 270,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -331,7 +341,7 @@ function LoginPage() {
                                                     value: student.name
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 270,
+                                                    lineNumber: 280,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(InfoField, {
@@ -339,7 +349,7 @@ function LoginPage() {
                                                     value: student.roll_no
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 271,
+                                                    lineNumber: 281,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(InfoField, {
@@ -347,7 +357,7 @@ function LoginPage() {
                                                     value: student.division
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 272,
+                                                    lineNumber: 282,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(InfoField, {
@@ -355,19 +365,19 @@ function LoginPage() {
                                                     value: student.branch
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 273,
+                                                    lineNumber: 283,
                                                     columnNumber: 19
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/app/page.tsx",
-                                            lineNumber: 263,
+                                            lineNumber: 273,
                                             columnNumber: 17
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/page.tsx",
-                                    lineNumber: 251,
+                                    lineNumber: 262,
                                     columnNumber: 15
                                 }, this),
                                 error && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -379,7 +389,7 @@ function LoginPage() {
                                     children: error
                                 }, void 0, false, {
                                     fileName: "[project]/app/page.tsx",
-                                    lineNumber: 278,
+                                    lineNumber: 288,
                                     columnNumber: 17
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -411,7 +421,7 @@ function LoginPage() {
                                             children: "Back"
                                         }, void 0, false, {
                                             fileName: "[project]/app/page.tsx",
-                                            lineNumber: 284,
+                                            lineNumber: 294,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -421,33 +431,44 @@ function LoginPage() {
                                             style: {
                                                 flex: 2,
                                                 padding: '13px',
-                                                background: loading ? 'var(--surface-2)' : 'var(--accent)',
+                                                background: loading ? 'var(--surface-2)' : 'var(--success)',
                                                 border: '1px solid transparent',
                                                 borderRadius: '4px',
-                                                color: loading ? 'var(--text-muted)' : '#fff',
+                                                color: loading ? 'var(--text-muted)' : '#000',
                                                 fontSize: '12px',
-                                                fontWeight: 600,
+                                                fontWeight: 700,
                                                 letterSpacing: '0.12em',
                                                 textTransform: 'uppercase',
                                                 cursor: loading ? 'not-allowed' : 'pointer',
-                                                transition: 'all 0.15s ease'
+                                                transition: 'all 0.2s ease',
+                                                boxShadow: 'none'
+                                            },
+                                            onMouseOver: (e)=>{
+                                                if (!loading) {
+                                                    e.currentTarget.style.background = '#0ea5e9'; // A bit brighter
+                                                }
+                                            },
+                                            onMouseOut: (e)=>{
+                                                if (!loading) {
+                                                    e.currentTarget.style.background = 'var(--success)';
+                                                }
                                             },
                                             children: loading ? 'Starting...' : 'Start Exam'
                                         }, void 0, false, {
                                             fileName: "[project]/app/page.tsx",
-                                            lineNumber: 307,
+                                            lineNumber: 317,
                                             columnNumber: 17
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/page.tsx",
-                                    lineNumber: 283,
+                                    lineNumber: 293,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/page.tsx",
-                            lineNumber: 249,
+                            lineNumber: 260,
                             columnNumber: 13
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -460,8 +481,8 @@ function LoginPage() {
                             },
                             children: [
                                 {
-                                    label: 'Language',
-                                    value: 'C++'
+                                    label: 'Platform',
+                                    value: 'Multi-Lang'
                                 },
                                 {
                                     label: 'Duration',
@@ -481,7 +502,7 @@ function LoginPage() {
                                             children: label
                                         }, void 0, false, {
                                             fileName: "[project]/app/page.tsx",
-                                            lineNumber: 348,
+                                            lineNumber: 369,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -494,18 +515,18 @@ function LoginPage() {
                                             children: value
                                         }, void 0, false, {
                                             fileName: "[project]/app/page.tsx",
-                                            lineNumber: 349,
+                                            lineNumber: 370,
                                             columnNumber: 17
                                         }, this)
                                     ]
                                 }, label, true, {
                                     fileName: "[project]/app/page.tsx",
-                                    lineNumber: 347,
+                                    lineNumber: 368,
                                     columnNumber: 15
                                 }, this))
                         }, void 0, false, {
                             fileName: "[project]/app/page.tsx",
-                            lineNumber: 333,
+                            lineNumber: 354,
                             columnNumber: 11
                         }, this)
                     ]
@@ -530,10 +551,16 @@ function LoginPage() {
                     color: 'var(--text-muted)',
                     letterSpacing: '0.04em'
                 },
-                children: "Built by inxanerudrakxh"
+                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                    children: "Built for secure, standardized coding assessments."
+                }, void 0, false, {
+                    fileName: "[project]/app/page.tsx",
+                    lineNumber: 397,
+                    columnNumber: 9
+                }, this)
             }, void 0, false, {
                 fileName: "[project]/app/page.tsx",
-                lineNumber: 366,
+                lineNumber: 387,
                 columnNumber: 7
             }, this)
         ]
@@ -560,7 +587,7 @@ function InfoField({ label, value }) {
                 children: label
             }, void 0, false, {
                 fileName: "[project]/app/page.tsx",
-                lineNumber: 385,
+                lineNumber: 406,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -574,13 +601,13 @@ function InfoField({ label, value }) {
                 children: value
             }, void 0, false, {
                 fileName: "[project]/app/page.tsx",
-                lineNumber: 386,
+                lineNumber: 407,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/app/page.tsx",
-        lineNumber: 384,
+        lineNumber: 405,
         columnNumber: 5
     }, this);
 }

@@ -2,48 +2,44 @@
 @import "tailwindcss";
 
 :root {
-  /* Rich Dark Aesthetic */
-  --bg: #0b0c10;
-  --bg-gradient: radial-gradient(circle at top right, #1f2833 0%, #0b0c10 60%);
-  --surface-1: rgba(31, 40, 51, 0.65);
-  --surface-2: rgba(31, 40, 51, 0.85);
+  /* Cloudflare Sandbox-inspired Minimalist Dark Theme */
+  --bg-color: #000000;
+  --bg-gradient: #000000;
+  --surface-1: #0A0A0A;
+  --surface-2: #141414;
   
-  --border: rgba(102, 252, 241, 0.2);
-  --border-subtle: rgba(102, 252, 241, 0.1);
-  --border-glow: rgba(102, 252, 241, 0.5);
+  --border: #262626;
+  --border-subtle: #171717;
+  --border-glow: transparent;
 
-  --text-primary: #ffffff;
-  --text-secondary: #c5c6c7;
-  --text-muted: #8b929a;
+  --text-primary: #EDEDED;
+  --text-secondary: #A1A1AA;
+  --text-muted: #71717A;
 
-  /* Neon Cyan Accent */
-  --accent: #66fcf1;
-  --accent-hover: #45a29e;
-  --accent-dim: rgba(102, 252, 241, 0.12);
+  /* Cloudflare Orange Accent */
+  --accent: #F38020;
+  --accent-hover: #D9701A;
+  --accent-dim: rgba(243, 128, 32, 0.12);
   
   /* Status Colors */
-  --success: #10b981;
+  --success: #10B981;
   --success-dim: rgba(16, 185, 129, 0.15);
-  --warning: #f59e0b;
+  --warning: #F59E0B;
   --warning-dim: rgba(245, 158, 11, 0.15);
-  --error: #ef4444;
+  --error: #EF4444;
   --error-dim: rgba(239, 68, 68, 0.15);
 }
 
 .glass {
   background: var(--surface-1);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
 }
 
 .glass-panel {
-  background: var(--surface-2);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 4px;
 }
 
 * {

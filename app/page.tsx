@@ -123,30 +123,16 @@ export default function LoginPage() {
           }}
         >
           {/* Brand block */}
-          <div style={{ marginBottom: '56px', position: 'relative' }}>
-            <div style={{
-              position: 'absolute',
-              top: '-20px',
-              left: '-20px',
-              width: '100px',
-              height: '100px',
-              background: 'var(--accent)',
-              filter: 'blur(80px)',
-              opacity: 0.3,
-              zIndex: 0
-            }} />
+          <div style={{ marginBottom: '56px' }}>
             <h1
               style={{
-                position: 'relative',
-                zIndex: 1,
                 fontFamily: 'JetBrains Mono, monospace',
                 fontSize: '48px',
                 fontWeight: 700,
                 color: 'var(--text-primary)',
                 letterSpacing: '-0.03em',
                 lineHeight: 1,
-                marginBottom: '12px',
-                textShadow: '0 0 20px var(--border-glow)'
+                marginBottom: '12px'
               }}
             >
               CODE//EXAM
@@ -254,18 +240,16 @@ export default function LoginPage() {
                   textTransform: 'uppercase',
                   cursor: loading || !rollNo.trim() ? 'not-allowed' : 'pointer',
                   transition: 'all 0.2s ease',
-                  boxShadow: loading || !rollNo.trim() ? 'none' : '0 0 15px var(--accent-dim)',
+                  boxShadow: 'none',
                 }}
                 onMouseOver={(e) => {
                   if (!loading && rollNo.trim()) {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 0 20px var(--border-glow)';
+                    e.currentTarget.style.background = 'var(--accent-hover)';
                   }
                 }}
                 onMouseOut={(e) => {
                   if (!loading && rollNo.trim()) {
-                    e.currentTarget.style.transform = 'none';
-                    e.currentTarget.style.boxShadow = '0 0 15px var(--accent-dim)';
+                    e.currentTarget.style.background = 'var(--accent)';
                   }
                 }}
               >
@@ -280,7 +264,7 @@ export default function LoginPage() {
                 style={{
                   padding: '24px',
                   marginBottom: '20px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+                  background: 'var(--surface-1)'
                 }}
               >
                 <p className="text-label" style={{ marginBottom: '16px' }}>
@@ -347,16 +331,16 @@ export default function LoginPage() {
                     textTransform: 'uppercase',
                     cursor: loading ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s ease',
-                    boxShadow: loading ? 'none' : '0 0 15px var(--success-dim)'
+                    boxShadow: 'none'
                   }}
                   onMouseOver={(e) => {
                     if (!loading) {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.background = '#0ea5e9'; // A bit brighter
                     }
                   }}
                   onMouseOut={(e) => {
                     if (!loading) {
-                      e.currentTarget.style.transform = 'none';
+                      e.currentTarget.style.background = 'var(--success)';
                     }
                   }}
                 >

@@ -91,7 +91,7 @@ function InstructionsPage() {
                             color: 'var(--text-secondary)',
                             letterSpacing: '0.04em'
                         },
-                        children: "CODE//DSA"
+                        children: "CODE//EXAM"
                     }, void 0, false, {
                         fileName: "[project]/app/exam/instructions/page.tsx",
                         lineNumber: 60,

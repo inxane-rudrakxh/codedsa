@@ -37,7 +37,7 @@ export default function AdminLoginPage() {
   return (
     <main style={{
       minHeight: '100vh',
-      background: 'var(--bg-gradient)',
+      background: 'var(--bg-color)',
       backgroundAttachment: 'fixed',
       display: 'flex',
       flexDirection: 'column',
@@ -45,19 +45,8 @@ export default function AdminLoginPage() {
       justifyContent: 'center',
       padding: '40px 20px',
     }}>
-      <div className="animate-fade-up glass-panel" style={{ maxWidth: '400px', width: '100%', padding: '40px 32px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-        <div style={{ marginBottom: '48px', position: 'relative' }}>
-          <div style={{
-            position: 'absolute',
-            top: '-20px',
-            left: '-20px',
-            width: '80px',
-            height: '80px',
-            background: 'var(--accent)',
-            filter: 'blur(60px)',
-            opacity: 0.25,
-            zIndex: 0
-          }} />
+      <div className="animate-fade-up glass-panel" style={{ maxWidth: '400px', width: '100%', padding: '40px 32px' }}>
+        <div style={{ marginBottom: '48px' }}>
           <p style={{
             fontSize: '10px',
             fontWeight: 600,
@@ -72,9 +61,6 @@ export default function AdminLoginPage() {
             fontWeight: 700,
             color: 'var(--text-primary)',
             letterSpacing: '-0.02em',
-            position: 'relative',
-            zIndex: 1,
-            textShadow: '0 0 15px var(--border-glow)'
           }}>CODE//EXAM</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
             Faculty Administration Panel
@@ -124,18 +110,16 @@ export default function AdminLoginPage() {
             textTransform: 'uppercase',
             cursor: loading ? 'not-allowed' : 'pointer',
             transition: 'all 0.2s ease',
-            boxShadow: loading ? 'none' : '0 0 15px var(--accent-dim)'
+            boxShadow: 'none'
           }}
           onMouseOver={(e) => {
             if (!loading) {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 0 20px var(--border-glow)';
+              e.currentTarget.style.background = 'var(--accent-hover)';
             }
           }}
           onMouseOut={(e) => {
             if (!loading) {
-              e.currentTarget.style.transform = 'none';
-              e.currentTarget.style.boxShadow = '0 0 15px var(--accent-dim)';
+              e.currentTarget.style.background = 'var(--accent)';
             }
           }}
         >
