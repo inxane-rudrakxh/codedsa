@@ -181,5 +181,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, report_id: report.id, data: reportRows });
   }
 
+  if (action === 'reset_session') {
+    const { session_id } = body;
+    if (!session_id) return NextResponse.json({ error: 'Missing session_id' }, { status: 400 });
+    
+    try {
+      await prisma.$transaction([
+        prisma.submission.deleteMany({ where: { session_id } }),
+        prisma.codeSave.deleteMany({ where: { session_id } }),
+        prisma.assignedQuestion.deleteMany({ where: { session_id } }),
+        prisma.examSession.delete({ where: { id: session_id } })
+      ]);
+      return NextResponse.json({ success: true });
+    } catch (err: any) {
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    }
+  }
+
   return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
 }

@@ -13,6 +13,7 @@ interface StudentInfo {
 export default function LoginPage() {
   const router = useRouter();
   const [rollNo, setRollNo] = useState('');
+  const [password, setPassword] = useState('');
   const [student, setStudent] = useState<StudentInfo | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -50,7 +51,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roll_no: rollNo.trim(), action: 'login' }),
+        body: JSON.stringify({ roll_no: rollNo.trim(), password, action: 'login' }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -69,6 +70,7 @@ export default function LoginPage() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       if (step === 'input') handleLookup();
+      else if (step === 'confirm' && password) handleStart();
     }
   };
 
@@ -283,6 +285,48 @@ export default function LoginPage() {
                   <InfoField label="Branch" value={student!.branch} />
                 </div>
               </div>
+              
+              <div style={{ marginBottom: '20px' }}>
+                <label
+                  htmlFor="password"
+                  style={{
+                    display: 'block',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    letterSpacing: '0.10em',
+                    textTransform: 'uppercase',
+                    color: 'var(--text-muted)',
+                    marginBottom: '10px',
+                  }}
+                >
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError('');
+                  }}
+                  onKeyDown={handleKeyDown}
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: 'var(--surface-1)',
+                    border: `1px solid ${error ? 'var(--error)' : 'var(--border)'}`,
+                    borderRadius: '4px',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                    fontFamily: 'Inter, sans-serif',
+                    outline: 'none',
+                    transition: 'border-color 0.15s ease',
+                  }}
+                  onFocus={(e) => { e.target.style.borderColor = 'var(--accent)'; }}
+                  onBlur={(e) => { e.target.style.borderColor = error ? 'var(--error)' : 'var(--border)'; }}
+                />
+              </div>
 
               {error && (
                 <p style={{ fontSize: '12px', color: 'var(--error)', marginBottom: '12px' }}>
@@ -317,14 +361,14 @@ export default function LoginPage() {
                 <button
                   id="start-exam-btn"
                   onClick={handleStart}
-                  disabled={loading}
+                  disabled={loading || !password}
                   style={{
                     flex: 2,
                     padding: '13px',
-                    background: loading ? 'var(--surface-2)' : 'var(--success)',
+                    background: loading || !password ? 'var(--surface-2)' : 'var(--success)',
                     border: '1px solid transparent',
                     borderRadius: '4px',
-                    color: loading ? 'var(--text-muted)' : '#000',
+                    color: loading || !password ? 'var(--text-muted)' : '#000',
                     fontSize: '12px',
                     fontWeight: 700,
                     letterSpacing: '0.12em',

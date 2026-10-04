@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { createStudentSessionToken, generateSessionId } from '@/lib/auth';
+import bcrypt from 'bcryptjs';
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -46,6 +47,16 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === 'login') {
+    const { password } = body;
+    if (!password) {
+      return NextResponse.json({ error: 'Password is required.' }, { status: 400 });
+    }
+
+    const passwordMatch = await bcrypt.compare(password, studentRecord.user.password_hash);
+    if (!passwordMatch) {
+      return NextResponse.json({ error: 'Invalid password.' }, { status: 401 });
+    }
+
     const existingSession = await prisma.examSession.findFirst({
       where: { student_id: studentRecord.id },
       orderBy: { start_time: 'desc' }

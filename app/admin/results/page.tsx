@@ -118,6 +118,17 @@ export default function ResultsPage() {
     setSelectedTest((prev: any) => prev ? { ...prev, marks_published: true } : prev);
   };
 
+  const handleResetSession = async (sessionId: string) => {
+    if (!confirm('Are you sure you want to completely reset this session? All code and marks will be permanently deleted.')) return;
+    setLoading(true);
+    await fetch('/api/admin/results', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ action: 'reset_session', session_id: sessionId }),
+    });
+    await loadResults(selectedTestId);
+  };
+
   const exportCSV = () => {
     if (!reportData) return;
     const keys = Object.keys(reportData[0] || {});
@@ -238,16 +249,16 @@ export default function ResultsPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
               <thead>
                 <tr style={{ background: 'var(--surface-2)' }}>
-                  {['Roll', 'Name', 'Div', ...qHeaders, 'Total', 'Status', 'Warnings'].map(h => (
+                  {['Roll', 'Name', 'Div', ...qHeaders, 'Total', 'Status', 'Warnings', 'Actions'].map(h => (
                     <th key={h} style={thStyle}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={7 + qHeaders.length} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading results...</td></tr>
+                  <tr><td colSpan={8 + qHeaders.length} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading results...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={7 + qHeaders.length} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No results found.</td></tr>
+                  <tr><td colSpan={8 + qHeaders.length} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No results found.</td></tr>
                 ) : filtered.map((r, i) => {
                   const sStatus = r.is_submitted ? 'submitted' : (r.session_id ? 'active' : 'not_started');
                   return (
@@ -288,6 +299,22 @@ export default function ResultsPage() {
                           <span style={{ fontSize: '11px', color: 'var(--error)', fontFamily: 'JetBrains Mono, monospace' }}>⚠ {r.integrity_warnings}</span>
                         ) : (
                           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>—</span>
+                        )}
+                      </td>
+                      <td style={tdStyle}>
+                        {r.session_id ? (
+                          <button
+                            onClick={() => handleResetSession(r.session_id!)}
+                            style={{
+                              background: 'transparent', border: '1px solid var(--error-dim)', borderRadius: '3px',
+                              color: 'var(--error)', fontSize: '10px', padding: '4px 8px', cursor: 'pointer',
+                              fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase'
+                            }}
+                          >
+                            Reset
+                          </button>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>—</span>
                         )}
                       </td>
                     </tr>
