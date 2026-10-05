@@ -26,7 +26,7 @@ export async function evaluateCodeWithAI(
   const url = `${endpoint.replace(/\/+$/, '')}/openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview`;
 
   const systemPrompt = `You are an expert Computer Science professor evaluating student code.
-Evaluate the code strictly and return ONLY a valid JSON object matching the format below.
+Evaluate the code and return ONLY a valid JSON object matching the format below.
 Do not wrap it in markdown block quotes. Just the raw JSON.
 {
   "is_correct": boolean,
@@ -47,7 +47,14 @@ ${studentCode}
 Test Cases Passed: ${testCasesPassed} out of ${totalTestCases}
 Max Marks Available: ${maxMarks}
 
-Based on the code's logic, time complexity, and the number of test cases passed, assign a fair score and brief feedback.
+IMPORTANT GRADING RULES:
+1. There is NO STRICTNESS on input and output formats. 
+2. Students are allowed to use different examples, custom prompts (e.g. "Enter a number"), or even hardcoded arrays in their main function.
+3. If 'Test Cases Passed' is 0, do NOT automatically fail them. They likely used their own custom inputs/outputs.
+4. If their core algorithmic logic (e.g., sorting algorithm, searching logic, array operations) is correct and works for their own example, give them full marks.
+5. Only deduct marks if the algorithmic logic itself is flawed or incomplete.
+
+Based on these rules, assign a fair score and brief feedback.
 `;
 
   try {

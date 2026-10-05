@@ -116,6 +116,14 @@ export async function POST(request: NextRequest) {
     if (aiResult) {
       marks = aiResult.score;
       aiFeedback = aiResult.feedback;
+      
+      if (marks === question.marks) {
+        subStatus = 'ACCEPTED';
+      } else if (marks > 0) {
+        subStatus = 'PARTIAL_ACCEPTED';
+      } else {
+        subStatus = 'WRONG_ANSWER';
+      }
     }
   }
 
