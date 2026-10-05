@@ -84,18 +84,18 @@ export async function POST(request: NextRequest) {
         status: existingSession.status
       });
     } else {
-      // Fetch tests that are PUBLISHED and either have no target_division or match the student's division
-      const activeTest = await prisma.test.findFirst({
-        where: { 
-          status: 'PUBLISHED',
-          OR: [
-            { target_division: null },
-            { target_division: '' },
-            { target_division: studentRecord.division?.name }
-          ]
-        },
+      // Fetch tests that are PUBLISHED, ordered by id descending
+      const publishedTests = await prisma.test.findMany({
+        where: { status: 'PUBLISHED' },
         orderBy: { id: 'desc' }
       });
+
+      // Find the first test that matches the student's division or has no specific division
+      const activeTest = publishedTests.find(t => 
+        !t.target_division || 
+        t.target_division.trim() === '' || 
+        t.target_division === studentRecord.division?.name
+      );
 
       if (!activeTest) {
         return NextResponse.json({ error: 'No active test found.' }, { status: 404 });
