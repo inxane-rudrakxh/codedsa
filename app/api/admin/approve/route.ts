@@ -44,7 +44,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'reject') {
-      await prisma.examSession.delete({ where: { id: session_id } });
+      await prisma.examSession.update({
+        where: { id: session_id },
+        data: { status: 'REJECTED' }
+      });
       return NextResponse.json({ success: true });
     }
 

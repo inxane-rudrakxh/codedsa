@@ -46,17 +46,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ student: studentPayload });
   }
 
-  if (action === 'login') {
-    const { password } = body;
-    if (!password) {
-      return NextResponse.json({ error: 'Password is required.' }, { status: 400 });
-    }
-
-    const passwordMatch = await bcrypt.compare(password, studentRecord.user.password_hash || '');
-    if (!passwordMatch) {
-      return NextResponse.json({ error: 'Invalid password.' }, { status: 401 });
-    }
-
+  if (action === 'request_access') {
     const existingSession = await prisma.examSession.findFirst({
       where: { student_id: studentRecord.id },
       orderBy: { start_time: 'desc' }
@@ -82,6 +72,17 @@ export async function POST(request: NextRequest) {
         });
         return NextResponse.json({ error: 'Your exam time has expired.' }, { status: 403 });
       }
+      
+      // If session exists and is rejected
+      if (existingSession.status === 'REJECTED') {
+        return NextResponse.json({ error: 'Your access request was rejected. Please contact your teacher.' }, { status: 403 });
+      }
+
+      // If it exists, just return the current status
+      return NextResponse.json({
+        success: true,
+        status: existingSession.status
+      });
     } else {
       // Fetch tests that are PUBLISHED and either have no target_division or match the student's division
       const activeTest = await prisma.test.findFirst({
@@ -148,12 +149,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const token = await createStudentSessionToken(studentRecord.id, studentRecord.roll_number, sessionId);
-
     return NextResponse.json({
-      session_token: token,
-      student: studentPayload,
+      success: true,
+      status: 'PENDING_APPROVAL'
     });
+  }
+
+  if (action === 'check_status') {
+    const existingSession = await prisma.examSession.findFirst({
+      where: { student_id: studentRecord.id },
+      orderBy: { start_time: 'desc' }
+    });
+
+    if (!existingSession) {
+      return NextResponse.json({ status: 'NOT_FOUND' });
+    }
+
+    if (existingSession.status === 'ACTIVE') {
+      const token = await createStudentSessionToken(studentRecord.id, studentRecord.roll_number, existingSession.id);
+      return NextResponse.json({ status: 'ACTIVE', session_token: token, student: studentPayload });
+    }
+
+    return NextResponse.json({ status: existingSession.status });
   }
 
   return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });

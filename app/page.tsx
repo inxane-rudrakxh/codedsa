@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface StudentInfo {
@@ -13,11 +13,12 @@ interface StudentInfo {
 export default function LoginPage() {
   const router = useRouter();
   const [rollNo, setRollNo] = useState('');
-  const [password, setPassword] = useState('');
   const [student, setStudent] = useState<StudentInfo | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<'input' | 'confirm'>('input');
+  const [step, setStep] = useState<'input' | 'confirm' | 'waiting' | 'rejected'>('input');
+  
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleLookup = async () => {
     if (!rollNo.trim()) return;
@@ -27,7 +28,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roll_no: rollNo.trim(), action: 'lookup' }),
+        body: JSON.stringify({ roll_no: rollNo.trim().toUpperCase(), action: 'lookup' }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -51,15 +52,27 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roll_no: rollNo.trim(), password, action: 'login' }),
+        body: JSON.stringify({ roll_no: rollNo.trim().toUpperCase(), action: 'request_access' }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || 'Login failed.');
+        if (data.error?.includes('rejected')) {
+           setStep('rejected');
+           return;
+        }
+        setError(data.error || 'Request failed.');
         return;
       }
-      localStorage.setItem('session_token', data.session_token);
-      router.push('/exam/instructions');
+      
+      if (data.status === 'ACTIVE') {
+        // If they were already approved previously
+        checkStatus();
+      } else if (data.status === 'REJECTED') {
+        setStep('rejected');
+      } else {
+        setStep('waiting');
+        startPolling();
+      }
     } catch {
       setError('Network error. Please try again.');
     } finally {
@@ -67,10 +80,43 @@ export default function LoginPage() {
     }
   };
 
+  const startPolling = () => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    pollIntervalRef.current = setInterval(checkStatus, 2000);
+  };
+
+  const checkStatus = async () => {
+    try {
+      const res = await fetch('/api/auth/student', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roll_no: rollNo.trim().toUpperCase(), action: 'check_status' }),
+      });
+      const data = await res.json();
+      
+      if (data.status === 'ACTIVE' && data.session_token) {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        localStorage.setItem('session_token', data.session_token);
+        router.push('/exam/instructions');
+      } else if (data.status === 'REJECTED') {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        setStep('rejected');
+      }
+    } catch {
+      // silently ignore network errors during polling
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       if (step === 'input') handleLookup();
-      else if (step === 'confirm' && password) handleStart();
+      else if (step === 'confirm') handleStart();
     }
   };
 
@@ -83,7 +129,6 @@ export default function LoginPage() {
         flexDirection: 'column',
       }}
     >
-      {/* Top bar */}
       <header
         style={{
           padding: '20px 40px',
@@ -107,7 +152,6 @@ export default function LoginPage() {
         <span className="text-label">S.Y. B.Tech AI&DS</span>
       </header>
 
-      {/* Center content */}
       <div
         style={{
           flex: 1,
@@ -124,7 +168,6 @@ export default function LoginPage() {
             maxWidth: '420px',
           }}
         >
-          {/* Brand block */}
           <div style={{ marginBottom: '56px' }}>
             <h1
               style={{
@@ -164,8 +207,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Form */}
-          {step === 'input' ? (
+          {step === 'input' && (
             <div>
               <label
                 htmlFor="roll-number"
@@ -186,7 +228,7 @@ export default function LoginPage() {
                 type="text"
                 value={rollNo}
                 onChange={(e) => {
-                  setRollNo(e.target.value);
+                  setRollNo(e.target.value.toUpperCase());
                   setError('');
                 }}
                 onKeyDown={handleKeyDown}
@@ -244,23 +286,14 @@ export default function LoginPage() {
                   transition: 'all 0.2s ease',
                   boxShadow: 'none',
                 }}
-                onMouseOver={(e) => {
-                  if (!loading && rollNo.trim()) {
-                    e.currentTarget.style.background = 'var(--accent-hover)';
-                  }
-                }}
-                onMouseOut={(e) => {
-                  if (!loading && rollNo.trim()) {
-                    e.currentTarget.style.background = 'var(--accent)';
-                  }
-                }}
               >
                 {loading ? 'Searching...' : 'Continue'}
               </button>
             </div>
-          ) : (
+          )}
+
+          {step === 'confirm' && (
             <div className="animate-fade-up">
-              {/* Student card */}
               <div
                 className="glass-panel"
                 style={{
@@ -284,48 +317,6 @@ export default function LoginPage() {
                   <InfoField label="Division" value={student!.division} />
                   <InfoField label="Branch" value={student!.branch} />
                 </div>
-              </div>
-              
-              <div style={{ marginBottom: '20px' }}>
-                <label
-                  htmlFor="password"
-                  style={{
-                    display: 'block',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    letterSpacing: '0.10em',
-                    textTransform: 'uppercase',
-                    color: 'var(--text-muted)',
-                    marginBottom: '10px',
-                  }}
-                >
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setError('');
-                  }}
-                  onKeyDown={handleKeyDown}
-                  autoFocus
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    background: 'var(--surface-1)',
-                    border: `1px solid ${error ? 'var(--error)' : 'var(--border)'}`,
-                    borderRadius: '4px',
-                    color: 'var(--text-primary)',
-                    fontSize: '14px',
-                    fontFamily: 'Inter, sans-serif',
-                    outline: 'none',
-                    transition: 'border-color 0.15s ease',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = 'var(--accent)'; }}
-                  onBlur={(e) => { e.target.style.borderColor = error ? 'var(--error)' : 'var(--border)'; }}
-                />
               </div>
 
               {error && (
@@ -361,34 +352,106 @@ export default function LoginPage() {
                 <button
                   id="start-exam-btn"
                   onClick={handleStart}
-                  disabled={loading || !password}
+                  disabled={loading}
                   style={{
                     flex: 2,
                     padding: '13px',
-                    background: loading || !password ? 'var(--surface-2)' : 'var(--success)',
+                    background: loading ? 'var(--surface-2)' : 'var(--success)',
                     border: '1px solid transparent',
                     borderRadius: '4px',
-                    color: loading || !password ? 'var(--text-muted)' : '#000',
+                    color: loading ? 'var(--text-muted)' : '#000',
                     fontSize: '12px',
                     fontWeight: 700,
                     letterSpacing: '0.12em',
                     textTransform: 'uppercase',
                     cursor: loading ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s ease',
-                    boxShadow: 'none'
-                  }}
-                  onMouseOver={(e) => {
-                    if (!loading) {
-                      e.currentTarget.style.background = '#0ea5e9'; // A bit brighter
-                    }
-                  }}
-                  onMouseOut={(e) => {
-                    if (!loading) {
-                      e.currentTarget.style.background = 'var(--success)';
-                    }
                   }}
                 >
-                  {loading ? 'Starting...' : 'Start Exam'}
+                  {loading ? 'Requesting...' : 'Request Access'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'waiting' && (
+            <div className="animate-fade-up text-center" style={{ textAlign: 'center' }}>
+              <div
+                className="glass-panel"
+                style={{
+                  padding: '32px 24px',
+                  background: 'var(--surface-1)'
+                }}
+              >
+                <div style={{ marginBottom: '24px' }}>
+                  <div className="animate-pulse-subtle" style={{ width: '12px', height: '12px', background: 'var(--warning)', borderRadius: '50%', margin: '0 auto 16px' }} />
+                  <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                    Verification Required
+                  </h3>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    Your attendance request has been sent to the teacher. Please wait for approval.
+                  </p>
+                </div>
+                
+                <div style={{ padding: '16px', background: 'var(--surface-2)', borderRadius: '4px', textAlign: 'left', marginBottom: '24px' }}>
+                  <p className="text-label" style={{ marginBottom: '12px' }}>Request Details</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Roll Number</span>
+                      <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>{student?.roll_no}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Name</span>
+                      <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{student?.name}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Division</span>
+                      <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{student?.division}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <p style={{ fontSize: '12px', color: 'var(--warning)', fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <span>●</span> Waiting for teacher approval
+                </p>
+              </div>
+            </div>
+          )}
+
+          {step === 'rejected' && (
+            <div className="animate-fade-up text-center" style={{ textAlign: 'center' }}>
+              <div
+                className="glass-panel"
+                style={{
+                  padding: '32px 24px',
+                  background: 'var(--surface-1)',
+                  border: '1px solid var(--error-dim)'
+                }}
+              >
+                <div style={{ width: '48px', height: '48px', background: 'var(--error-dim)', color: 'var(--error)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '24px' }}>
+                  ✕
+                </div>
+                <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--error)', marginBottom: '8px' }}>
+                  Verification Rejected
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '24px' }}>
+                  Your attendance/entry request was rejected by the teacher. Please contact your teacher if this was a mistake.
+                </p>
+                <button
+                  onClick={() => setStep('input')}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'transparent',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    color: 'var(--text-secondary)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Start Over
                 </button>
               </div>
             </div>
@@ -426,8 +489,6 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
-      
-
     </main>
   );
 }
