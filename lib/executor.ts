@@ -105,7 +105,7 @@ export async function compileAndRun(code: string, input: string, language: strin
       return {
         success: true,
         output: (execErr.stdout || '').trim(),
-        stderr: (execErr.stderr || execErr.message || '').trim(),
+        stderr: (execErr.stderr || '').trim(),
         execution_time: Date.now() - startTime
       };
     }
