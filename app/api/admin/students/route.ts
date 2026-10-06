@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     roll_no: s.roll_number,
     name: s.user.full_name,
     branch: s.branch.name,
-    division: s.division?.name || 'A',
+    division: (s.division?.name === 'A' || s.division?.name === 'AIDS A') ? 'AIDS A' : (s.division?.name === 'B' || s.division?.name === 'AIDS B') ? 'AIDS B' : (s.division?.name || 'AIDS A'),
     is_active: s.user.status === 'ACTIVE' ? 1 : 0
   }));
 

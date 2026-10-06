@@ -208,12 +208,29 @@ export default function AdminDashboard() {
                     </span>
                   </td>
                   <td style={tdStyle}>
-                    <StatusPill 
-                      status={session.status} 
-                      sessionId={session.session_id}
-                      onApprove={(id) => handleAction(id, 'approve')}
-                      onReject={(id) => handleAction(id, 'reject')}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <StatusPill 
+                        status={session.status} 
+                        sessionId={session.session_id}
+                        onApprove={(id) => handleAction(id, 'approve')}
+                        onReject={(id) => handleAction(id, 'reject')}
+                      />
+                      {session.status === 'submitted' && (
+                        <a href="/admin/results" style={{
+                          fontSize: '9px',
+                          color: 'var(--accent)',
+                          background: 'transparent',
+                          border: '1px solid var(--accent)',
+                          padding: '2px 6px',
+                          borderRadius: '2px',
+                          textDecoration: 'none',
+                          fontWeight: 600,
+                          letterSpacing: '0.05em',
+                        }}>
+                          VIEW
+                        </a>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

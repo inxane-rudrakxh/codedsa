@@ -61,6 +61,8 @@ const STARTER_CODE = `#include <iostream>
 using namespace std;
 
 int main() {
+    // Write your code here
+    // Example: cout << "Hello World!" << endl;
     
     return 0;
 }`;
@@ -1174,9 +1176,10 @@ function ConsolePanel({
                   fontSize: '12px',
                   color: 'var(--text-primary)',
                   whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
                   margin: 0,
                   lineHeight: 1.7,
-                }}>{results.output}</pre>
+                }}>{(results.output || '').replace(/\\n/g, '\n')}</pre>
               ) : (
                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', margin: 0 }}>
                   (no output)

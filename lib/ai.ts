@@ -21,9 +21,9 @@ export async function evaluateCodeWithAI(
     return null;
   }
 
-  // Construct the Azure OpenAI REST endpoint
-  // Format: https://{endpoint}/openai/deployments/{deployment-id}/chat/completions?api-version=2024-02-15-preview
-  const url = `${endpoint.replace(/\/+$/, '')}/openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview`;
+  // Clean up endpoint if it has trailing paths
+  const cleanEndpoint = endpoint.replace(/\/openai\/.*$/, '').replace(/\/+$/, '');
+  const url = `${cleanEndpoint}/openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview`;
 
   const systemPrompt = `You are an expert Computer Science professor evaluating student code.
 Evaluate the code and return ONLY a valid JSON object matching the format below.
@@ -100,7 +100,8 @@ export async function simulateCodeExecutionWithAI(code: string, language: string
     return "Error: AI configuration missing.";
   }
 
-  const url = `${endpoint.replace(/\/+$/, '')}/openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview`;
+  const cleanEndpoint = endpoint.replace(/\/openai\/.*$/, '').replace(/\/+$/, '');
+  const url = `${cleanEndpoint}/openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview`;
 
   const systemPrompt = `You are an incredibly fast and accurate C++ (or specified language) compiler and code executor.
 Given the source code and the standard input provided by the user, you must output exactly what the program would print to standard output (stdout).
