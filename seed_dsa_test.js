@@ -15,12 +15,17 @@ async function main() {
     });
   }
 
+  // 1.5 Get teacher
+  const teacher = await prisma.teacher.findFirst();
+  const teacher_id = teacher ? teacher.id : null;
+
   // 2. Create Test
   const test = await prisma.test.create({
     data: {
       title: 'Unit II – DSA 30 Marks Online Coding Test',
       description: 'The test consists of 30 marks. Any 3 random programs will appear on the screen. Each successful code execution carries 10 marks.',
       subject_id: subject.id,
+      teacher_id: teacher_id,
       duration_minutes: 60,
       total_marks: 30,
       status: 'PUBLISHED',
