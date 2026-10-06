@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
   const body = await request.json();
-  const { code, language } = body;
+  const { code, language, input } = body;
 
   if (!code) {
     return NextResponse.json({ error: 'code is required' }, { status: 400 });
@@ -23,9 +23,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Exam session is not active' }, { status: 403 });
   }
 
-  // Free compiler — just run the code with empty stdin, like Programiz
-  // Student provides their own input via hardcoded values in the code
-  const result = await compileAndRun(code, '', language || 'cpp');
+  // Free compiler — just run the code with provided custom input, like Programiz
+  // Student provides their own input via the custom input box
+  const result = await compileAndRun(code, input || '', language || 'cpp');
 
   return NextResponse.json({
     success: result.success,

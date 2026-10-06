@@ -103,6 +103,7 @@ export default function WorkspacePage() {
   const [consoleOpen, setConsoleOpen] = useState(true);
   const [submitScores, setSubmitScores] = useState<Record<number, number>>({});
   const [showFinalScreen, setShowFinalScreen] = useState(false);
+  const [customInput, setCustomInput] = useState('');
   
   // Demo Mode State
   const [demoActive, setDemoActive] = useState(false);
@@ -379,7 +380,7 @@ export default function WorkspacePage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ code, language }),
+        body: JSON.stringify({ code, language, input: customInput }),
       });
       const data = await res.json();
       setRunResults(data);
@@ -839,6 +840,8 @@ export default function WorkspacePage() {
                     onToggle={() => setConsoleOpen(p => !p)}
                     results={runResults}
                     running={running}
+                    customInput={customInput}
+                    setCustomInput={setCustomInput}
                   />
                 </div>
               </div>
@@ -1059,11 +1062,15 @@ function ConsolePanel({
   onToggle,
   results,
   running,
+  customInput,
+  setCustomInput,
 }: {
   open: boolean;
   onToggle: () => void;
   results: any | null;
   running: boolean;
+  customInput: string;
+  setCustomInput: (val: string) => void;
 }) {
   return (
     <div style={{
@@ -1098,7 +1105,30 @@ function ConsolePanel({
       </button>
 
       {open && (
-        <div style={{ maxHeight: '220px', overflowY: 'auto', padding: '0 16px 12px' }}>
+        <div style={{ maxHeight: '300px', overflowY: 'auto', padding: '0 16px 12px' }}>
+          <div style={{ marginBottom: '12px', marginTop: '8px' }}>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Custom Input (stdin):</span>
+            <textarea
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              placeholder="Enter input here if your code uses cin/scanf..."
+              style={{
+                width: '100%',
+                height: '60px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid var(--border)',
+                borderRadius: '3px',
+                color: 'var(--text-primary)',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '12px',
+                padding: '8px',
+                marginTop: '6px',
+                resize: 'vertical',
+                outline: 'none',
+              }}
+            />
+          </div>
+
           {running && (
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', padding: '8px 0' }}>
               ◌ Compiling and running...

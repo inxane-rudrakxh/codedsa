@@ -53,7 +53,7 @@ export async function compileAndRun(code: string, input: string, language: strin
         stdin: input
       }),
       // Set an abort controller timeout for fetch just in case
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(20000)
     });
 
     if (!res.ok) {
@@ -93,7 +93,6 @@ export async function compileAndRun(code: string, input: string, language: strin
       return {
         success: false,
         timed_out: true,
-        compile_error: 'Time Limit Exceeded',
       };
     }
     return {
