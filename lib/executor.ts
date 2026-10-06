@@ -34,90 +34,50 @@ export async function compileAndRun(code: string, input: string, language: strin
     }
   }
 
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'codedsa-run-'));
-  const inputPath = path.join(tmpDir, 'input.txt');
-  let srcPath = '';
-  let binPath = '';
-  let compileCmd = '';
-  let runCmd = '';
+  let compilerName = 'gcc-head';
+  switch (language.toLowerCase()) {
+    case 'c': compilerName = 'gcc-head-c'; break;
+    case 'python': 
+    case 'py': compilerName = 'cpython-head'; break;
+    case 'java': compilerName = 'openjdk-head'; break;
+  }
 
   try {
-    await fs.writeFile(inputPath, input);
+    const response = await fetch('https://wandbox.org/api/compile.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: sanitizedCode,
+        compiler: compilerName,
+        stdin: input || ''
+      })
+    });
+
+    if (!response.ok) {
+      return { success: false, compile_error: 'Execution service unavailable.' };
+    }
+
+    const data = await response.json();
     
-    switch(language.toLowerCase()) {
-      case 'c':
-        srcPath = path.join(tmpDir, 'main.c');
-        binPath = path.join(tmpDir, 'program');
-        compileCmd = `gcc "${srcPath}" -o "${binPath}" -O2`;
-        runCmd = `"${binPath}" < "${inputPath}"`;
-        break;
-      case 'cpp':
-      case 'c++':
-        srcPath = path.join(tmpDir, 'main.cpp');
-        binPath = path.join(tmpDir, 'program');
-        compileCmd = `g++ "${srcPath}" -o "${binPath}" -O2`;
-        runCmd = `"${binPath}" < "${inputPath}"`;
-        break;
-      case 'python':
-      case 'py':
-        srcPath = path.join(tmpDir, 'main.py');
-        compileCmd = ''; 
-        runCmd = `python3 "${srcPath}" < "${inputPath}"`;
-        break;
-      case 'java':
-        srcPath = path.join(tmpDir, 'Main.java');
-        compileCmd = `javac "${srcPath}"`;
-        runCmd = `java -cp "${tmpDir}" Main < "${inputPath}"`;
-        break;
-      default:
-        srcPath = path.join(tmpDir, 'main.cpp');
-        binPath = path.join(tmpDir, 'program');
-        compileCmd = `g++ "${srcPath}" -o "${binPath}" -O2`;
-        runCmd = `"${binPath}" < "${inputPath}"`;
-        break;
+    // Wandbox returns status="0" on success, something else if crash or compile error
+    if (data.status !== '0' && data.compiler_error) {
+       return { success: false, compile_error: data.compiler_error.trim() };
+    }
+    
+    // Programiz-like: Timeout or Signal killed
+    if (data.signal) {
+       return { success: false, timed_out: true, execution_time: 5000 };
     }
 
-    await fs.writeFile(srcPath, sanitizedCode);
-
-    if (compileCmd) {
-      try {
-        await execAsync(compileCmd, { timeout: COMPILE_TIMEOUT_MS });
-      } catch (compileErr: any) {
-        return {
-          success: false,
-          compile_error: (compileErr.stderr || compileErr.message || '').trim(),
-        };
-      }
-    }
-
-    try {
-      const { stdout, stderr } = await execAsync(runCmd, { timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES });
-      return {
-        success: true,
-        output: stdout.trim(),
-        stderr: stderr.trim(),
-        execution_time: Date.now() - startTime
-      };
-    } catch (execErr: any) {
-      if (execErr.killed || execErr.signal === 'SIGTERM') {
-        return { success: false, timed_out: true, execution_time: Date.now() - startTime };
-      }
-      return {
-        success: true,
-        output: (execErr.stdout || '').trim(),
-        stderr: (execErr.stderr || '').trim(),
-        execution_time: Date.now() - startTime
-      };
-    }
-  } catch (err: any) {
     return {
-      success: false,
-      compile_error: 'Internal Error: ' + err.message,
+      success: data.status === '0',
+      output: (data.program_output || '').trim(),
+      stderr: (data.program_error || '').trim(),
+      execution_time: Date.now() - startTime
     };
-  } finally {
-    try {
-      await fs.rm(tmpDir, { recursive: true, force: true });
-    } catch (e) {}
+
+  } catch (err: any) {
+    return { success: false, compile_error: 'Internal Error: ' + err.message };
   }
 }
 
