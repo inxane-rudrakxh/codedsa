@@ -40,7 +40,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     { href: '/admin/questions', label: 'Questions', showFor: 'all' },
     { href: '/admin/tests', label: 'Tests', showFor: 'all' },
     { href: '/admin/results', label: 'Results', showFor: 'all' },
-    { href: '/admin/students', label: 'Students', showFor: 'admin' },
+    { href: '/admin/students', label: 'Students', showFor: 'all' },
     { href: '/admin/teachers', label: 'Teachers', showFor: 'admin' },
     { href: '/admin/settings', label: 'Settings', showFor: 'admin' },
   ].filter(item => item.showFor === 'all' || isAdmin);
