@@ -10,6 +10,7 @@ interface Question {
   id: number;
   title: string;
   topic: string;
+  description: string;
   statement: string;
   input_format: string;
   output_format: string;
