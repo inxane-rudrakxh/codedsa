@@ -17,18 +17,18 @@
   --text-secondary: #A1A1AA;
   --text-muted: #71717A;
 
-  /* Cloudflare Orange Accent */
-  --accent: #F38020;
-  --accent-hover: #D9701A;
-  --accent-dim: rgba(243, 128, 32, 0.12);
+  /* Monochrome / Minimalist White Accent */
+  --accent: #FFFFFF;
+  --accent-hover: #E5E5E5;
+  --accent-dim: rgba(255, 255, 255, 0.15);
   
   /* Status Colors */
-  --success: #10B981;
-  --success-dim: rgba(16, 185, 129, 0.15);
-  --warning: #F59E0B;
-  --warning-dim: rgba(245, 158, 11, 0.15);
-  --error: #EF4444;
-  --error-dim: rgba(239, 68, 68, 0.15);
+  --success: #FFFFFF;
+  --success-dim: rgba(255, 255, 255, 0.10);
+  --warning: #FFFFFF;
+  --warning-dim: rgba(255, 255, 255, 0.10);
+  --error: #FFFFFF;
+  --error-dim: rgba(255, 255, 255, 0.10);
 }
 
 .glass {

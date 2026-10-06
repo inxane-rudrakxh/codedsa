@@ -350,6 +350,10 @@
     border-width: 1px;
   }
 
+  .text-center {
+    text-align: center;
+  }
+
   .uppercase {
     text-transform: uppercase;
   }
@@ -384,6 +388,7 @@
 }
 
 :root {
+  --bg: #000;
   --bg-color: #000;
   --bg-gradient: #000;
   --surface-1: #0a0a0a;
@@ -394,15 +399,15 @@
   --text-primary: #ededed;
   --text-secondary: #a1a1aa;
   --text-muted: #71717a;
-  --accent: #f38020;
-  --accent-hover: #d9701a;
-  --accent-dim: #f380201f;
-  --success: #10b981;
-  --success-dim: #10b98126;
-  --warning: #f59e0b;
-  --warning-dim: #f59e0b26;
-  --error: #ef4444;
-  --error-dim: #ef444426;
+  --accent: #fff;
+  --accent-hover: #e5e5e5;
+  --accent-dim: #ffffff26;
+  --success: #fff;
+  --success-dim: #ffffff1a;
+  --warning: #fff;
+  --warning-dim: #ffffff1a;
+  --error: #fff;
+  --error-dim: #ffffff1a;
 }
 
 .glass, .glass-panel {
