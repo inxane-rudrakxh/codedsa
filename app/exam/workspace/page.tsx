@@ -1138,26 +1138,21 @@ function ConsolePanel({
           {results?.compile_error && (
             <div style={{
               padding: '12px',
-              background: '#1e1e1e', // VS Code Terminal background
-              border: '1px solid #3c3c3c',
-              borderRadius: '4px',
-              fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid var(--border)',
+              borderRadius: '3px',
               marginBottom: '8px',
-              minHeight: '80px',
-              overflowX: 'auto',
             }}>
-              <div style={{ fontSize: '11px', color: '#858585', marginBottom: '8px' }}>
-                $ g++ source.cpp -o program
-              </div>
-              <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', color: '#f48771', marginBottom: '6px' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', color: 'var(--error)', marginBottom: '6px' }}>
                 COMPILATION ERROR
               </p>
               <pre style={{
-                fontSize: '13px',
-                color: '#f48771', // VS Code terminal red for errors
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '11px',
+                color: 'var(--text-secondary)',
                 whiteSpace: 'pre-wrap',
                 margin: 0,
-                lineHeight: 1.5,
+                lineHeight: 1.6,
               }}>{results.compile_error}</pre>
             </div>
           )}
@@ -1165,41 +1160,37 @@ function ConsolePanel({
           {results && !results.compile_error && (
             <div style={{
               padding: '12px',
-              background: '#1e1e1e', // VS Code Terminal background
-              border: '1px solid #3c3c3c',
-              borderRadius: '4px',
-              fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
-              color: '#cccccc', // Default terminal text color
-              minHeight: '80px',
-              overflowX: 'auto',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              borderRadius: '3px',
             }}>
-              <div style={{ fontSize: '11px', color: '#858585', marginBottom: '8px' }}>
-                $ ./program {customInput ? '< input.txt' : ''}
-              </div>
               {results.timed_out ? (
-                <p style={{ fontSize: '13px', color: '#cca700', margin: 0 }}>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace', margin: 0 }}>
                   ⏱ Time Limit Exceeded (5 seconds)
                 </p>
               ) : results.output ? (
                 <pre style={{
-                  fontSize: '13px',
-                  color: '#ffffff', // Bright white for standard output
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '12px',
+                  color: 'var(--text-primary)',
                   whiteSpace: 'pre-wrap',
                   margin: 0,
-                  lineHeight: 1.5,
+                  lineHeight: 1.7,
                 }}>{results.output}</pre>
               ) : (
-                <p style={{ fontSize: '12px', color: '#858585', margin: 0, fontStyle: 'italic' }}>
-                  (no standard output)
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', margin: 0 }}>
+                  (no output)
                 </p>
               )}
               {results.stderr && (
                 <pre style={{
-                  fontSize: '13px',
-                  color: '#f48771', // VS Code terminal red for errors
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '11px',
+                  color: 'var(--text-secondary)',
                   whiteSpace: 'pre-wrap',
                   margin: '8px 0 0',
-                  lineHeight: 1.5,
+                  lineHeight: 1.6,
+                  opacity: 0.7,
                 }}>{results.stderr}</pre>
               )}
             </div>
