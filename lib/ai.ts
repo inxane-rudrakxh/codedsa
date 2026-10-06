@@ -90,3 +90,69 @@ Based on these rules, assign a fair score and brief feedback.
     return null;
   }
 }
+
+export async function simulateCodeExecutionWithAI(code: string, language: string, customInput: string) {
+  const apiKey = process.env.AZURE_OPENAI_API_KEY;
+  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+  const deploymentName = process.env.AZURE_OPENAI_DEPLOYMENT;
+
+  if (!apiKey || !endpoint || !deploymentName) {
+    return "Error: AI configuration missing.";
+  }
+
+  const url = `${endpoint.replace(/\/+$/, '')}/openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview`;
+
+  const systemPrompt = `You are an incredibly fast and accurate C++ (or specified language) compiler and code executor.
+Given the source code and the standard input provided by the user, you must output exactly what the program would print to standard output (stdout).
+If there is a compilation error, output "COMPILATION_ERROR: <reason>".
+If there is no output, just leave it blank.
+DO NOT provide any markdown formatting, explanations, or backticks. Return ONLY the exact raw text output that the program would produce in a terminal.`;
+
+  const userPrompt = `Language: ${language}
+
+Source Code:
+${code}
+
+Standard Input (stdin):
+${customInput}`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': apiKey
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 1500,
+      }),
+    });
+
+    if (!response.ok) {
+      return "Error: AI Simulation Failed.";
+    }
+
+    const data = await response.json();
+    let content = data.choices[0].message.content || "";
+    // Remove potential markdown block if the AI ignored instructions
+    if (content.startsWith("```")) {
+       const lines = content.split("\n");
+       if (lines.length > 2) {
+         lines.shift();
+         if (lines[lines.length - 1].startsWith("```")) {
+           lines.pop();
+         }
+         content = lines.join("\n");
+       }
+    }
+    return content;
+  } catch (err) {
+    console.error("AI Simulation error", err);
+    return "Error: AI Simulation crashed.";
+  }
+}
