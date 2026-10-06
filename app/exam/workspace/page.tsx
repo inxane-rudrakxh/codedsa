@@ -366,11 +366,8 @@ export default function WorkspacePage() {
   };
 
   const handleRunCode = async () => {
-    if (!sessionData) return;
-    const question = sessionData.questions[activeQuestion];
-    if (!question) return;
-
-    const code = codes[question.id] || STARTER_CODE;
+    const question = sessionData?.questions[activeQuestion];
+    const code = codes[question?.id || 0] || STARTER_CODE;
     setRunning(true);
     setRunResults(null);
 
@@ -381,7 +378,7 @@ export default function WorkspacePage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ question_id: question.id, code, language }),
+        body: JSON.stringify({ code, language }),
       });
       const data = await res.json();
       setRunResults(data);
@@ -811,12 +808,12 @@ export default function WorkspacePage() {
                             disabled={submitting || running}
                             style={{
                               padding: '8px 20px',
-                              background: submitting ? 'var(--surface-2)' : 'var(--accent)',
-                              border: '1px solid transparent',
+                              background: submitting ? 'var(--surface-2)' : '#FFFFFF',
+                              border: '1px solid var(--border)',
                               borderRadius: '3px',
-                              color: submitting ? 'var(--text-muted)' : '#fff',
+                              color: submitting ? 'var(--text-muted)' : '#000000',
                               fontSize: '11px',
-                              fontWeight: 600,
+                              fontWeight: 700,
                               letterSpacing: '0.10em',
                               textTransform: 'uppercase',
                               cursor: submitting ? 'not-allowed' : 'pointer',
@@ -1008,63 +1005,40 @@ function QuestionPanel({ question, index }: { question: Question; index: number 
       {/* Problem statement */}
       <Section label="Problem">
         <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-          {question.statement}
+          {question.description || question.statement}
         </p>
       </Section>
 
-      <Section label="Input Format">
-        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-          {question.input_format}
-        </p>
-      </Section>
+      {question.input_format && (
+        <Section label="Input Format">
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+            {question.input_format}
+          </p>
+        </Section>
+      )}
 
-      <Section label="Output Format">
-        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-          {question.output_format}
-        </p>
-      </Section>
+      {question.output_format && (
+        <Section label="Output Format">
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+            {question.output_format}
+          </p>
+        </Section>
+      )}
 
-      <Section label="Constraints">
-        <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-          {question.constraints}
-        </p>
-      </Section>
+      {question.constraints && (
+        <Section label="Constraints">
+          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+            {question.constraints}
+          </p>
+        </Section>
+      )}
 
-      {/* Example */}
-      <div style={{ marginBottom: '20px' }}>
-        <p className="text-label" style={{ marginBottom: '12px' }}>Example</p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          <div>
-            <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '6px', letterSpacing: '0.06em' }}>INPUT</p>
-            <pre style={{
-              fontFamily: 'JetBrains Mono, monospace',
-              fontSize: '12px',
-              color: 'var(--text-secondary)',
-              background: 'var(--surface-2)',
-              padding: '10px 12px',
-              borderRadius: '3px',
-              border: '1px solid var(--border)',
-              whiteSpace: 'pre-wrap',
-              lineHeight: 1.6,
-              margin: 0,
-            }}>{question.example_input}</pre>
-          </div>
-          <div>
-            <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '6px', letterSpacing: '0.06em' }}>OUTPUT</p>
-            <pre style={{
-              fontFamily: 'JetBrains Mono, monospace',
-              fontSize: '12px',
-              color: 'var(--text-secondary)',
-              background: 'var(--surface-2)',
-              padding: '10px 12px',
-              borderRadius: '3px',
-              border: '1px solid var(--border)',
-              whiteSpace: 'pre-wrap',
-              lineHeight: 1.6,
-              margin: 0,
-            }}>{question.example_output}</pre>
-          </div>
-        </div>
+      <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: '3px', border: '1px solid var(--border)' }}>
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+          💡 <strong style={{ color: 'var(--text-secondary)' }}>Note:</strong> You can use a hardcoded array or take input from the user — any approach is accepted.
+          Press <strong style={{ color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>Run Code</strong> to test your code,
+          then <strong style={{ color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>Submit</strong> when ready. AI will evaluate your logic.
+        </p>
       </div>
     </div>
   );
@@ -1087,12 +1061,7 @@ function ConsolePanel({
 }: {
   open: boolean;
   onToggle: () => void;
-  results: {
-    compile_error?: string;
-    test_results: TestCaseResult[];
-    passed: number;
-    total: number;
-  } | null;
+  results: any | null;
   running: boolean;
 }) {
   return (
@@ -1117,16 +1086,11 @@ function ConsolePanel({
         }}
       >
         <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.10em', textTransform: 'uppercase' }}>
-          Console
+          Output
         </span>
-        {results && !results.compile_error && (
-          <span style={{
-            fontSize: '10px',
-            fontFamily: 'JetBrains Mono, monospace',
-            color: results.passed === results.total ? 'var(--success)' : 'var(--warning)',
-            fontWeight: 600,
-          }}>
-            {results.passed}/{results.total} passed
+        {results && results.output && !results.compile_error && (
+          <span style={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)' }}>
+            {results.execution_time ? `${results.execution_time}ms` : ''}
           </span>
         )}
         <span style={{ marginLeft: 'auto', fontSize: '10px' }}>{open ? '▼' : '▲'}</span>
@@ -1143,8 +1107,8 @@ function ConsolePanel({
           {results?.compile_error && (
             <div style={{
               padding: '12px',
-              background: 'var(--error-dim)',
-              border: '1px solid var(--error)',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid var(--border)',
               borderRadius: '3px',
               marginBottom: '8px',
             }}>
@@ -1154,7 +1118,7 @@ function ConsolePanel({
               <pre style={{
                 fontFamily: 'JetBrains Mono, monospace',
                 fontSize: '11px',
-                color: 'var(--error)',
+                color: 'var(--text-secondary)',
                 whiteSpace: 'pre-wrap',
                 margin: 0,
                 lineHeight: 1.6,
@@ -1162,80 +1126,48 @@ function ConsolePanel({
             </div>
           )}
 
-          {results && !results.compile_error && results.test_results.length > 0 && (
-            <div>
-              <p style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.10em', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' }}>
-                Test Results
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {results.test_results.map((tc, i) => (
-                  <div key={i} style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    padding: '8px 12px',
-                    background: tc.passed ? 'var(--success-dim)' : 'var(--error-dim)',
-                    borderRadius: '4px',
-                    border: `1px solid ${tc.passed ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{
-                        fontSize: '12px',
-                        color: tc.passed ? 'var(--success)' : 'var(--error)',
-                        fontWeight: 700,
-                        minWidth: '12px',
-                      }}>
-                        {tc.passed ? '✓' : '✕'}
-                      </span>
-                      <span style={{
-                        fontSize: '11px',
-                        color: 'var(--text-secondary)',
-                        fontFamily: 'JetBrains Mono, monospace',
-                        flex: 1,
-                      }}>
-                        Test Case {i + 1}
-                      </span>
-                      <span style={{
-                        fontSize: '10px',
-                        color: tc.passed ? 'var(--success)' : 'var(--error)',
-                        fontWeight: 600,
-                        letterSpacing: '0.06em',
-                      }}>
-                        {tc.passed ? 'PASSED' : 'FAILED'}
-                      </span>
-                    </div>
-                    
-                    {!tc.passed && (
-                      <div style={{ 
-                        marginTop: '8px', 
-                        paddingTop: '8px', 
-                        borderTop: '1px solid rgba(239,68,68,0.1)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '6px'
-                      }}>
-                        <div>
-                          <span style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Input:</span>
-                          <pre style={{ margin: '2px 0 0 0', fontSize: '10px', color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'pre-wrap' }}>{tc.input || '(no input)'}</pre>
-                        </div>
-                        <div>
-                          <span style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Expected Output:</span>
-                          <pre style={{ margin: '2px 0 0 0', fontSize: '10px', color: 'var(--success)', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'pre-wrap' }}>{tc.expected_output}</pre>
-                        </div>
-                        <div>
-                          <span style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Your Output:</span>
-                          <pre style={{ margin: '2px 0 0 0', fontSize: '10px', color: 'var(--error)', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'pre-wrap' }}>{tc.actual_output || '(no output)'}</pre>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+          {results && !results.compile_error && (
+            <div style={{
+              padding: '12px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              borderRadius: '3px',
+            }}>
+              {results.timed_out ? (
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace', margin: 0 }}>
+                  ⏱ Time Limit Exceeded (5 seconds)
+                </p>
+              ) : results.output ? (
+                <pre style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '12px',
+                  color: 'var(--text-primary)',
+                  whiteSpace: 'pre-wrap',
+                  margin: 0,
+                  lineHeight: 1.7,
+                }}>{results.output}</pre>
+              ) : (
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', margin: 0 }}>
+                  (no output)
+                </p>
+              )}
+              {results.stderr && (
+                <pre style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '11px',
+                  color: 'var(--text-secondary)',
+                  whiteSpace: 'pre-wrap',
+                  margin: '8px 0 0',
+                  lineHeight: 1.6,
+                  opacity: 0.7,
+                }}>{results.stderr}</pre>
+              )}
             </div>
           )}
 
           {!running && !results && (
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 0', fontFamily: 'JetBrains Mono, monospace' }}>
-              Press Run Code to execute your program.
+              Press Run Code to compile and execute your program.
             </p>
           )}
         </div>
@@ -1243,6 +1175,7 @@ function ConsolePanel({
     </div>
   );
 }
+
 
 function Modal({
   onClose,
