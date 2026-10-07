@@ -55,9 +55,9 @@ export default function AdminLoginPage() {
             textTransform: 'uppercase',
             color: 'var(--text-muted)',
             marginBottom: '10px',
-          }}>Admin</p>
+          }}>Faculty</p>
           <h1 style={{
-            fontFamily: 'JetBrains Mono, monospace',
+            fontFamily: 'Söhne Mono, ui-monospace, monospace',
             fontSize: '36px',
             fontWeight: 700,
             color: 'var(--text-primary)',

@@ -100,6 +100,7 @@ export async function GET(request: NextRequest) {
       is_submitted: session.is_submitted,
       remaining_seconds: Math.floor(remaining),
       test_title: session.test.title,
+      test_instructions: session.test.instructions || '',
       marks_published: session.test.marks_published,
       allowed_languages: session.test.allowed_languages,
     },

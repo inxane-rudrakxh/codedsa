@@ -70,7 +70,13 @@ export async function POST(request: NextRequest) {
   let totalExecTime = 0;
 
   for (const tc of testCases) {
-    const result = await compileAndRun(code, tc.input, language || 'cpp');
+    const result = await compileAndRun(
+      code, 
+      tc.input, 
+      language || 'cpp',
+      question.time_limit || 1.0,
+      question.memory_limit || 256000
+    );
 
     if (!result.success && result.compile_error && !result.timed_out) {
       compileError = result.compile_error;

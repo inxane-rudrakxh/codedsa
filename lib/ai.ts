@@ -70,7 +70,7 @@ Based on these rules, assign a fair score and brief feedback.
           { role: 'user', content: userPrompt }
         ],
         temperature: 0.1,
-        max_tokens: 200,
+        max_completion_tokens: 200,
         response_format: { type: 'json_object' }
       }),
     });
@@ -130,7 +130,7 @@ ${customInput}`;
           { role: 'user', content: userPrompt }
         ],
         temperature: 0.1,
-        max_tokens: 1500,
+        max_completion_tokens: 1500,
       }),
     });
 

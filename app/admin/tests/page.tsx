@@ -1,19 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function TestsPage() {
+  const router = useRouter();
   const [tests, setTests] = useState<any[]>([]);
   const [allQuestions, setAllQuestions] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [divisions, setDivisions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<any>({});
+  const [testToDelete, setTestToDelete] = useState<string | null>(null);
   
   const [isCreating, setIsCreating] = useState(false);
-  const [newData, setNewData] = useState({ title: '', subject_name: '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'], target_division: '' });
+  const [newData, setNewData] = useState({ title: '', subject_name: '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'], target_division: '', instructions: '', start_time: '', end_time: '' });
   
   const SUPPORTED_LANGS = [
     { id: 'c', label: 'C' },
@@ -50,11 +53,11 @@ export default function TestsPage() {
       body: JSON.stringify({ action: 'create_test', ...newData }),
     });
     setIsCreating(false);
-    setNewData({ title: '', subject_name: subjects[0]?.name || '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'], target_division: '' });
+    setNewData({ title: '', subject_name: subjects[0]?.name || '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'], target_division: '', instructions: '', start_time: '', end_time: '' });
     fetchData();
   };
 
-  const handleUpdate = async (id: number) => {
+  const handleUpdate = async (id: string) => {
     await fetch('/api/admin/tests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
@@ -64,7 +67,7 @@ export default function TestsPage() {
     fetchData();
   };
 
-  const handleAssignQuestion = async (testId: number, questionId: string) => {
+  const handleAssignQuestion = async (testId: string, questionId: string) => {
     if (!questionId) return;
     await fetch('/api/admin/tests', {
       method: 'POST',
@@ -74,7 +77,7 @@ export default function TestsPage() {
     fetchData();
   };
 
-  const handleRemoveQuestion = async (testId: number, questionId: number) => {
+  const handleRemoveQuestion = async (testId: string, questionId: string) => {
     await fetch('/api/admin/tests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
@@ -92,70 +95,18 @@ export default function TestsPage() {
           <p className="text-label" style={{ marginBottom: '8px' }}>Management</p>
           <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Exam Tests</h1>
         </div>
-        <button onClick={() => setIsCreating(true)} style={primaryBtn}>Create New Test</button>
+        <button 
+          onClick={() => router.push('/admin/tests/create')} 
+          style={{ 
+            background: 'var(--accent)', color: '#fff', border: 'none', 
+            padding: '12px 24px', borderRadius: '6px', fontSize: '14px', 
+            fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          }}
+        >
+          <span style={{ fontSize: '16px' }}>+</span> CREATE TEST
+        </button>
       </div>
-
-      {isCreating && (
-        <div style={{ padding: '20px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '4px', marginBottom: '24px' }}>
-          <p className="text-label" style={{ marginBottom: '16px' }}>Create New Test</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Test Title</p>
-              <input value={newData.title} onChange={e => setNewData(p => ({ ...p, title: e.target.value }))} style={inputStyle} placeholder="e.g. DSA Unit II" />
-            </div>
-            <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Subject</p>
-              <input value={newData.subject_name || ''} onChange={e => setNewData(p => ({ ...p, subject_name: e.target.value }))} style={inputStyle} placeholder="e.g. Data Structures" />
-            </div>
-            <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Duration (Mins)</p>
-              <input type="number" value={newData.duration_minutes} onChange={e => setNewData(p => ({ ...p, duration_minutes: parseInt(e.target.value) || 0 }))} style={inputStyle} />
-            </div>
-            <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Total Marks</p>
-              <input type="number" value={newData.total_marks} onChange={e => setNewData(p => ({ ...p, total_marks: parseInt(e.target.value) || 0 }))} style={inputStyle} />
-            </div>
-            <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Questions Assigned per Student</p>
-              <input type="number" value={newData.questions_per_student} onChange={e => setNewData(p => ({ ...p, questions_per_student: parseInt(e.target.value) || 0 }))} style={inputStyle} />
-            </div>
-            <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Target Division</p>
-              <select value={newData.target_division} onChange={e => setNewData(p => ({ ...p, target_division: e.target.value }))} style={inputStyle}>
-                <option value="">All Divisions</option>
-                {divisions.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-              </select>
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Allowed Languages</p>
-              <div style={{ display: 'flex', gap: '16px' }}>
-                {SUPPORTED_LANGS.map(lang => (
-                  <label key={lang.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={newData.allowed_languages.includes(lang.id)}
-                      onChange={e => {
-                        const checked = e.target.checked;
-                        setNewData(p => ({
-                          ...p,
-                          allowed_languages: checked 
-                            ? [...p.allowed_languages, lang.id] 
-                            : p.allowed_languages.filter(l => l !== lang.id)
-                        }));
-                      }}
-                    />
-                    {lang.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={() => setIsCreating(false)} style={outlineBtn}>Cancel</button>
-            <button onClick={handleCreate} disabled={!newData.title} style={primaryBtn}>Create</button>
-          </div>
-        </div>
-      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         {tests.map(test => (
@@ -171,6 +122,17 @@ export default function TestsPage() {
                   <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Languages: {test.allowed_languages?.join(', ') || 'c, cpp, python, java'}</p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  {test.status === 'PUBLISHED' && test.unique_id && (
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/${test.unique_id}`);
+                        alert('Test Link Copied to Clipboard!');
+                      }}
+                      style={{ ...outlineBtn, padding: '4px 8px', fontSize: '10px' }}
+                    >
+                      Copy Link
+                    </button>
+                  )}
                   <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', padding: '4px 8px', borderRadius: '3px', background: test.status === 'PUBLISHED' ? 'var(--success-dim)' : 'var(--surface-2)', color: test.status === 'PUBLISHED' ? 'var(--success)' : 'var(--text-muted)' }}>
                     {test.status}
                   </span>
@@ -205,6 +167,25 @@ export default function TestsPage() {
                       <p className="text-label" style={{ marginBottom: '4px' }}>Qs per Student</p>
                       <input type="number" value={editData.questions_per_student} onChange={e => setEditData((p: any) => ({ ...p, questions_per_student: parseInt(e.target.value) || 0 }))} style={inputStyle} />
                     </div>
+                    <div>
+                      <p className="text-label" style={{ marginBottom: '4px' }}>Target Division</p>
+                      <select value={editData.target_division || ''} onChange={e => setEditData((p: any) => ({ ...p, target_division: e.target.value }))} style={inputStyle}>
+                        <option value="">All Divisions</option>
+                        {divisions.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <p className="text-label" style={{ marginBottom: '4px' }}>Instructions / Guidelines</p>
+                      <textarea value={editData.instructions || ''} onChange={e => setEditData((p: any) => ({ ...p, instructions: e.target.value }))} style={{ ...inputStyle, height: '80px', resize: 'vertical' }} />
+                    </div>
+                    <div>
+                      <p className="text-label" style={{ marginBottom: '4px' }}>Start Time</p>
+                      <input type="datetime-local" value={editData.start_time ? new Date(editData.start_time).toISOString().slice(0,16) : ''} onChange={e => setEditData((p: any) => ({ ...p, start_time: e.target.value }))} style={inputStyle} />
+                    </div>
+                    <div>
+                      <p className="text-label" style={{ marginBottom: '4px' }}>End Time</p>
+                      <input type="datetime-local" value={editData.end_time ? new Date(editData.end_time).toISOString().slice(0,16) : ''} onChange={e => setEditData((p: any) => ({ ...p, end_time: e.target.value }))} style={inputStyle} />
+                    </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <p className="text-label" style={{ marginBottom: '4px' }}>Allowed Languages</p>
                       <div style={{ display: 'flex', gap: '16px' }}>
@@ -232,9 +213,17 @@ export default function TestsPage() {
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => setEditingId(null)} style={outlineBtn}>Cancel</button>
-                    <button onClick={() => handleUpdate(test.id)} style={primaryBtn}>Save</button>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <button 
+                      onClick={() => setTestToDelete(test.id)}
+                      style={{ ...outlineBtn, color: 'var(--error)', borderColor: 'var(--error-dim)' }}
+                    >
+                      Delete Test
+                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => setEditingId(null)} style={outlineBtn}>Cancel</button>
+                      <button onClick={() => handleUpdate(test.id)} style={primaryBtn}>Save</button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -271,7 +260,7 @@ export default function TestsPage() {
                   ) : test.testQuestions.map((tq: any, idx: number) => (
                     <div key={tq.question_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px' }}>
                       <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>{idx + 1}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>{idx + 1}</span>
                         <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{tq.question.title}</span>
                         <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{tq.question.topic}</span>
                       </div>
@@ -285,6 +274,47 @@ export default function TestsPage() {
           </div>
         ))}
       </div>
+
+      {testToDelete && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: 'var(--surface-1)', padding: '24px', borderRadius: '8px',
+            width: '400px', border: '1px solid var(--border)'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>Delete Test?</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: 1.5 }}>
+              Are you sure you want to delete this test? This will permanently delete all associated questions, sessions, and submissions. This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setTestToDelete(null)}
+                style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: '6px', background: 'transparent', cursor: 'pointer', fontSize: '14px' }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  const id = testToDelete;
+                  setTestToDelete(null);
+                  await fetch('/api/admin/tests', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+                    body: JSON.stringify({ action: 'delete_test', id }),
+                  });
+                  setEditingId(null);
+                  fetchData();
+                }}
+                style={{ padding: '8px 16px', border: 'none', borderRadius: '6px', background: 'var(--error)', color: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
+              >
+                Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -315,10 +345,10 @@ const outlineBtn: React.CSSProperties = {
 
 const primaryBtn: React.CSSProperties = {
   padding: '8px 16px',
-  background: 'var(--text-primary)',
+  background: 'var(--accent)',
   border: '1px solid transparent',
   borderRadius: '3px',
-  color: 'var(--bg)',
+  color: '#ffffff',
   fontSize: '11px',
   fontWeight: 600,
   letterSpacing: '0.08em',

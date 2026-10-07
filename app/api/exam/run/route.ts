@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
   const body = await request.json();
-  const { code, language, input } = body;
+  const { code, language, input, question_id } = body;
 
   if (!code) {
     return NextResponse.json({ error: 'code is required' }, { status: 400 });
@@ -23,7 +23,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Exam session is not active' }, { status: 403 });
   }
 
-  const result = await compileAndRun(code, input || '', language || 'cpp');
+  let timeLimit = 1.0;
+  let memoryLimit = 256000;
+
+  if (question_id) {
+    const question = await prisma.question.findUnique({ where: { id: question_id } });
+    if (question) {
+      timeLimit = question.time_limit || 1.0;
+      memoryLimit = question.memory_limit || 256000;
+    }
+  }
+
+  const result = await compileAndRun(code, input || '', language || 'cpp', timeLimit, memoryLimit);
 
   return NextResponse.json({
     success: result.success,

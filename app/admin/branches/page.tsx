@@ -19,8 +19,8 @@ export default async function BranchesPage() {
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>Manage academic branches and programs</p>
         </div>
         <button style={{
-          background: 'var(--text-primary)',
-          color: 'var(--bg)',
+          background: 'var(--accent)',
+          color: '#ffffff',
           border: 'none',
           padding: '8px 16px',
           borderRadius: '4px',
@@ -45,7 +45,7 @@ export default async function BranchesPage() {
             {branches.map((b, i) => (
               <tr key={b.id} style={{ borderBottom: i < branches.length - 1 ? '1px solid var(--border-subtle)' : 'none', background: 'var(--surface-1)' }}>
                 <td style={{ padding: '12px 14px' }}>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--text-muted)' }}>{b.id}</span>
+                  <span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '12px', color: 'var(--text-muted)' }}>{b.id}</span>
                 </td>
                 <td style={{ padding: '12px 14px' }}>
                   <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{b.code}</span>

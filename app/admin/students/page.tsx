@@ -213,7 +213,7 @@ export default function StudentsPage() {
                   background: 'var(--surface-1)',
                   opacity: s.is_active ? 1 : 0.5,
                 }}>
-                  <td style={tdStyle}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>{s.roll_no}</span></td>
+                  <td style={tdStyle}><span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>{s.roll_no}</span></td>
                   <td style={tdStyle}><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{s.name}</span></td>
                   <td style={tdStyle}><span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{s.division}</span></td>
                   <td style={tdStyle}><span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{s.branch}</span></td>
@@ -295,10 +295,10 @@ const outlineBtn: React.CSSProperties = {
 
 const primaryBtn: React.CSSProperties = {
   padding: '8px 16px',
-  background: 'var(--text-primary)',
+  background: 'var(--accent)',
   border: '1px solid transparent',
   borderRadius: '3px',
-  color: 'var(--bg)',
+  color: '#ffffff',
   fontSize: '11px',
   fontWeight: 600,
   letterSpacing: '0.08em',

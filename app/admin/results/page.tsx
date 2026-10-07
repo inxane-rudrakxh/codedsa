@@ -53,8 +53,9 @@ export default function ResultsPage() {
   const [selectedCode, setSelectedCode] = useState<{
     name: string; roll: string; q: QuestionResult; editMarks: number;
   } | null>(null);
-  const [generating, setGenerating] = useState(false);
   const [reportData, setReportData] = useState<any[] | null>(null);
+  const [sessionToReset, setSessionToReset] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   const getToken = () => localStorage.getItem('admin_token') || '';
 
@@ -119,7 +120,6 @@ export default function ResultsPage() {
   };
 
   const handleResetSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to completely reset this session? All code and marks will be permanently deleted.')) return;
     setLoading(true);
     await fetch('/api/admin/results', {
       method: 'POST',
@@ -223,7 +223,7 @@ export default function ResultsPage() {
             ].map(({ label, value }) => (
               <div key={label} style={{ padding: '16px 20px', background: 'var(--surface-1)' }}>
                 <p className="text-label" style={{ marginBottom: '4px' }}>{label}</p>
-                <p style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-primary)' }}>{value}</p>
+                <p style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'Söhne Mono, ui-monospace, monospace', color: 'var(--text-primary)' }}>{value}</p>
               </div>
             ))}
           </div>
@@ -263,7 +263,7 @@ export default function ResultsPage() {
                   const sStatus = r.is_submitted ? 'submitted' : (r.session_id ? 'active' : 'not_started');
                   return (
                     <tr key={r.roll_no} style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border-subtle)' : 'none', background: 'var(--surface-1)' }}>
-                      <td style={tdStyle}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--text-primary)' }}>{r.roll_no}</span></td>
+                      <td style={tdStyle}><span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '12px', color: 'var(--text-primary)' }}>{r.roll_no}</span></td>
                       <td style={tdStyle}><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.name}</span></td>
                       <td style={tdStyle}><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.division}</span></td>
                       {qHeaders.map((_, qi) => {
@@ -275,7 +275,7 @@ export default function ResultsPage() {
                                 onClick={() => setSelectedCode({ name: r.name, roll: r.roll_no, q, editMarks: q.marks_awarded ?? 0 })}
                                 style={{
                                   background: 'transparent', border: 'none', cursor: 'pointer',
-                                  fontFamily: 'JetBrains Mono, monospace', fontSize: '13px',
+                                  fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px',
                                   textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '3px',
                                   color: q.marks_awarded === null ? 'var(--text-muted)' : q.marks_awarded >= q.max_marks * 0.7 ? 'var(--success)' : q.marks_awarded >= q.max_marks * 0.4 ? 'var(--warning, #f0a500)' : 'var(--error)',
                                 }}
@@ -283,20 +283,20 @@ export default function ResultsPage() {
                                 {q.marks_awarded !== null ? `${q.marks_awarded}/${q.max_marks}` : `?/${q.max_marks}`}
                               </button>
                             ) : (
-                              <span style={{ color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '13px' }}>—</span>
+                              <span style={{ color: 'var(--text-muted)', fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px' }}>—</span>
                             )}
                           </td>
                         );
                       })}
                       <td style={tdStyle}>
-                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', fontWeight: 600, color: r.is_submitted ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                        <span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', fontWeight: 600, color: r.is_submitted ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                           {r.is_submitted ? `${r.total_score}/${r.max_total}` : '—'}
                         </span>
                       </td>
                       <td style={tdStyle}><StatusPill status={sStatus} /></td>
                       <td style={tdStyle}>
                         {r.integrity_warnings > 0 ? (
-                          <span style={{ fontSize: '11px', color: 'var(--error)', fontFamily: 'JetBrains Mono, monospace' }}>⚠ {r.integrity_warnings}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--error)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>⚠ {r.integrity_warnings}</span>
                         ) : (
                           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>—</span>
                         )}
@@ -304,7 +304,7 @@ export default function ResultsPage() {
                       <td style={tdStyle}>
                         {r.session_id ? (
                           <button
-                            onClick={() => handleResetSession(r.session_id!)}
+                            onClick={() => setSessionToReset(r.session_id!)}
                             style={{
                               background: 'transparent', border: '1px solid var(--error-dim)', borderRadius: '3px',
                               color: 'var(--error)', fontSize: '10px', padding: '4px 8px', cursor: 'pointer',
@@ -355,10 +355,44 @@ export default function ResultsPage() {
                 <button onClick={() => setSelectedCode(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '22px', cursor: 'pointer' }}>×</button>
               </div>
             </div>
-            <div style={{ padding: '24px', overflow: 'auto', flex: 1, background: '#0d1117' }}>
-              <pre style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', color: '#c9d1d9', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            <div style={{ padding: '24px', overflow: 'auto', flex: 1, background: 'var(--surface-1)' }}>
+              <pre style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', color: 'var(--text-primary)', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {selectedCode.q.source_code || '// No code submitted'}
               </pre>
+            </div>
+          </div>
+        </div>
+      )}
+      {sessionToReset && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: 'var(--surface-1)', padding: '24px', borderRadius: '8px',
+            width: '400px', border: '1px solid var(--border)'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>Reset Session?</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: 1.5 }}>
+              Are you sure you want to completely reset this session? All code and marks will be permanently deleted.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setSessionToReset(null)}
+                style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: '6px', background: 'transparent', cursor: 'pointer', fontSize: '14px' }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  const id = sessionToReset;
+                  setSessionToReset(null);
+                  await handleResetSession(id);
+                }}
+                style={{ padding: '8px 16px', border: 'none', borderRadius: '6px', background: 'var(--error)', color: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
+              >
+                Reset Session
+              </button>
             </div>
           </div>
         </div>
@@ -381,4 +415,4 @@ const thStyle: React.CSSProperties = { padding: '10px 14px', textAlign: 'left', 
 const tdStyle: React.CSSProperties = { padding: '10px 14px', verticalAlign: 'middle' };
 const filterInput: React.CSSProperties = { padding: '8px 12px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--text-secondary)', fontSize: '13px', outline: 'none' };
 const outlineBtn: React.CSSProperties = { padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' };
-const primaryBtn: React.CSSProperties = { padding: '8px 16px', background: 'var(--text-primary)', border: '1px solid transparent', borderRadius: '3px', color: 'var(--bg)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' };
+const primaryBtn: React.CSSProperties = { padding: '8px 16px', background: 'var(--accent)', border: '1px solid transparent', borderRadius: '3px', color: '#ffffff', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' };

@@ -8,6 +8,8 @@ export default function InstructionsPage() {
   const [checked, setChecked] = useState(false);
   const [studentName, setStudentName] = useState('');
   const [sessionStatus, setSessionStatus] = useState<string | null>(null);
+  const [testTitle, setTestTitle] = useState('Coding Assessment');
+  const [testInstructions, setTestInstructions] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('session_token');
@@ -28,6 +30,8 @@ export default function InstructionsPage() {
             return;
           }
           setSessionStatus(data.session.status);
+          if (data.session.test_title) setTestTitle(data.session.test_title);
+          if (data.session.test_instructions) setTestInstructions(data.session.test_instructions);
           
           if (data.submissions && Object.keys(data.submissions).length > 0) {
             // Still allow going to workspace if they already started
@@ -58,14 +62,14 @@ export default function InstructionsPage() {
         justifyContent: 'space-between',
       }}>
         <span style={{
-          fontFamily: 'JetBrains Mono, monospace',
+          fontFamily: 'Söhne Mono, ui-monospace, monospace',
           fontSize: '13px',
           fontWeight: 500,
           color: 'var(--text-secondary)',
           letterSpacing: '0.04em',
         }}>CODE//ZEAL</span>
         {studentName && (
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
             {studentName}
           </span>
         )}
@@ -96,9 +100,9 @@ export default function InstructionsPage() {
               letterSpacing: '-0.02em',
               lineHeight: 1.1,
               marginBottom: '8px',
-            }}>DSA — Unit II</h1>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-              S.Y. B.Tech AI&DS · Coding Assessment
+            }}>{testTitle}</h1>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
+              {testInstructions || 'Please read the instructions carefully before beginning your test.'}
             </p>
           </div>
 
@@ -128,7 +132,7 @@ export default function InstructionsPage() {
                   fontSize: '18px',
                   fontWeight: 600,
                   color: 'var(--text-primary)',
-                  fontFamily: 'JetBrains Mono, monospace',
+                  fontFamily: 'Söhne Mono, ui-monospace, monospace',
                 }}>{value}</p>
               </div>
             ))}
@@ -156,7 +160,7 @@ export default function InstructionsPage() {
                 }}>
                   <span style={{
                     fontSize: '11px',
-                    fontFamily: 'JetBrains Mono, monospace',
+                    fontFamily: 'Söhne Mono, ui-monospace, monospace',
                     color: 'var(--text-muted)',
                     marginTop: '2px',
                     minWidth: '20px',
@@ -250,10 +254,10 @@ export default function InstructionsPage() {
               style={{
                 width: '100%',
                 padding: '15px',
-                background: checked ? 'var(--text-primary)' : 'var(--surface-2)',
+                background: checked ? 'var(--accent)' : 'var(--surface-2)',
                 border: '1px solid transparent',
                 borderRadius: '4px',
-                color: checked ? 'var(--bg)' : 'var(--text-muted)',
+                color: checked ? '#ffffff' : 'var(--text-muted)',
                 fontSize: '12px',
                 fontWeight: 600,
                 letterSpacing: '0.12em',

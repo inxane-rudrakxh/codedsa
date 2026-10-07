@@ -1,46 +1,45 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap');
 @import "tailwindcss";
 
 :root {
-  /* Cloudflare Sandbox-inspired Minimalist Dark Theme */
-  --bg: #000000;
-  --bg-color: #000000;
-  --bg-gradient: #000000;
-  --surface-1: #0A0A0A;
-  --surface-2: #141414;
+  /* Claude Editorial Light Theme */
+  --bg: #faf9f5;
+  --bg-color: #faf9f5;
+  --bg-gradient: #faf9f5;
+  --surface-1: #f5f0e8;
+  --surface-2: #efe9de;
   
-  --border: #262626;
-  --border-subtle: #171717;
+  --border: #e6dfd8;
+  --border-subtle: #ebe6df;
   --border-glow: transparent;
 
-  --text-primary: #EDEDED;
-  --text-secondary: #A1A1AA;
-  --text-muted: #71717A;
+  --text-primary: #141413;
+  --text-secondary: #3d3d3a;
+  --text-muted: #6c6a64;
 
-  /* Monochrome / Minimalist White Accent */
-  --accent: #FFFFFF;
-  --accent-hover: #E5E5E5;
-  --accent-dim: rgba(255, 255, 255, 0.15);
+  /* Warm coral */
+  --accent: #cc785c;
+  --accent-hover: #a9583e;
+  --accent-dim: rgba(204, 120, 92, 0.15);
   
   /* Status Colors */
-  --success: #FFFFFF;
-  --success-dim: rgba(255, 255, 255, 0.10);
-  --warning: #FFFFFF;
-  --warning-dim: rgba(255, 255, 255, 0.10);
-  --error: #FFFFFF;
-  --error-dim: rgba(255, 255, 255, 0.10);
+  --success: #5db872;
+  --success-dim: rgba(93, 184, 114, 0.15);
+  --warning: #e8a55a;
+  --warning-dim: rgba(232, 165, 90, 0.15);
+  --error: #cc785c;
+  --error-dim: rgba(204, 120, 92, 0.15);
 }
 
 .glass {
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 .glass-panel {
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 * {
@@ -58,10 +57,52 @@ body {
   background: var(--bg-gradient);
   background-attachment: fixed;
   color: var(--text-primary);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: "Söhne", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   min-height: 100vh;
+}
+
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20fill%3D%22%236c6a64%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M7%2010l5%205%205-5z%22%2F%3E%3C%2Fsvg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 8px center !important;
+  padding-right: 28px !important;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 1px var(--accent-dim) !important;
+}
+
+input, textarea, select {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.font-serif {
+  font-family: "Copernicus", "Tiempos Headline", serif !important;
+}
+
+code, pre, .font-mono {
+  font-family: "Söhne Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Copernicus", "Tiempos Headline", serif;
 }
 
 /* Scrollbar */
@@ -96,7 +137,7 @@ body {
 }
 
 .text-mono {
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-family: 'Söhne Mono', 'Courier New', monospace;
 }
 
 /* Focus */

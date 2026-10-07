@@ -59,7 +59,7 @@ export default function SignupPage() {
         <div style={{ marginBottom: '32px' }}>
           <p className="text-label" style={{ marginBottom: '10px' }}>Faculty Portal</p>
           <h1 style={{
-            fontFamily: 'JetBrains Mono, monospace',
+            fontFamily: 'Söhne Mono, ui-monospace, monospace',
             fontSize: '32px',
             fontWeight: 700,
             color: 'var(--text-primary)',
@@ -102,7 +102,7 @@ export default function SignupPage() {
                 borderRadius: '4px',
                 padding: '12px 16px',
                 color: 'var(--text-primary)',
-                fontFamily: 'JetBrains Mono, monospace',
+                fontFamily: 'Söhne Mono, ui-monospace, monospace',
                 fontSize: '14px',
                 transition: 'all 0.2s ease',
                 outline: 'none'
@@ -116,11 +116,13 @@ export default function SignupPage() {
             <input
               type="email"
               name="email"
-              placeholder="faculty@college.edu"
+              placeholder="faculty@zealeducation.com"
               value={formData.email}
               onChange={handleChange}
               disabled={loading}
               required
+              pattern=".*@zealeducation\.com$"
+              title="Email must end with @zealeducation.com"
               style={{
                 width: '100%',
                 background: 'var(--surface-2)',
@@ -128,7 +130,7 @@ export default function SignupPage() {
                 borderRadius: '4px',
                 padding: '12px 16px',
                 color: 'var(--text-primary)',
-                fontFamily: 'JetBrains Mono, monospace',
+                fontFamily: 'Söhne Mono, ui-monospace, monospace',
                 fontSize: '14px',
                 transition: 'all 0.2s ease',
                 outline: 'none'
@@ -154,7 +156,7 @@ export default function SignupPage() {
                 borderRadius: '4px',
                 padding: '12px 16px',
                 color: 'var(--text-primary)',
-                fontFamily: 'JetBrains Mono, monospace',
+                fontFamily: 'Söhne Mono, ui-monospace, monospace',
                 fontSize: '14px',
                 transition: 'all 0.2s ease',
                 outline: 'none'
@@ -180,7 +182,7 @@ export default function SignupPage() {
                   borderRadius: '4px',
                   padding: '12px 16px',
                   color: 'var(--text-primary)',
-                  fontFamily: 'JetBrains Mono, monospace',
+                  fontFamily: 'Söhne Mono, ui-monospace, monospace',
                   fontSize: '14px',
                   outline: 'none'
                 }}
@@ -204,7 +206,7 @@ export default function SignupPage() {
                   borderRadius: '4px',
                   padding: '12px 16px',
                   color: 'var(--text-primary)',
-                  fontFamily: 'JetBrains Mono, monospace',
+                  fontFamily: 'Söhne Mono, ui-monospace, monospace',
                   fontSize: '14px',
                   outline: 'none'
                 }}
@@ -225,7 +227,7 @@ export default function SignupPage() {
               color: '#000',
               border: 'none',
               borderRadius: '4px',
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'Söhne Mono, ui-monospace, monospace',
               fontSize: '14px',
               fontWeight: 700,
               textTransform: 'uppercase',

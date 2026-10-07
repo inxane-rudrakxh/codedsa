@@ -47,7 +47,7 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 3000);
   };
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'JetBrains Mono, monospace' }}>Loading...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>Loading...</div>;
 
   return (
     <div>
@@ -158,7 +158,7 @@ export default function SettingsPage() {
                       borderRadius: '3px',
                       color: 'var(--text-primary)',
                       fontSize: '13px',
-                      fontFamily: 'JetBrains Mono, monospace',
+                      fontFamily: 'Söhne Mono, ui-monospace, monospace',
                       textAlign: 'center',
                       outline: 'none',
                     }}
@@ -178,10 +178,10 @@ export default function SettingsPage() {
             disabled={saving}
             style={{
               padding: '11px 24px',
-              background: saving ? 'var(--surface-2)' : 'var(--text-primary)',
+              background: saving ? 'var(--surface-2)' : 'var(--accent)',
               border: '1px solid transparent',
               borderRadius: '3px',
-              color: saving ? 'var(--text-muted)' : 'var(--bg)',
+              color: saving ? 'var(--text-muted)' : '#ffffff',
               fontSize: '11px',
               fontWeight: 600,
               letterSpacing: '0.12em',
@@ -193,7 +193,7 @@ export default function SettingsPage() {
             {saving ? 'Saving...' : 'Save Settings'}
           </button>
           {saved && (
-            <span style={{ fontSize: '12px', color: 'var(--success)', fontFamily: 'JetBrains Mono, monospace' }}>
+            <span style={{ fontSize: '12px', color: 'var(--success)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
               ✓ Settings saved
             </span>
           )}

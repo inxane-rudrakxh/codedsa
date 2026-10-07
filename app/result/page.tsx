@@ -56,7 +56,7 @@ export default function ResultPage() {
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)', fontSize: '13px' }}>Loading results...</p>
+        <p style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', color: 'var(--text-muted)', fontSize: '13px' }}>Loading results...</p>
       </div>
     );
   }
@@ -76,7 +76,7 @@ export default function ResultPage() {
         justifyContent: 'space-between',
       }}>
         <span style={{
-          fontFamily: 'JetBrains Mono, monospace',
+          fontFamily: 'Söhne Mono, ui-monospace, monospace',
           fontSize: '13px',
           fontWeight: 500,
           color: 'var(--text-secondary)',
@@ -119,7 +119,7 @@ export default function ResultPage() {
             fontSize: '13px',
             color: 'var(--text-muted)',
             marginBottom: '48px',
-            fontFamily: 'JetBrains Mono, monospace',
+            fontFamily: 'Söhne Mono, ui-monospace, monospace',
           }}>
             Roll {data.student.roll_no} · {data.student.division}
           </p>
@@ -144,7 +144,7 @@ export default function ResultPage() {
                     fontSize: '10px',
                     color: 'var(--text-muted)',
                     marginBottom: '3px',
-                    fontFamily: 'JetBrains Mono, monospace',
+                    fontFamily: 'Söhne Mono, ui-monospace, monospace',
                   }}>
                     Q{String(i + 1).padStart(2, '0')}
                   </p>
@@ -153,7 +153,7 @@ export default function ResultPage() {
                 <span style={{
                   fontSize: '20px',
                   fontWeight: 600,
-                  fontFamily: 'JetBrains Mono, monospace',
+                  fontFamily: 'Söhne Mono, ui-monospace, monospace',
                   color: scoreMap[q.id] !== null && scoreMap[q.id] !== undefined ? 'var(--text-primary)' : 'var(--text-muted)',
                 }}>
                   {data.marks_published && scoreMap[q.id] !== null && scoreMap[q.id] !== undefined ? scoreMap[q.id] : '—'}
@@ -194,14 +194,14 @@ export default function ResultPage() {
               <span style={{
                 fontSize: '48px',
                 fontWeight: 700,
-                fontFamily: 'JetBrains Mono, monospace',
+                fontFamily: 'Söhne Mono, ui-monospace, monospace',
                 color: data.marks_published ? 'var(--text-primary)' : 'var(--text-muted)',
                 letterSpacing: '-0.02em',
               }}>
                 {data.marks_published && data.total_score !== null ? data.total_score : '—'}
               </span>
               {data.marks_published && (
-                <span style={{ fontSize: '20px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
+                <span style={{ fontSize: '20px', color: 'var(--text-muted)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
                   /30
                 </span>
               )}

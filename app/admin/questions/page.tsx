@@ -14,13 +14,12 @@ interface Question {
   example_input: string;
   example_output: string;
   is_enabled: number;
-  test_cases: Array<{
-    id: number;
+  testCases: Array<{
+    id: string;
     input: string;
     expected_output: string;
-    type: string;
-    is_visible: number;
-    weight: number;
+    is_hidden: boolean;
+    marks: number;
   }>;
 }
 
@@ -32,9 +31,12 @@ export default function QuestionsPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editData, setEditData] = useState<Partial<Question>>({});
   const [addingTC, setAddingTC] = useState<number | null>(null);
-  const [newTC, setNewTC] = useState({ input: '', expected_output: '', type: 'hidden', is_visible: false, weight: 1 });
+  const [newTC, setNewTC] = useState({ input: '', expected_output: '', is_hidden: true, marks: 1 });
   
   const [isCreating, setIsCreating] = useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
   const [newData, setNewData] = useState({ title: '', topic: '', description: '', input_format: '', output_format: '', constraints: '', sample_input: '', sample_output: '', subject_name: '' });
 
   const getToken = () => localStorage.getItem('admin_token') || '';
@@ -54,13 +56,29 @@ export default function QuestionsPage() {
 
   useEffect(() => { fetchQuestions(); }, []);
 
-  const handleToggle = async (id: number) => {
-    await fetch('/api/admin/questions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'toggle', id }),
-    });
-    fetchQuestions();
+
+  const handleGenerateAI = async () => {
+    if (!aiPrompt.trim()) return;
+    setAiGenerating(true);
+    try {
+      const res = await fetch('/api/admin/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ action: 'generate_ai', prompt: aiPrompt, subject_name: subjects[0]?.name || 'General' }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsGeneratingAI(false);
+        setAiPrompt('');
+        fetchQuestions();
+      } else {
+        alert(data.error || 'Failed to generate question with AI');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('An error occurred while calling the AI service');
+    }
+    setAiGenerating(false);
   };
 
   const handleCreate = async () => {
@@ -86,6 +104,15 @@ export default function QuestionsPage() {
     fetchQuestions();
   };
 
+  const handleDelete = async (id: number) => {
+    await fetch('/api/admin/questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ action: 'delete', id }),
+    });
+    fetchQuestions();
+  };
+
   const handleAddTC = async (questionId: number) => {
     await fetch('/api/admin/questions', {
       method: 'POST',
@@ -93,11 +120,11 @@ export default function QuestionsPage() {
       body: JSON.stringify({ action: 'add_test_case', question_id: questionId, ...newTC }),
     });
     setAddingTC(null);
-    setNewTC({ input: '', expected_output: '', type: 'hidden', is_visible: false, weight: 1 });
+    setNewTC({ input: '', expected_output: '', is_hidden: true, marks: 1 });
     fetchQuestions();
   };
 
-  const handleDeleteTC = async (tcId: number) => {
+  const handleDeleteTC = async (tcId: string) => {
     await fetch('/api/admin/questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
@@ -107,7 +134,7 @@ export default function QuestionsPage() {
   };
 
   if (loading) {
-    return <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'JetBrains Mono, monospace' }}>Loading...</div>;
+    return <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>Loading...</div>;
   }
 
   return (
@@ -120,10 +147,37 @@ export default function QuestionsPage() {
             {questions.length} questions available
           </p>
         </div>
-        <button onClick={() => setIsCreating(true)} style={primaryBtn}>
-          Create New Question
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={() => setIsGeneratingAI(true)} style={{ ...outlineBtn, color: 'var(--text-primary)' }}>
+            ✦ Generate with AI
+          </button>
+          <button onClick={() => setIsCreating(true)} style={primaryBtn}>
+            Create New Question
+          </button>
+        </div>
       </div>
+
+      {isGeneratingAI && (
+        <div style={{ padding: '24px', background: 'var(--surface-1)', border: '1px dashed var(--border)', borderRadius: '4px', marginBottom: '24px' }}>
+          <p className="text-label" style={{ marginBottom: '16px' }}>Generate Question with AI</p>
+          <div style={{ marginBottom: '16px' }}>
+            <p className="text-label" style={{ marginBottom: '4px' }}>Topic & Difficulty</p>
+            <textarea 
+              value={aiPrompt} 
+              onChange={e => setAiPrompt(e.target.value)} 
+              rows={3} 
+              style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }} 
+              placeholder="e.g. Generate a hard Dynamic Programming question about finding the longest palindromic subsequence..." 
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <button onClick={() => setIsGeneratingAI(false)} style={outlineBtn}>Cancel</button>
+            <button onClick={handleGenerateAI} disabled={aiGenerating} style={primaryBtn}>
+              {aiGenerating ? 'Generating...' : 'Generate & Save'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {isCreating && (
         <div style={{ padding: '24px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '4px', marginBottom: '24px' }}>
@@ -147,29 +201,14 @@ export default function QuestionsPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
             <div>
               <p className="text-label" style={{ marginBottom: '4px' }}>Problem Description</p>
-              <textarea value={newData.description} onChange={e => setNewData(p => ({ ...p, description: e.target.value }))} rows={4} style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace', resize: 'vertical' }} />
+              <textarea value={newData.description} onChange={e => setNewData(p => ({ ...p, description: e.target.value }))} rows={4} style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <p className="text-label" style={{ marginBottom: '4px' }}>Input Format</p>
-                <textarea value={newData.input_format} onChange={e => setNewData(p => ({ ...p, input_format: e.target.value }))} rows={3} style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace', resize: 'vertical' }} />
-              </div>
-              <div>
-                <p className="text-label" style={{ marginBottom: '4px' }}>Output Format</p>
-                <textarea value={newData.output_format} onChange={e => setNewData(p => ({ ...p, output_format: e.target.value }))} rows={3} style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace', resize: 'vertical' }} />
-              </div>
-              <div>
-                <p className="text-label" style={{ marginBottom: '4px' }}>Sample Input</p>
-                <textarea value={newData.sample_input} onChange={e => setNewData(p => ({ ...p, sample_input: e.target.value }))} rows={3} style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace', resize: 'vertical' }} />
-              </div>
-              <div>
-                <p className="text-label" style={{ marginBottom: '4px' }}>Sample Output</p>
-                <textarea value={newData.sample_output} onChange={e => setNewData(p => ({ ...p, sample_output: e.target.value }))} rows={3} style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace', resize: 'vertical' }} />
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+              {/* Removed Input/Output fields per request */}
             </div>
             <div>
               <p className="text-label" style={{ marginBottom: '4px' }}>Constraints</p>
-              <textarea value={newData.constraints} onChange={e => setNewData(p => ({ ...p, constraints: e.target.value }))} rows={2} style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace', resize: 'vertical' }} />
+              <textarea value={newData.constraints} onChange={e => setNewData(p => ({ ...p, constraints: e.target.value }))} rows={2} style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }} />
             </div>
           </div>
 
@@ -186,7 +225,6 @@ export default function QuestionsPage() {
             border: '1px solid var(--border)',
             borderRadius: '4px',
             overflow: 'hidden',
-            opacity: q.is_enabled ? 1 : 0.6,
           }}>
             {/* Question header */}
             <div style={{
@@ -198,7 +236,7 @@ export default function QuestionsPage() {
               cursor: 'pointer',
             }} onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}>
               <span style={{
-                fontFamily: 'JetBrains Mono, monospace',
+                fontFamily: 'Söhne Mono, ui-monospace, monospace',
                 fontSize: '12px',
                 color: 'var(--text-muted)',
                 minWidth: '24px',
@@ -207,33 +245,27 @@ export default function QuestionsPage() {
               </span>
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{q.title}</p>
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{q.topic} · {q.test_cases.length} test cases</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{q.topic} · {q.testCases?.length || 0} test cases</p>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{
-                  fontSize: '9px',
-                  fontWeight: 700,
-                  letterSpacing: '0.10em',
-                  color: q.is_enabled ? 'var(--success)' : 'var(--text-muted)',
-                  background: q.is_enabled ? 'var(--success-dim)' : 'var(--surface-2)',
-                  padding: '3px 7px',
-                  borderRadius: '2px',
-                }}>
-                  {q.is_enabled ? 'ENABLED' : 'DISABLED'}
-                </span>
-                <button
-                  onClick={e => { e.stopPropagation(); handleToggle(q.id); }}
-                  style={smallBtn}
-                >
-                  {q.is_enabled ? 'Disable' : 'Enable'}
-                </button>
                 <button
                   onClick={e => { e.stopPropagation(); setEditingId(q.id); setEditData(q); setExpandedId(q.id); }}
                   style={smallBtn}
                 >
                   Edit
                 </button>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{expandedId === q.id ? '▲' : '▼'}</span>
+                <button
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (confirm('Are you sure you want to delete this question?')) {
+                      handleDelete(q.id);
+                    }
+                  }}
+                  style={{ ...smallBtn, color: 'var(--error)' }}
+                >
+                  Delete
+                </button>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '8px' }}>{expandedId === q.id ? '▲' : '▼'}</span>
               </div>
             </div>
 
@@ -259,11 +291,7 @@ export default function QuestionsPage() {
                       ))}
                       {[
                         { label: 'Problem Statement', key: 'statement' },
-                        { label: 'Input Format', key: 'input_format' },
-                        { label: 'Output Format', key: 'output_format' },
                         { label: 'Constraints', key: 'constraints' },
-                        { label: 'Example Input', key: 'example_input' },
-                        { label: 'Example Output', key: 'example_output' },
                       ].map(({ label, key }) => (
                         <div key={key}>
                           <p className="text-label" style={{ marginBottom: '4px' }}>{label}</p>
@@ -271,7 +299,7 @@ export default function QuestionsPage() {
                             value={(editData as Record<string, string>)[key] || ''}
                             onChange={e => setEditData(prev => ({ ...prev, [key]: e.target.value }))}
                             rows={3}
-                            style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace', resize: 'vertical' }}
+                            style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }}
                           />
                         </div>
                       ))}
@@ -295,21 +323,16 @@ export default function QuestionsPage() {
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                             <div>
                               <p className="text-label" style={{ marginBottom: '4px' }}>Input</p>
-                              <textarea value={newTC.input} onChange={e => setNewTC(p => ({ ...p, input: e.target.value }))} rows={3} style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace', resize: 'vertical' }} />
+                              <textarea value={newTC.input} onChange={e => setNewTC(p => ({ ...p, input: e.target.value }))} rows={3} style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }} />
                             </div>
                             <div>
                               <p className="text-label" style={{ marginBottom: '4px' }}>Expected Output</p>
-                              <textarea value={newTC.expected_output} onChange={e => setNewTC(p => ({ ...p, expected_output: e.target.value }))} rows={3} style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace', resize: 'vertical' }} />
+                              <textarea value={newTC.expected_output} onChange={e => setNewTC(p => ({ ...p, expected_output: e.target.value }))} rows={3} style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }} />
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-                            <select value={newTC.type} onChange={e => setNewTC(p => ({ ...p, type: e.target.value }))} style={inputStyle}>
-                              <option value="visible">Visible</option>
-                              <option value="hidden">Hidden</option>
-                              <option value="edge">Edge</option>
-                            </select>
                             <label style={{ display: 'flex', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                              <input type="checkbox" checked={newTC.is_visible} onChange={e => setNewTC(p => ({ ...p, is_visible: e.target.checked }))} />
+                              <input type="checkbox" checked={!newTC.is_hidden} onChange={e => setNewTC(p => ({ ...p, is_hidden: !e.target.checked }))} />
                               Visible to student
                             </label>
                           </div>
@@ -321,7 +344,7 @@ export default function QuestionsPage() {
                       )}
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {q.test_cases.map((tc, ti) => (
+                        {(q.testCases || []).map((tc, ti) => (
                           <div key={tc.id} style={{
                             display: 'flex',
                             gap: '12px',
@@ -331,22 +354,22 @@ export default function QuestionsPage() {
                             borderRadius: '3px',
                             border: '1px solid var(--border)',
                           }}>
-                            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)', minWidth: '16px' }}>{ti + 1}</span>
+                            <span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '11px', color: 'var(--text-muted)', minWidth: '16px' }}>{ti + 1}</span>
                             <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                              <pre style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{tc.input}</pre>
-                              <pre style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{tc.expected_output}</pre>
+                              <pre style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '11px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{tc.input}</pre>
+                              <pre style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '11px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{tc.expected_output}</pre>
                             </div>
                             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                               <span style={{
                                 fontSize: '9px',
                                 fontWeight: 700,
                                 letterSpacing: '0.08em',
-                                color: tc.is_visible ? 'var(--accent)' : 'var(--text-muted)',
-                                background: tc.is_visible ? 'var(--accent-dim)' : 'var(--surface-2)',
+                                color: !tc.is_hidden ? 'var(--accent)' : 'var(--text-muted)',
+                                background: !tc.is_hidden ? 'var(--accent-dim)' : 'var(--surface-2)',
                                 padding: '2px 5px',
                                 borderRadius: '2px',
                               }}>
-                                {tc.type.toUpperCase()}
+                                {!tc.is_hidden ? 'VISIBLE' : 'HIDDEN'}
                               </span>
                               <button
                                 onClick={() => handleDeleteTC(tc.id)}
@@ -404,10 +427,10 @@ const outlineBtn: React.CSSProperties = {
 };
 const primaryBtn: React.CSSProperties = {
   padding: '8px 16px',
-  background: 'var(--text-primary)',
+  background: 'var(--accent)',
   border: '1px solid transparent',
   borderRadius: '3px',
-  color: 'var(--bg)',
+  color: '#ffffff',
   fontSize: '11px',
   fontWeight: 600,
   letterSpacing: '0.08em',

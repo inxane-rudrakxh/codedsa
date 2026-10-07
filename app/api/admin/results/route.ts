@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     if (!test) return NextResponse.json({ error: 'Test not found' }, { status: 404 });
 
     // Check teacher owns this test
-    if (payload.role === 'TEACHER' && test.teacher_id !== payload.user_id) {
+    if (test.teacher_id !== payload.user_id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     const test = await prisma.test.findUnique({ where: { id: test_id } });
     if (!test) return NextResponse.json({ error: 'Test not found' }, { status: 404 });
 
-    if (payload.role === 'TEACHER' && test.teacher_id !== payload.user_id) {
+    if (test.teacher_id !== payload.user_id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
@@ -186,7 +186,22 @@ export async function POST(request: NextRequest) {
     if (!session_id) return NextResponse.json({ error: 'Missing session_id' }, { status: 400 });
     
     try {
+      const session = await prisma.examSession.findUnique({
+        where: { id: session_id },
+        include: { test: true }
+      });
+      if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+
+      // Verify ownership
+      if (session.test.teacher_id !== payload.user_id) {
+        return NextResponse.json({ error: 'Access denied. You can only reset sessions for tests you created.' }, { status: 403 });
+      }
+
       await prisma.$transaction([
+        // Delete submission results
+        prisma.submissionResult.deleteMany({
+          where: { submission: { session_id } }
+        }),
         prisma.submission.deleteMany({ where: { session_id } }),
         prisma.codeDraft.deleteMany({ where: { session_id } }),
         prisma.assignedQuestion.deleteMany({ where: { session_id } }),

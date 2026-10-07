@@ -43,10 +43,10 @@ export async function POST(request: NextRequest) {
   const { action } = body;
 
   if (action === 'create_test') {
-    const { title, description, subject_name, duration_minutes, total_marks, questions_per_student, target_division, allowed_languages } = body;
+    const { title, description, instructions, subject_name, duration_minutes, total_marks, questions_per_student, target_division, allowed_languages, start_time, end_time } = body;
     
-    // Get teacher id: if teacher, use their own id; if admin and they specify teacher_id, use that
-    const teacher_id = payload.role === 'TEACHER' ? payload.user_id : (body.teacher_id || null);
+    // Always map the created test to the current user (admin)
+    const teacher_id = payload.user_id;
     
     // Process Subject by Name
     let subject_id = body.subject_id;
@@ -61,10 +61,24 @@ export async function POST(request: NextRequest) {
     }
     if (!subject_id) return NextResponse.json({ error: 'Subject is required' }, { status: 400 });
     
+    const crypto = require('crypto');
+    // Generate a slug-like unique ID, e.g. test-dsa-5v8f35
+    const subjectStr = subject_name || 'test';
+    let slugBase = subjectStr.split(/\s+/).map((w: string) => w[0]?.toLowerCase()).join('');
+    if (!/^[a-z]+$/.test(slugBase)) {
+      slugBase = subjectStr.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 5);
+    }
+    // ensure trailing - is removed
+    slugBase = slugBase.replace(/-+$/, '');
+    const randomHex = crypto.randomBytes(3).toString('hex');
+    const uniqueId = `test-${slugBase}-${randomHex}`;
+
     const test = await prisma.test.create({
       data: {
+        unique_id: uniqueId,
         title,
         description: description || null,
+        instructions: instructions || null,
         subject_id,
         teacher_id,
         duration_minutes: parseInt(duration_minutes) || 60,
@@ -72,21 +86,21 @@ export async function POST(request: NextRequest) {
         questions_per_student: parseInt(questions_per_student) || 3,
         target_division: target_division || null,
         allowed_languages: allowed_languages || ['c', 'cpp', 'python', 'java'],
-        status: 'DRAFT'
+        status: 'DRAFT',
+        start_time: start_time ? new Date(start_time) : null,
+        end_time: end_time ? new Date(end_time) : null,
       }
     });
     return NextResponse.json({ success: true, test });
   }
 
   if (action === 'update_test') {
-    const { id, title, description, duration_minutes, total_marks, questions_per_student, status, target_division, marks_published, allowed_languages } = body;
+    const { id, title, description, instructions, duration_minutes, total_marks, questions_per_student, status, target_division, marks_published, allowed_languages, start_time, end_time } = body;
     
-    // Verify ownership if teacher
-    if (payload.role === 'TEACHER') {
-      const test = await prisma.test.findUnique({ where: { id } });
-      if (!test || test.teacher_id !== payload.user_id) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-      }
+    // Verify ownership
+    const test = await prisma.test.findUnique({ where: { id } });
+    if (!test || test.teacher_id !== payload.user_id) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     
     await prisma.test.update({
@@ -94,6 +108,7 @@ export async function POST(request: NextRequest) {
       data: {
         title,
         description: description || null,
+        instructions: instructions || null,
         duration_minutes: parseInt(duration_minutes) || 60,
         total_marks: parseInt(total_marks) || 30,
         questions_per_student: parseInt(questions_per_student) || 3,
@@ -101,6 +116,8 @@ export async function POST(request: NextRequest) {
         target_division: target_division || null,
         allowed_languages: allowed_languages || ['c', 'cpp', 'python', 'java'],
         marks_published: marks_published === true,
+        start_time: start_time ? new Date(start_time) : null,
+        end_time: end_time ? new Date(end_time) : null,
       }
     });
     return NextResponse.json({ success: true });
@@ -108,11 +125,9 @@ export async function POST(request: NextRequest) {
 
   if (action === 'publish_marks') {
     const { id } = body;
-    if (payload.role === 'TEACHER') {
-      const test = await prisma.test.findUnique({ where: { id } });
-      if (!test || test.teacher_id !== payload.user_id) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-      }
+    const test = await prisma.test.findUnique({ where: { id } });
+    if (!test || test.teacher_id !== payload.user_id) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     await prisma.test.update({ where: { id }, data: { marks_published: true } });
     return NextResponse.json({ success: true });
@@ -135,17 +150,27 @@ export async function POST(request: NextRequest) {
 
   if (action === 'delete_test') {
     const { id } = body;
-    if (payload.role === 'TEACHER') {
-      const test = await prisma.test.findUnique({ where: { id } });
-      if (!test || test.teacher_id !== payload.user_id) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-      }
+    const test = await prisma.test.findUnique({ where: { id } });
+    if (!test || test.teacher_id !== payload.user_id) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
-    // Delete all related data
-    await prisma.examSession.deleteMany({ where: { test_id: id } });
+
+    const sessions = await prisma.examSession.findMany({ where: { test_id: id }, select: { id: true } });
+    const sessionIds = sessions.map(s => s.id);
+
+    // Delete all related data properly to prevent orphaned documents in MongoDB
+    if (sessionIds.length > 0) {
+      await prisma.submissionResult.deleteMany({ where: { submission: { session_id: { in: sessionIds } } } });
+      await prisma.submission.deleteMany({ where: { session_id: { in: sessionIds } } });
+      await prisma.codeDraft.deleteMany({ where: { session_id: { in: sessionIds } } });
+      await prisma.assignedQuestion.deleteMany({ where: { session_id: { in: sessionIds } } });
+      await prisma.examSession.deleteMany({ where: { test_id: id } });
+    }
+
     await prisma.testQuestion.deleteMany({ where: { test_id: id } });
     await prisma.marksReport.deleteMany({ where: { test_id: id } });
     await prisma.test.delete({ where: { id } });
+    
     return NextResponse.json({ success: true });
   }
 

@@ -15,11 +15,16 @@ export interface ExecutionResult {
   execution_time?: number;
 }
 
-const COMPILE_TIMEOUT_MS = 5000;
-const EXEC_TIMEOUT_MS = 2000;
-const MAX_OUTPUT_BYTES = 64 * 1024; // 64KB
+const JUDGE0_URL = process.env.JUDGE0_API_URL || 'https://ce.judge0.com';
+const JUDGE0_KEY = process.env.JUDGE0_API_KEY || '';
 
-export async function compileAndRun(code: string, input: string, language: string = 'cpp'): Promise<ExecutionResult> {
+export async function compileAndRun(
+  code: string, 
+  input: string, 
+  language: string = 'cpp', 
+  timeLimit: number = 1.0, 
+  memoryLimitKb: number = 256000
+): Promise<ExecutionResult> {
   const startTime = Date.now();
   
   // Sanitize code by removing markdown blocks
@@ -34,46 +39,89 @@ export async function compileAndRun(code: string, input: string, language: strin
     }
   }
 
-  let compilerName = 'gcc-head';
-  switch (language.toLowerCase()) {
-    case 'c': compilerName = 'gcc-head-c'; break;
-    case 'python': 
-    case 'py': compilerName = 'cpython-head'; break;
-    case 'java': compilerName = 'openjdk-head'; break;
-  }
-
+  // Only C++ is supported
+  let languageId = 54; // C++ (GCC 9.2.0)
+  
   try {
-    const response = await fetch('https://wandbox.org/api/compile.json', {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (JUDGE0_KEY) {
+      if (JUDGE0_URL.includes('rapidapi')) {
+        headers['X-RapidAPI-Key'] = JUDGE0_KEY;
+        headers['X-RapidAPI-Host'] = new URL(JUDGE0_URL).host;
+      } else {
+        headers['X-Auth-Token'] = JUDGE0_KEY;
+      }
+    }
+
+    const payload = {
+      source_code: Buffer.from(sanitizedCode).toString('base64'),
+      language_id: languageId,
+      stdin: Buffer.from(input || '').toString('base64'),
+      cpu_time_limit: timeLimit,
+      memory_limit: memoryLimitKb
+    };
+
+    const res = await fetch(`${JUDGE0_URL}/submissions?base64_encoded=true&wait=true`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        code: sanitizedCode,
-        compiler: compilerName,
-        stdin: input || ''
-      })
+      headers,
+      body: JSON.stringify(payload)
     });
 
-    if (!response.ok) {
-      return { success: false, compile_error: 'Execution service unavailable.' };
+    if (!res.ok) {
+      const errorText = await res.text();
+      return { success: false, compile_error: `Judge0 execution service returned ${res.status}: ${errorText}` };
     }
 
-    const data = await response.json();
+    const data = await res.json();
     
-    // Wandbox returns status="0" on success, something else if crash or compile error
-    if (data.status !== '0' && data.compiler_error) {
-       return { success: false, compile_error: data.compiler_error.trim() };
-    }
-    
-    // Programiz-like: Timeout or Signal killed
-    if (data.signal) {
-       return { success: false, timed_out: true, execution_time: 5000 };
+    // Helper to decode base64
+    const decodeBase64 = (str: string | null | undefined) => {
+      if (!str) return '';
+      try {
+        return Buffer.from(str, 'base64').toString('utf-8');
+      } catch {
+        return str;
+      }
+    };
+
+    const stdoutStr = decodeBase64(data.stdout);
+    const stderrStr = decodeBase64(data.stderr);
+    const compileOutStr = decodeBase64(data.compile_output);
+
+    // Judge0 Status IDs
+    const statusId = data.status?.id;
+
+    if (statusId === 6) { // Compilation Error
+      return { success: false, compile_error: compileOutStr || 'Compilation Error' };
     }
 
+    if (statusId === 5) { // Time Limit Exceeded
+      return { success: false, timed_out: true, execution_time: parseFloat(data.time) * 1000 || timeLimit * 1000 };
+    }
+
+    if (statusId >= 7 && statusId <= 12) { // Runtime Errors
+      return { 
+        success: false, 
+        stderr: stderrStr || 'Runtime Error',
+        compile_error: `Runtime Error: ${data.status?.description || 'Unknown'}`
+      };
+    }
+    
+    // Status 3 = Accepted, 4 = Wrong Answer (we evaluate correctness manually)
+    if (statusId === 3 || statusId === 4) {
+      return {
+        success: true,
+        output: stdoutStr,
+        stderr: stderrStr,
+        execution_time: parseFloat(data.time) * 1000 || (Date.now() - startTime)
+      };
+    }
+    
     return {
-      success: data.status === '0',
-      output: (data.program_output || '').trim(),
-      stderr: (data.program_error || '').trim(),
-      execution_time: Date.now() - startTime
+       success: false,
+       compile_error: data.status?.description || 'Unknown Execution Error'
     };
 
   } catch (err: any) {

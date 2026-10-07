@@ -19,9 +19,8 @@ export function isTeacher(payload: { role: string } | null) {
 }
 
 // Returns the teacher_id filter for scoped queries
-// ADMIN sees everything (null), TEACHER sees only their own resources
+// All accounts are isolated and only see their own tests
 export function teacherScope(payload: { user_id: string; role: string } | null) {
   if (!payload) return null;
-  if (payload.role === 'ADMIN') return undefined; // no filter
-  return payload.user_id; // filter by this teacher
+  return payload.user_id;
 }

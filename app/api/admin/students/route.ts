@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const payload = await verifyAuthToken(token);
-  if (payload && payload.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized role' }, { status: 403 });
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+  if (payload.role !== 'ADMIN' && payload.role !== 'TEACHER') return NextResponse.json({ error: 'Unauthorized role' }, { status: 403 });
 
   const body = await request.json();
   const { action, students, roll_no, name, division, branch } = body;

@@ -294,7 +294,9 @@ export default function WorkspacePage() {
       if (
         e.key === 'F12' ||
         (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
-        (e.ctrlKey && (e.key === 'U' || e.key === 'C' || e.key === 'V' || e.key === 'X' || e.key === 'P' || e.key === 'S'))
+        (e.ctrlKey && (e.key === 'U' || e.key === 'C' || e.key === 'V' || e.key === 'X' || e.key === 'P' || e.key === 'S')) ||
+        e.key === 'PrintScreen' ||
+        (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5'))
       ) {
         e.preventDefault();
         reportIntegrity('forbidden_key');
@@ -353,8 +355,13 @@ export default function WorkspacePage() {
         'copy_paste_attempt': 'Copying or pasting'
       };
       
-      setIntegrityWarning(`${eventMap[event_type] || 'A forbidden action'} has been detected.`);
-      setTimeout(() => setIntegrityWarning(null), 5000);
+      if (data.warnings >= 3) {
+        setIntegrityWarning('Maximum warnings exceeded. Your test is being auto-submitted.');
+        handleAutoSubmit();
+      } else {
+        setIntegrityWarning(`${eventMap[event_type] || 'A forbidden action'} has been detected. Warning ${data.warnings} of 3.`);
+        setTimeout(() => setIntegrityWarning(null), 5000);
+      }
     } catch {}
   };
 
@@ -369,29 +376,12 @@ export default function WorkspacePage() {
     router.push('/result');
   };
 
-  const handleRunCode = async () => {
-    const question = sessionData?.questions[activeQuestion];
-    const code = codes[question?.id || 0] || STARTER_CODE;
-    setRunning(true);
-    setRunResults(null);
+  const [runTrigger, setRunTrigger] = useState(0);
 
-    try {
-      const res = await fetch('/api/exam/run', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify({ code, language, input: customInput }),
-      });
-      const data = await res.json();
-      setRunResults(data);
-      setConsoleOpen(true);
-    } catch (err) {
-      setRunResults({ compile_error: 'Network error', test_results: [], passed: 0, total: 0 });
-    } finally {
-      setRunning(false);
-    }
+  const handleRunCode = () => {
+    setConsoleOpen(true);
+    setRunning(true);
+    setRunTrigger(prev => prev + 1);
   };
 
   const doSubmit = async (questionId: number, code: string): Promise<number> => {
@@ -455,7 +445,7 @@ export default function WorkspacePage() {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)', fontSize: '13px' }}>
+          <p style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', color: 'var(--text-muted)', fontSize: '13px' }}>
             Loading exam...
           </p>
         </div>
@@ -510,7 +500,7 @@ export default function WorkspacePage() {
             </span>
             <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{integrityWarning}</span>
           </div>
-          <span style={{ fontSize: '12px', color: 'var(--warning)', fontFamily: 'JetBrains Mono, monospace' }}>
+          <span style={{ fontSize: '12px', color: 'var(--warning)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
             Warnings: {warningCount} / 3
           </span>
         </div>
@@ -553,7 +543,7 @@ export default function WorkspacePage() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <span style={{
-                      fontFamily: 'JetBrains Mono, monospace',
+                      fontFamily: 'Söhne Mono, ui-monospace, monospace',
                       fontSize: '11px',
                       color: active ? 'var(--text-primary)' : 'var(--text-muted)',
                       fontWeight: 500,
@@ -582,10 +572,10 @@ export default function WorkspacePage() {
             <p className="text-label" style={{ marginBottom: '8px' }}>Score</p>
             {sessionData.questions.map((q, i) => (
               <div key={q.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>Q{i + 1}</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>Q{i + 1}</span>
                 <span style={{
                   fontSize: '11px',
-                  fontFamily: 'JetBrains Mono, monospace',
+                  fontFamily: 'Söhne Mono, ui-monospace, monospace',
                   color: submitScores[q.id] !== undefined ? 'var(--success)' : 'var(--text-muted)',
                 }}>
                   {submitScores[q.id] !== undefined ? `${submitScores[q.id]}/10` : '—'}
@@ -593,8 +583,8 @@ export default function WorkspacePage() {
               </div>
             ))}
             <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>Total</span>
-              <span style={{ fontSize: '11px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-secondary)', fontWeight: 600 }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>Total</span>
+              <span style={{ fontSize: '11px', fontFamily: 'Söhne Mono, ui-monospace, monospace', color: 'var(--text-secondary)', fontWeight: 600 }}>
                 {Object.values(submitScores).reduce((a, b) => a + b, 0)}/30
               </span>
             </div>
@@ -620,9 +610,9 @@ export default function WorkspacePage() {
 
                 {/* Editor Panel */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                  {/* Editor header */}
+                  {/* Editor header with actions */}
                   <div style={{
-                    height: '40px',
+                    height: '48px',
                     borderBottom: '1px solid var(--border)',
                     display: 'flex',
                     alignItems: 'center',
@@ -631,9 +621,9 @@ export default function WorkspacePage() {
                     background: 'var(--surface-1)',
                     flexShrink: 0,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        Source Code
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        Language:
                       </span>
                       <select
                         value={language}
@@ -642,12 +632,13 @@ export default function WorkspacePage() {
                         style={{
                           background: 'var(--surface-2)',
                           color: 'var(--text-primary)',
-                          border: 'none',
-                          padding: '2px 6px',
-                          borderRadius: '2px',
+                          border: '1px solid var(--border)',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
                           fontSize: '11px',
                           outline: 'none',
-                          cursor: isSubmitted ? 'not-allowed' : 'pointer'
+                          cursor: isSubmitted ? 'not-allowed' : 'pointer',
+                          fontFamily: 'Söhne Mono, ui-monospace, monospace',
                         }}
                       >
                         {(sessionData.session.allowed_languages || ['c', 'cpp', 'python', 'java']).map(l => (
@@ -656,29 +647,80 @@ export default function WorkspacePage() {
                           </option>
                         ))}
                       </select>
+                      
+                      {!isSubmitted && (
+                        <button
+                          onClick={() => setCodes(prev => ({ ...prev, [currentQuestion.id]: STARTER_CODE }))}
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            letterSpacing: '0.04em',
+                            padding: '4px 8px',
+                          }}
+                        >
+                          Reset Code
+                        </button>
+                      )}
                     </div>
-                    {isSubmitted ? (
-                      <span style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600, letterSpacing: '0.08em' }}>
-                        ✓ SUBMITTED · {submitScores[currentQuestion.id] ?? 0}/10
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setCodes(prev => ({ ...prev, [currentQuestion.id]: STARTER_CODE }));
-                        }}
-                        style={{
-                          fontSize: '11px',
-                          color: 'var(--text-muted)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          letterSpacing: '0.04em',
-                          padding: '4px 8px',
-                        }}
-                      >
-                        Reset
-                      </button>
-                    )}
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      {isSubmitted ? (
+                        <span style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600, letterSpacing: '0.08em' }}>
+                          ✓ SUBMITTED · {submitScores[currentQuestion.id] ?? 0}/10
+                        </span>
+                      ) : demoActive ? (
+                        <>
+                          <div style={{ padding: '4px 8px', background: 'var(--accent)', color: 'white', fontSize: '10px', fontWeight: 700, borderRadius: '2px', letterSpacing: '0.05em' }}>
+                            DEMO MODE
+                          </div>
+                          <button onClick={() => setDemoActive(false)} style={{...demoBtnStyle, border: '1px solid var(--error)', color: 'var(--error)'}}>
+                            Exit Demo
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            id="run-code-btn"
+                            onClick={handleRunCode}
+                            disabled={running || submitting}
+                            style={{
+                              padding: '6px 16px',
+                              background: 'var(--surface-2)',
+                              border: '1px solid var(--border)',
+                              borderRadius: '4px',
+                              color: running ? 'var(--text-muted)' : 'var(--text-primary)',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              cursor: running ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            {running ? 'Running...' : 'Run Code'}
+                          </button>
+                          <button
+                            id="submit-btn"
+                            onClick={() => setShowSubmitConfirm(true)}
+                            disabled={submitting || running}
+                            style={{
+                              padding: '6px 16px',
+                              background: submitting ? 'var(--surface-2)' : '#ffffff',
+                              border: '1px solid var(--border)',
+                              borderRadius: '4px',
+                              color: submitting ? 'var(--text-muted)' : '#000000',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              cursor: submitting ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            {submitting ? 'Submitting...' : 'Submit'}
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* Monaco Editor */}
@@ -692,12 +734,10 @@ export default function WorkspacePage() {
                     <MonacoEditor
                       height="100%"
                       language={language === 'c' ? 'c' : language === 'cpp' ? 'cpp' : language === 'python' ? 'python' : 'java'}
-                      theme="vs-dark"
+                      theme="light"
                       value={demoActive ? demoCode : (codes[currentQuestion.id] || STARTER_CODE)}
                       onChange={(val) => {
                         if (isSubmitted) return;
-                        
-                        // Demo Mode intercept
                         if (sessionData?.session.is_demo && sessionData.session.demo_config) {
                           const demoSetup = sessionData.session.demo_config.questions[currentQuestion.id];
                           if (demoSetup && val?.trim() === demoSetup.keyword) {
@@ -708,20 +748,13 @@ export default function WorkspacePage() {
                             return;
                           }
                         }
-
-                        if (demoActive) {
-                          // Allow editing demo code? Or just disable it?
-                          // The user shouldn't edit during playback, but if they do, we can just update demoCode.
-                          setDemoCode(val || '');
-                          return;
-                        }
-
+                        if (demoActive) { setDemoCode(val || ''); return; }
                         setCodes(prev => ({ ...prev, [currentQuestion.id]: val || '' }));
                       }}
                       options={{
                         readOnly: isSubmitted,
                         fontSize: 13,
-                        fontFamily: 'JetBrains Mono, monospace',
+                        fontFamily: 'Söhne Mono, ui-monospace, monospace',
                         fontLigatures: true,
                         lineNumbers: 'on',
                         minimap: { enabled: false },
@@ -729,19 +762,11 @@ export default function WorkspacePage() {
                         automaticLayout: true,
                         tabSize: 4,
                         wordWrap: 'on',
-                        renderLineHighlight: 'line',
-                        scrollbar: {
-                          verticalScrollbarSize: 4,
-                          horizontalScrollbarSize: 4,
-                        },
                         padding: { top: 16, bottom: 16 },
-                        bracketPairColorization: { enabled: true },
-                        formatOnPaste: true,
-                        autoIndent: 'advanced',
-                        suggest: { showKeywords: true },
+                        contextmenu: false,
+                        dragAndDrop: false,
                       }}
                       onMount={(editor, monaco) => {
-                        // Ctrl+Enter → Run Code
                         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
                           if (!isSubmitted) handleRunCode();
                         });
@@ -749,101 +774,15 @@ export default function WorkspacePage() {
                     />
                   </div>
 
-                  {/* Action bar */}
-                  {!isSubmitted && (
-                    <div style={{
-                      height: '48px',
-                      borderTop: '1px solid var(--border)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '0 16px',
-                      background: 'var(--surface-1)',
-                      flexShrink: 0,
-                    }}>
-                      {demoActive ? (
-                        <>
-                          <div style={{ padding: '4px 8px', background: 'var(--accent)', color: 'white', fontSize: '10px', fontWeight: 700, borderRadius: '2px', letterSpacing: '0.05em' }}>
-                            DEMO MODE — SOLUTION PREVIEW
-                          </div>
-                          <button onClick={() => setDemoPlaying(p => !p)} style={demoBtnStyle}>
-                            {demoPlaying ? 'Pause' : 'Play'}
-                          </button>
-                          <button onClick={() => { setDemoCode(''); setDemoIndex(0); setDemoPlaying(true); }} style={demoBtnStyle}>
-                            Replay
-                          </button>
-                          <button onClick={() => { 
-                            const demoSetup = sessionData.session.demo_config?.questions[currentQuestion.id];
-                            if(demoSetup) { setDemoCode(demoSetup.solution); setDemoIndex(demoSetup.solution.split('\n').length); setDemoPlaying(false); }
-                          }} style={demoBtnStyle}>
-                            Show Complete
-                          </button>
-                          <button onClick={() => setDemoActive(false)} style={{...demoBtnStyle, marginLeft: 'auto', border: '1px solid var(--error)', color: 'var(--error)'}}>
-                            Exit Demo
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            id="run-code-btn"
-                            onClick={handleRunCode}
-                            disabled={running || submitting}
-                            style={{
-                              padding: '8px 20px',
-                              background: 'transparent',
-                              border: '1px solid var(--border)',
-                              borderRadius: '3px',
-                              color: running ? 'var(--text-muted)' : 'var(--text-secondary)',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              letterSpacing: '0.10em',
-                              textTransform: 'uppercase',
-                              cursor: running ? 'not-allowed' : 'pointer',
-                              transition: 'all 0.15s ease',
-                              fontFamily: 'inherit',
-                            }}
-                          >
-                            {running ? '◌ Running...' : '▷ Run Code'}
-                          </button>
-
-                          <button
-                            id="submit-btn"
-                            onClick={() => setShowSubmitConfirm(true)}
-                            disabled={submitting || running}
-                            style={{
-                              padding: '8px 20px',
-                              background: submitting ? 'var(--surface-2)' : '#FFFFFF',
-                              border: '1px solid var(--border)',
-                              borderRadius: '3px',
-                              color: submitting ? 'var(--text-muted)' : '#000000',
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              letterSpacing: '0.10em',
-                              textTransform: 'uppercase',
-                              cursor: submitting ? 'not-allowed' : 'pointer',
-                              transition: 'all 0.15s ease',
-                              fontFamily: 'inherit',
-                            }}
-                          >
-                            {submitting ? 'Submitting...' : 'Submit'}
-                          </button>
-
-                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                            Ctrl+Enter to run
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Console */}
+                  {/* Console Panel (Bottom Split) */}
                   <ConsolePanel
                     open={consoleOpen}
                     onToggle={() => setConsoleOpen(p => !p)}
-                    results={runResults}
                     running={running}
-                    customInput={customInput}
-                    setCustomInput={setCustomInput}
+                    setRunning={setRunning}
+                    runTrigger={runTrigger}
+                    code={codes[currentQuestion?.id || 0] || STARTER_CODE}
+                    language={language}
                   />
                 </div>
               </div>
@@ -910,7 +849,7 @@ function TopBar({
       flexShrink: 0,
     }}>
       <span style={{
-        fontFamily: 'JetBrains Mono, monospace',
+        fontFamily: 'Söhne Mono, ui-monospace, monospace',
         fontSize: '12px',
         fontWeight: 500,
         color: 'var(--text-secondary)',
@@ -926,7 +865,7 @@ function TopBar({
       <span style={{
         fontSize: '12px',
         color: 'var(--text-secondary)',
-        fontFamily: 'JetBrains Mono, monospace',
+        fontFamily: 'Söhne Mono, ui-monospace, monospace',
       }}>
         {student.roll_no} · {student.name}
       </span>
@@ -940,7 +879,7 @@ function TopBar({
 
         <span
           style={{
-            fontFamily: 'JetBrains Mono, monospace',
+            fontFamily: 'Söhne Mono, ui-monospace, monospace',
             fontSize: '16px',
             fontWeight: 600,
             color: timerColor,
@@ -964,7 +903,7 @@ function StatusBadge({ submitted, active }: { submitted: boolean; active: boolea
         fontWeight: 600,
         letterSpacing: '0.08em',
         color: 'var(--success)',
-        fontFamily: 'JetBrains Mono, monospace',
+        fontFamily: 'Söhne Mono, ui-monospace, monospace',
       }}>✓</span>
     );
   }
@@ -982,7 +921,6 @@ function StatusBadge({ submitted, active }: { submitted: boolean; active: boolea
 function QuestionPanel({ question, index }: { question: Question; index: number }) {
   return (
     <div>
-      {/* Question header */}
       <div style={{ marginBottom: '28px' }}>
         <p style={{
           fontSize: '10px',
@@ -991,7 +929,7 @@ function QuestionPanel({ question, index }: { question: Question; index: number 
           textTransform: 'uppercase',
           color: 'var(--text-muted)',
           marginBottom: '6px',
-          fontFamily: 'JetBrains Mono, monospace',
+          fontFamily: 'Söhne Mono, ui-monospace, monospace',
         }}>
           Q{String(index + 1).padStart(2, '0')} · {question.topic}
         </p>
@@ -1008,7 +946,6 @@ function QuestionPanel({ question, index }: { question: Question; index: number 
 
       <div style={{ height: '1px', background: 'var(--border)', marginBottom: '24px' }} />
 
-      {/* Problem statement */}
       <Section label="Problem">
         <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
           {question.description || question.statement}
@@ -1033,7 +970,7 @@ function QuestionPanel({ question, index }: { question: Question; index: number 
 
       {question.constraints && (
         <Section label="Constraints">
-          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+          <p style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
             {question.constraints}
           </p>
         </Section>
@@ -1041,9 +978,7 @@ function QuestionPanel({ question, index }: { question: Question; index: number 
 
       <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: '3px', border: '1px solid var(--border)' }}>
         <p style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          💡 <strong style={{ color: 'var(--text-secondary)' }}>Note:</strong> You can use a hardcoded array or take input from the user — any approach is accepted.
-          Press <strong style={{ color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>Run Code</strong> to test your code,
-          then <strong style={{ color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>Submit</strong> when ready. AI will evaluate your logic.
+          💡 <strong style={{ color: 'var(--text-secondary)' }}>Note:</strong> You can use a hardcoded array or take input from the user.
         </p>
       </div>
     </div>
@@ -1062,154 +997,144 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 function ConsolePanel({
   open,
   onToggle,
-  results,
   running,
-  customInput,
-  setCustomInput,
+  setRunning,
+  runTrigger,
+  code,
+  language,
 }: {
   open: boolean;
   onToggle: () => void;
-  results: any | null;
   running: boolean;
-  customInput: string;
-  setCustomInput: (val: string) => void;
+  setRunning: (val: boolean) => void;
+  runTrigger: number;
+  code: string;
+  language: string;
 }) {
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<any>(null);
+  const socketRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!open || !terminalRef.current) return;
+    
+    let isMounted = true;
+    (async () => {
+      if (!xtermRef.current) {
+        const { Terminal } = await import('xterm');
+        const { FitAddon } = await import('xterm-addon-fit');
+        await import('xterm/css/xterm.css');
+        
+        const el = terminalRef.current;
+        if (!el || !isMounted) return;
+        const term = new Terminal({
+          theme: { background: '#f5f0e8', foreground: '#141413', cursor: '#cc785c' },
+          fontFamily: 'Söhne Mono, ui-monospace, monospace',
+          fontSize: 13,
+          cursorBlink: true
+        });
+        const fitAddon = new FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(el);
+        fitAddon.fit();
+        xtermRef.current = term;
+
+        window.addEventListener('resize', () => fitAddon.fit());
+        
+        term.writeln('\x1b[90mTerminal ready. Click "Run Code" to execute.\x1b[0m');
+      }
+    })();
+    return () => { isMounted = false; };
+  }, [open]);
+
+  useEffect(() => {
+    if (!running || !xtermRef.current || !code || runTrigger === 0) return;
+    
+    (async () => {
+      const { io } = await import('socket.io-client');
+      const term = xtermRef.current;
+      term.clear();
+      
+      const host = window.location.hostname;
+      const socket = io(`http://${host}:4000`);
+      socketRef.current = socket;
+
+      socket.on('connect', () => {
+        socket.emit('execute', { code, language });
+      });
+
+      socket.on('output', (data: string) => {
+        term.write(data);
+      });
+
+      socket.on('finished', () => {
+        setRunning(false);
+        socket.disconnect();
+      });
+
+      term.onData((data: string) => {
+        socket.emit('input', data);
+      });
+
+    })();
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [runTrigger]); // Run ONLY when runTrigger changes
+
   return (
     <div style={{
+      height: open ? '280px' : '40px',
       borderTop: '1px solid var(--border)',
-      background: 'var(--surface-1)',
+      background: 'var(--bg)',
       flexShrink: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      transition: 'height 0.2s ease',
     }}>
-      {/* Console header */}
-      <button
+      <div
         onClick={onToggle}
         style={{
-          width: '100%',
-          padding: '8px 16px',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
+          height: '40px',
+          padding: '0 16px',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
-          color: 'var(--text-muted)',
+          gap: '12px',
+          cursor: 'pointer',
+          background: 'var(--surface-1)',
+          userSelect: 'none',
         }}
       >
-        <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.10em', textTransform: 'uppercase' }}>
-          Output
+        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          Interactive Terminal {open ? '▼' : '▲'}
         </span>
-        {results && results.output && !results.compile_error && (
-          <span style={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)' }}>
-            {results.execution_time ? `${results.execution_time}ms` : ''}
+        {running && (
+          <span style={{ fontSize: '10px', fontFamily: 'Söhne Mono, ui-monospace, monospace', color: 'var(--warning)' }}>
+            Running...
           </span>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: '10px' }}>{open ? '▼' : '▲'}</span>
-      </button>
+      </div>
 
       {open && (
-        <div style={{ maxHeight: '300px', overflowY: 'auto', padding: '0 16px 12px' }}>
-          <div style={{ marginBottom: '12px', marginTop: '8px' }}>
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Custom Input (stdin):</span>
-            <textarea
-              value={customInput}
-              onChange={(e) => setCustomInput(e.target.value)}
-              placeholder="Enter input here if your code uses cin/scanf..."
-              style={{
-                width: '100%',
-                height: '60px',
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid var(--border)',
-                borderRadius: '3px',
-                color: 'var(--text-primary)',
-                fontFamily: 'JetBrains Mono, monospace',
-                fontSize: '12px',
-                padding: '8px',
-                marginTop: '6px',
-                resize: 'vertical',
-                outline: 'none',
-              }}
-            />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ padding: '8px 16px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Execution Output (Interactive)
+            </span>
           </div>
-
-          {running && (
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', padding: '8px 0' }}>
-              ◌ Compiling and running...
-            </p>
-          )}
-
-          {results?.compile_error && (
-            <div style={{
-              padding: '12px',
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid var(--border)',
-              borderRadius: '3px',
-              marginBottom: '8px',
-            }}>
-              <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', color: 'var(--error)', marginBottom: '6px' }}>
-                COMPILATION ERROR
-              </p>
-              <pre style={{
-                fontFamily: 'JetBrains Mono, monospace',
-                fontSize: '11px',
-                color: 'var(--text-secondary)',
-                whiteSpace: 'pre-wrap',
-                margin: 0,
-                lineHeight: 1.6,
-              }}>{results.compile_error}</pre>
-            </div>
-          )}
-
-          {results && !results.compile_error && (
-            <div style={{
-              padding: '12px',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--border)',
-              borderRadius: '3px',
-            }}>
-              {results.timed_out ? (
-                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace', margin: 0 }}>
-                  ⏱ Time Limit Exceeded (5 seconds)
-                </p>
-              ) : results.output ? (
-                <pre style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: '12px',
-                  color: 'var(--text-primary)',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  margin: 0,
-                  lineHeight: 1.7,
-                }}>{(results.output || '').replace(/\\n/g, '\n')}</pre>
-              ) : (
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', margin: 0 }}>
-                  (no output)
-                </p>
-              )}
-              {results.stderr && (
-                <pre style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: '11px',
-                  color: 'var(--text-secondary)',
-                  whiteSpace: 'pre-wrap',
-                  margin: '8px 0 0',
-                  lineHeight: 1.6,
-                  opacity: 0.7,
-                }}>{results.stderr}</pre>
-              )}
-            </div>
-          )}
-
-          {!running && !results && (
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 0', fontFamily: 'JetBrains Mono, monospace' }}>
-              Press Run Code to compile and execute your program.
-            </p>
-          )}
+          <div 
+            ref={terminalRef} 
+            style={{ flex: 1, padding: '12px', background: 'var(--surface-1)', overflow: 'hidden' }}
+          />
         </div>
       )}
     </div>
   );
 }
-
 
 function Modal({
   onClose,
@@ -1341,7 +1266,7 @@ function FinalScreen({
         }}>
           {student.name}
         </h1>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '40px', fontFamily: 'JetBrains Mono, monospace' }}>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '40px', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
           Roll {student.roll_no} · {student.division}
         </p>
 
@@ -1357,7 +1282,7 @@ function FinalScreen({
             borderBottom: '1px solid var(--border-subtle)',
           }}>
             <div>
-              <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '2px', fontFamily: 'JetBrains Mono, monospace' }}>
+              <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '2px', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
                 Q{String(i + 1).padStart(2, '0')}
               </p>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{q.title}</p>
@@ -1365,7 +1290,7 @@ function FinalScreen({
             <span style={{
               fontSize: '18px',
               fontWeight: 600,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'Söhne Mono, ui-monospace, monospace',
               color: submissions[q.id] ? 'var(--text-primary)' : 'var(--text-muted)',
             }}>
               {submitScores[q.id] !== undefined ? `${submitScores[q.id]}` : '—'}<span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>/10</span>
@@ -1388,7 +1313,7 @@ function FinalScreen({
           <span style={{
             fontSize: '36px',
             fontWeight: 700,
-            fontFamily: 'JetBrains Mono, monospace',
+            fontFamily: 'Söhne Mono, ui-monospace, monospace',
             color: 'var(--text-primary)',
           }}>
             {totalScore}<span style={{ fontSize: '18px', color: 'var(--text-muted)' }}>/30</span>

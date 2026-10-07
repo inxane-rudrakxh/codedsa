@@ -72,8 +72,10 @@ model Subject {
 
 model Test {
   id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  unique_id             String    @unique
   title                 String
   description           String?
+  instructions          String?
   subject_id            String    @db.ObjectId
   subject               Subject   @relation(fields: [subject_id], references: [id])
   teacher_id            String?   @db.ObjectId
@@ -86,6 +88,8 @@ model Test {
   questions_per_student Int       @default(3)
   target_division       String?
   allowed_languages     String[]  @default(["c", "cpp", "python", "java"])
+  start_time            DateTime?
+  end_time              DateTime?
   created_at            DateTime  @default(now())
   updated_at            DateTime  @updatedAt
   
@@ -106,6 +110,8 @@ model Question {
   topic         String?
   difficulty    String    @default("MEDIUM")
   marks         Int       @default(10)
+  time_limit    Float?    @default(1.0)
+  memory_limit  Int?      @default(256000)
   input_format  String?
   output_format String?
   constraints   String?
@@ -208,6 +214,9 @@ model Submission {
   error_message   String?
   ai_feedback     String?
   marks_awarded   Float?    @default(0)
+  faculty_score   Float?
+  faculty_feedback String?
+  is_reviewed     Boolean   @default(false)
   created_at      DateTime  @default(now())
   
   submissionResults SubmissionResult[]

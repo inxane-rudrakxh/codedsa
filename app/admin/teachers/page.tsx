@@ -139,10 +139,10 @@ export default function TeachersPage() {
             ) : teachers.map((t, i) => (
               <tr key={t.id} style={{ borderBottom: i < teachers.length - 1 ? '1px solid var(--border-subtle)' : 'none', background: 'var(--surface-1)' }}>
                 <td style={tdStyle}><span style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '13px' }}>{t.full_name}</span></td>
-                <td style={tdStyle}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--text-secondary)' }}>{t.email}</span></td>
+                <td style={tdStyle}><span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '12px', color: 'var(--text-secondary)' }}>{t.email}</span></td>
                 <td style={tdStyle}><span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.department || '—'} / {t.subject || '—'}</span></td>
-                <td style={tdStyle}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>{t.test_count}</span></td>
-                <td style={tdStyle}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>{t.question_count}</span></td>
+                <td style={tdStyle}><span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>{t.test_count}</span></td>
+                <td style={tdStyle}><span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>{t.question_count}</span></td>
                 <td style={tdStyle}>
                   <span style={{
                     fontSize: '9px', fontWeight: 700, letterSpacing: '0.10em',
@@ -192,4 +192,4 @@ const thStyle: React.CSSProperties = { padding: '10px 14px', textAlign: 'left', 
 const tdStyle: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'middle' };
 const inputStyle: React.CSSProperties = { width: '100%', padding: '8px 12px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--text-secondary)', fontSize: '13px', outline: 'none' };
 const outlineBtn: React.CSSProperties = { padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' };
-const primaryBtn: React.CSSProperties = { padding: '8px 16px', background: 'var(--text-primary)', border: '1px solid transparent', borderRadius: '3px', color: 'var(--bg)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' };
+const primaryBtn: React.CSSProperties = { padding: '8px 16px', background: 'var(--accent)', border: '1px solid transparent', borderRadius: '3px', color: '#ffffff', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' };

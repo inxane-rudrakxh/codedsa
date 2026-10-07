@@ -113,6 +113,7 @@ async function main() {
 
   const test = await prisma.test.create({
     data: {
+      unique_id: 'SEED-TEST-ID',
       title: 'Unit II – DSA 30 Marks Online Coding Test',
       description: 'ZCOER coding test for Unit II DSA',
       subject_id: dsa.id,

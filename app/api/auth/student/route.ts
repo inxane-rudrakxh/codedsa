@@ -5,16 +5,24 @@ import bcrypt from 'bcryptjs';
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { roll_no, action } = body;
+  const { roll_no, action, test_id } = body;
 
   if (!roll_no) {
     return NextResponse.json({ error: 'Roll number is required.' }, { status: 400 });
   }
 
-  // Check exam is active via settings
-  const examActive = await prisma.setting.findUnique({ where: { key: 'exam_active' } });
-  if (examActive && examActive.value === '0') {
-    return NextResponse.json({ error: 'The exam is not currently active.' }, { status: 403 });
+  if (!test_id) {
+    return NextResponse.json({ error: 'Test ID is required.' }, { status: 400 });
+  }
+
+  // Lookup test by unique_id
+  const test = await prisma.test.findUnique({ where: { unique_id: test_id } });
+  if (!test) {
+    return NextResponse.json({ error: 'Invalid Test Link or Code.' }, { status: 404 });
+  }
+  
+  if (test.status !== 'PUBLISHED') {
+    return NextResponse.json({ error: 'This test is not currently active.' }, { status: 403 });
   }
 
   // Lookup student
@@ -48,7 +56,7 @@ export async function POST(request: NextRequest) {
 
   if (action === 'request_access') {
     const existingSession = await prisma.examSession.findFirst({
-      where: { student_id: studentRecord.id },
+      where: { student_id: studentRecord.id, test_id: test.id },
       orderBy: { start_time: 'desc' }
     });
 
@@ -60,8 +68,7 @@ export async function POST(request: NextRequest) {
 
       sessionId = existingSession.id;
 
-      const testInfo = await prisma.test.findUnique({ where: { id: existingSession.test_id } });
-      const durationMinutes = testInfo?.duration_minutes || 60;
+      const durationMinutes = test?.duration_minutes || 60;
       const startTime = new Date(existingSession.start_time).getTime();
       const elapsed = (Date.now() - startTime) / 1000 / 60;
 
@@ -84,21 +91,9 @@ export async function POST(request: NextRequest) {
         status: existingSession.status
       });
     } else {
-      // Fetch tests that are PUBLISHED, ordered by id descending
-      const publishedTests = await prisma.test.findMany({
-        where: { status: 'PUBLISHED' },
-        orderBy: { id: 'desc' }
-      });
-
-      // Find the first test that matches the student's division or has no specific division
-      const activeTest = publishedTests.find(t => 
-        !t.target_division || 
-        t.target_division.trim() === '' || 
-        t.target_division === studentRecord.division?.name
-      );
-
-      if (!activeTest) {
-        return NextResponse.json({ error: 'No active test found.' }, { status: 404 });
+      // Validate target division
+      if (test.target_division && test.target_division.trim() !== '' && test.target_division !== studentRecord.division?.name) {
+         return NextResponse.json({ error: 'This test is not assigned to your division.' }, { status: 403 });
       }
 
       sessionId = generateSessionId();
@@ -106,7 +101,7 @@ export async function POST(request: NextRequest) {
       await prisma.examSession.create({
         data: {
           id: sessionId,
-          test_id: activeTest.id,
+          test_id: test.id,
           student_id: studentRecord.id,
           status: 'PENDING_APPROVAL',
           is_submitted: false
@@ -115,7 +110,7 @@ export async function POST(request: NextRequest) {
 
       // Assign questions
       const testQuestions = await prisma.testQuestion.findMany({
-        where: { test_id: activeTest.id }
+        where: { test_id: test.id }
       });
       
       if (testQuestions.length > 0) {
@@ -124,7 +119,7 @@ export async function POST(request: NextRequest) {
           const j = Math.floor(Math.random() * (i + 1));
           [qs[i], qs[j]] = [qs[j], qs[i]];
         }
-        const assigned = qs.slice(0, activeTest.questions_per_student || 3);
+        const assigned = qs.slice(0, test.questions_per_student || 3);
 
         if (assigned.length > 0) {
           await prisma.assignedQuestion.createMany({
@@ -157,7 +152,7 @@ export async function POST(request: NextRequest) {
 
   if (action === 'check_status') {
     const existingSession = await prisma.examSession.findFirst({
-      where: { student_id: studentRecord.id },
+      where: { student_id: studentRecord.id, test_id: test.id },
       orderBy: { start_time: 'desc' }
     });
 

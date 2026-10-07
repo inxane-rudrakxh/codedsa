@@ -11,6 +11,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email, password, and name are required.' }, { status: 400 });
     }
 
+    if (!email.endsWith('@zealeducation.com')) {
+      return NextResponse.json({ error: 'Only emails ending with @zealeducation.com are allowed to sign up.' }, { status: 400 });
+    }
+
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json({ error: 'Email is already in use.' }, { status: 409 });
@@ -25,7 +29,7 @@ export async function POST(request: NextRequest) {
           email,
           password_hash: hashed,
           full_name,
-          role: 'TEACHER',
+          role: 'ADMIN',
           status: 'ACTIVE',
         }
       });
