@@ -25,21 +25,34 @@ export default function SignupPage() {
     setError('');
 
     try {
+      const { auth } = await import('@/lib/firebase');
+      const { createUserWithEmailAndPassword, sendEmailVerification } = await import('firebase/auth');
+
+      // 1. Create user in Firebase
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+      
+      // 2. Send Verification Email
+      await sendEmailVerification(userCredential.user);
+
+      // 3. Get Firebase Token
+      const firebaseToken = await userCredential.user.getIdToken();
+
+      // 4. Send to our backend to create MongoDB record
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, firebaseToken }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Signup failed');
+      if (!res.ok) throw new Error(data.error || 'Signup failed on server');
 
-      localStorage.setItem('admin_token', data.token);
-      localStorage.setItem('admin_user', JSON.stringify(data.user));
-      
-      router.push('/admin');
+      setError('Successfully registered! Please check your email inbox to verify your account before logging in.');
+      // Keep loading true so they can't click again while reading the message
+      setTimeout(() => {
+        router.push('/admin/login');
+      }, 5000);
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -133,12 +146,14 @@ export default function SignupPage() {
                 fontFamily: 'Söhne Mono, ui-monospace, monospace',
                 fontSize: '14px',
                 transition: 'all 0.2s ease',
-                outline: 'none'
+                outline: 'none',
+                marginBottom: '16px'
               }}
               onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
               onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
             />
           </div>
+
           <div>
             <label className="text-label" style={{ display: 'block', marginBottom: '8px' }}>Password *</label>
             <input

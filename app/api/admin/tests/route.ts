@@ -86,11 +86,23 @@ export async function POST(request: NextRequest) {
         questions_per_student: parseInt(questions_per_student) || 3,
         target_division: target_division || null,
         allowed_languages: allowed_languages || ['c', 'cpp', 'python', 'java'],
-        status: 'DRAFT',
+        status: 'PUBLISHED',
         start_time: start_time ? new Date(start_time) : null,
-        end_time: end_time ? new Date(end_time) : null,
       }
     });
+
+    // Auto-assign the 9 seeded questions to this new test
+    const allQs = await prisma.question.findMany();
+    for (let i = 0; i < allQs.length; i++) {
+      await prisma.testQuestion.create({
+        data: {
+          test_id: test.id,
+          question_id: allQs[i].id,
+          order_index: i
+        }
+      });
+    }
+
     return NextResponse.json({ success: true, test });
   }
 

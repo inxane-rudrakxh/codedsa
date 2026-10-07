@@ -162,37 +162,21 @@ export default function CreateTestWizard() {
           </div>
         )}
 
-        {/* STEP 2: QUESTIONS */}
         {step === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {formData.questionMode === 'menu' && (
               <>
                 <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>Add Questions</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <button disabled style={{ padding: '24px', background: 'var(--surface-2)', border: '1px dashed var(--border)', borderRadius: '8px', textAlign: 'center', cursor: 'not-allowed', opacity: 0.7 }}>
-                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>+</div>
-                    <div style={{ fontWeight: 600, fontSize: '14px' }}>CREATE QUESTION</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Manually add a coding problem</div>
-                  </button>
-                  <button onClick={() => handleChange('questionMode', 'ai')} style={{ padding: '24px', background: 'var(--surface-1)', border: '1px solid var(--accent)', borderRadius: '8px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(204, 120, 92, 0.1)' }}>
-                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>✨</div>
-                    <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--accent)' }}>GENERATE WITH AI</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Let AI create questions for you</div>
-                  </button>
-                  <button disabled style={{ padding: '24px', background: 'var(--surface-2)', border: '1px dashed var(--border)', borderRadius: '8px', textAlign: 'center', cursor: 'not-allowed', opacity: 0.7 }}>
-                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>📄</div>
-                    <div style={{ fontWeight: 600, fontSize: '14px' }}>IMPORT FROM PDF</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Extract from question paper</div>
-                  </button>
-                  <button disabled style={{ padding: '24px', background: 'var(--surface-2)', border: '1px dashed var(--border)', borderRadius: '8px', textAlign: 'center', cursor: 'not-allowed', opacity: 0.7 }}>
-                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>📚</div>
-                    <div style={{ fontWeight: 600, fontSize: '14px' }}>QUESTION BANK</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Select from existing</div>
-                  </button>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+                  <div style={{ padding: '24px', background: 'var(--success-dim)', border: '1px solid var(--success)', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>❖</div>
+                    <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--success)' }}>9 QUESTIONS AUTOMATICALLY SELECTED</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginTop: '8px' }}>The 9 pre-seeded coding problems have been automatically attached to this assessment. <br/>When students start the test, they will receive 3 random questions out of these 9.</div>
+                  </div>
                 </div>
-                <div style={{ textAlign: 'center', marginTop: '16px' }}>
-                  <button onClick={() => setStep(3)} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '13px', cursor: 'pointer', color: 'var(--text-secondary)' }}>
-                    Skip for now
+                <div style={{ textAlign: 'center', marginTop: '24px' }}>
+                  <button onClick={() => setStep(3)} style={{ padding: '12px 24px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                    Continue to Configuration →
                   </button>
                 </div>
               </>
@@ -202,7 +186,7 @@ export default function CreateTestWizard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', background: 'var(--surface-2)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h2 style={{ fontSize: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>✨</span> GENERATE WITH AI
+                    <span>✦</span> GENERATE WITH AI
                   </h2>
                   <button onClick={() => handleChange('questionMode', 'menu')} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
                     Cancel
@@ -254,7 +238,7 @@ export default function CreateTestWizard() {
                     alert('AI Generation initiated. (Backend generation will be connected in next phase)');
                     setStep(3);
                   }} style={{ padding: '12px 24px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 8px rgba(204, 120, 92, 0.3)' }}>
-                    <span>✨</span> GENERATE QUESTIONS
+                    <span>✦</span> GENERATE QUESTIONS
                   </button>
                 </div>
               </div>

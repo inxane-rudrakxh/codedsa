@@ -271,6 +271,7 @@ export default function WorkspacePage() {
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
         reportIntegrity('fullscreen_exit');
+        requestFullscreen(); // Force back to fullscreen
       }
     };
 
@@ -282,6 +283,12 @@ export default function WorkspacePage() {
 
     const handleBlur = () => {
       reportIntegrity('window_blur');
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
     };
 
     const handleContextMenu = (e: MouseEvent) => {
@@ -316,6 +323,7 @@ export default function WorkspacePage() {
     document.addEventListener('copy', handleCopyPaste);
     document.addEventListener('paste', handleCopyPaste);
     document.addEventListener('cut', handleCopyPaste);
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       document.removeEventListener('click', firstClick);
@@ -327,6 +335,7 @@ export default function WorkspacePage() {
       document.removeEventListener('copy', handleCopyPaste);
       document.removeEventListener('paste', handleCopyPaste);
       document.removeEventListener('cut', handleCopyPaste);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [sessionData]);
 
@@ -1059,6 +1068,13 @@ function ConsolePanel({
       const socket = io(`http://${host}:4000`);
       socketRef.current = socket;
 
+      socket.on('connect_error', (err) => {
+        term.writeln(`\\r\\n\\x1b[31m[Connection Error: ${err.message}]\\x1b[0m`);
+        term.writeln('\\x1b[90mMake sure the PTY execution server is running on port 4000.\\x1b[0m\\r\\n');
+        setRunning(false);
+        socket.disconnect();
+      });
+
       socket.on('connect', () => {
         socket.emit('execute', { code, language });
       });
@@ -1084,7 +1100,7 @@ function ConsolePanel({
         socketRef.current = null;
       }
     };
-  }, [runTrigger]); // Run ONLY when runTrigger changes
+  }, [runTrigger]);
 
   return (
     <div style={{

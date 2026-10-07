@@ -25,8 +25,10 @@ async function main() {
   const teacher_id = teacher ? teacher.id : null;
 
   // 2. Create Test
+  const unique_id = Math.random().toString(36).substring(2, 8).toUpperCase();
   const test = await prisma.test.create({
     data: {
+      unique_id: unique_id,
       title: 'Unit II – DSA 30 Marks Online Coding Test',
       description: 'The test consists of 30 marks. Any 3 random programs will appear on the screen. Each successful code execution carries 10 marks.',
       subject_id: subject.id,

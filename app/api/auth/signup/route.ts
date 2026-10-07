@@ -5,17 +5,30 @@ import { hashPassword, createAuthToken } from '@/lib/auth';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, full_name, department, subject } = body;
+    const { email, password, full_name, department, subject, firebaseToken } = body;
 
-    if (!email || !password || !full_name) {
-      return NextResponse.json({ error: 'Email, password, and name are required.' }, { status: 400 });
+    if (!email || !password || !full_name || !firebaseToken) {
+      return NextResponse.json({ error: 'Email, password, name, and valid token are required.' }, { status: 400 });
     }
 
     if (!email.endsWith('@zealeducation.com')) {
       return NextResponse.json({ error: 'Only emails ending with @zealeducation.com are allowed to sign up.' }, { status: 400 });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    // Verify Firebase token
+    try {
+      const { adminAuth } = await import('@/lib/firebase-admin');
+      const decodedToken = await adminAuth.verifyIdToken(firebaseToken);
+      if (decodedToken.email !== email) {
+        return NextResponse.json({ error: 'Token email mismatch.' }, { status: 403 });
+      }
+    } catch (err) {
+      return NextResponse.json({ error: 'Invalid Firebase authentication.' }, { status: 401 });
+    }
+
+    const existingUser = await prisma.user.findFirst({
+      where: { email }
+    });
     if (existingUser) {
       return NextResponse.json({ error: 'Email is already in use.' }, { status: 409 });
     }

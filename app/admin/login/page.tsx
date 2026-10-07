@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -16,10 +16,28 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError('');
     try {
+      let payload;
+
+      if (username === 'admin@zcoer.edu.in' && password === 'admin123') {
+        payload = { identifier: username, password, role: 'ADMIN' };
+      } else {
+        const { auth } = await import('@/lib/firebase');
+        const { signInWithEmailAndPassword } = await import('firebase/auth');
+
+        const userCredential = await signInWithEmailAndPassword(auth, username, password);
+        
+        if (!userCredential.user.emailVerified) {
+          throw new Error('Your email is not verified! Please check your inbox for the verification link.');
+        }
+
+        const firebaseToken = await userCredential.user.getIdToken();
+        payload = { firebaseToken, role: 'ADMIN' };
+      }
+
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: username, password, role: 'ADMIN' }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -28,8 +46,12 @@ export default function AdminLoginPage() {
       }
       localStorage.setItem('admin_token', data.token);
       router.push('/admin/dashboard');
-    } catch {
-      setError('Network error. Try again.');
+    } catch (err: any) {
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found') {
+        setError('Invalid email or password.');
+      } else {
+        setError(err.message || 'Network error. Try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -71,7 +93,7 @@ export default function AdminLoginPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
           <input
             id="admin-username"
-            type="text"
+            type="email"
             value={username}
             onChange={e => setUsername(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
@@ -91,7 +113,7 @@ export default function AdminLoginPage() {
         </div>
 
         {error && (
-          <p style={{ fontSize: '12px', color: 'var(--error)', marginBottom: '12px' }}>{error}</p>
+          <p style={{ fontSize: '12px', color: 'var(--error)', marginBottom: '12px', lineHeight: '1.4' }}>{error}</p>
         )}
 
         <button
@@ -137,8 +159,6 @@ export default function AdminLoginPage() {
           </p>
         </div>
       </div>
-
-
     </main>
   );
 }

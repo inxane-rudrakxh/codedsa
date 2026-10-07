@@ -52,14 +52,20 @@ io.on('connection', (socket) => {
 
       socket.emit('output', '\x1b[32mSuccessfully compiled. Running...\x1b[0m\r\n\r\n');
 
-      // Run with PTY
-      ptyProcess = pty.spawn(outFile, [], {
-        name: 'xterm-color',
-        cols: 80,
-        rows: 24,
-        cwd: workDir,
-        env: process.env
-      });
+      try {
+        // Run with PTY
+        ptyProcess = pty.spawn(outFile, [], {
+          name: 'xterm-color',
+          cols: 80,
+          rows: 24,
+          cwd: workDir,
+          env: process.env
+        });
+      } catch (spawnError) {
+        socket.emit('output', `\\r\\n\\x1b[31m[Execution Error: Could not spawn process: ${spawnError.message}]\\x1b[0m\\r\\n`);
+        socket.emit('finished');
+        return;
+      }
 
       let finished = false;
 
