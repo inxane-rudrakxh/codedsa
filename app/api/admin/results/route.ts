@@ -132,7 +132,9 @@ export async function POST(request: NextRequest) {
           language_id: draft?.language_id || 1,
           source_code: draft?.source_code || '',
           status: 'MANUALLY_GRADED',
-          marks_awarded: parseFloat(marks_awarded)
+          marks_awarded: parseFloat(marks_awarded),
+          total_test_cases: 0,
+          passed_test_cases: 0
         }
       });
     } else {
