@@ -35,7 +35,8 @@ export async function GET(request: NextRequest) {
       where: { test_id },
       include: {
         assignedQuestions: { include: { question: true }, orderBy: { order_index: 'asc' } },
-        submissions: { orderBy: { created_at: 'desc' } }
+        submissions: { orderBy: { created_at: 'desc' } },
+        codeDrafts: true
       }
     });
 
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
           // Get the latest submission for this question
           const subs = session.submissions.filter(s => s.question_id === aq.question_id);
           const sub = subs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+          const draft = session.codeDrafts?.find((d: any) => d.question_id === aq.question_id);
           const marks = sub?.marks_awarded ?? null;
           if (marks !== null) total_score += marks;
           questionsData.push({
@@ -56,12 +58,13 @@ export async function GET(request: NextRequest) {
             question_title: aq.question.title,
             order_index: aq.order_index,
             submission_id: sub?.id || null,
-            source_code: sub?.source_code || null,
-            status: sub?.status || null,
+            source_code: sub?.source_code || draft?.source_code || null,
+            status: sub?.status || (draft ? 'DRAFT' : null),
             passed_test_cases: sub?.passed_test_cases ?? null,
             total_test_cases: sub?.total_test_cases ?? null,
             marks_awarded: marks,
             max_marks: aq.question.marks,
+            ai_feedback: sub?.error_message || null,
           });
         }
       }
@@ -107,14 +110,35 @@ export async function POST(request: NextRequest) {
   const { action } = body;
 
   if (action === 'update_marks') {
-    const { submission_id, marks_awarded } = body;
-    if (!submission_id || marks_awarded === undefined) {
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+    const { submission_id, session_id, question_id, marks_awarded } = body;
+    if (marks_awarded === undefined) {
+      return NextResponse.json({ error: 'Missing marks_awarded' }, { status: 400 });
     }
-    await prisma.submission.update({
-      where: { id: submission_id },
-      data: { marks_awarded: parseFloat(marks_awarded) }
-    });
+    
+    if (submission_id) {
+      await prisma.submission.update({
+        where: { id: submission_id },
+        data: { marks_awarded: parseFloat(marks_awarded) }
+      });
+    } else if (session_id && question_id) {
+      // Find draft
+      const draft = await prisma.codeDraft.findUnique({
+        where: { session_id_question_id: { session_id, question_id } }
+      });
+      await prisma.submission.create({
+        data: {
+          session_id,
+          question_id,
+          language_id: draft?.language_id || 1,
+          source_code: draft?.source_code || '',
+          status: 'MANUALLY_GRADED',
+          marks_awarded: parseFloat(marks_awarded)
+        }
+      });
+    } else {
+      return NextResponse.json({ error: 'Missing identifiers' }, { status: 400 });
+    }
+    
     return NextResponse.json({ success: true });
   }
 

@@ -22,6 +22,7 @@ interface QuestionResult {
   total_test_cases: number | null;
   marks_awarded: number | null;
   max_marks: number;
+  ai_feedback: string | null;
 }
 
 interface ResultRow {
@@ -51,7 +52,7 @@ export default function ResultsPage() {
   const [divFilter, setDivFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedCode, setSelectedCode] = useState<{
-    name: string; roll: string; q: QuestionResult; editMarks: number;
+    name: string; roll: string; q: QuestionResult; editMarks: number; session_id: string;
   } | null>(null);
   const [reportData, setReportData] = useState<any[] | null>(null);
   const [sessionToReset, setSessionToReset] = useState<string | null>(null);
@@ -86,11 +87,16 @@ export default function ResultsPage() {
 
   const handleUpdateMarks = async () => {
     if (!selectedCode) return;
-    if (!selectedCode.q.submission_id) return;
     await fetch('/api/admin/results', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'update_marks', submission_id: selectedCode.q.submission_id, marks_awarded: selectedCode.editMarks }),
+      body: JSON.stringify({ 
+        action: 'update_marks', 
+        submission_id: selectedCode.q.submission_id, 
+        session_id: selectedCode.session_id,
+        question_id: selectedCode.q.question_id,
+        marks_awarded: selectedCode.editMarks 
+      }),
     });
     setSelectedCode(null);
     loadResults(selectedTestId);
@@ -267,12 +273,12 @@ export default function ResultsPage() {
                       <td style={tdStyle}><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.name}</span></td>
                       <td style={tdStyle}><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.division}</span></td>
                       {qHeaders.map((_, qi) => {
-                        const q = r.questions.find(q => q.order_index === qi);
+                        const q = r.questions.find(q => q.order_index === qi + 1);
                         return (
                           <td key={qi} style={tdStyle}>
-                            {q && q.submission_id ? (
+                            {q && (q.submission_id || q.status === 'DRAFT') ? (
                               <button
-                                onClick={() => setSelectedCode({ name: r.name, roll: r.roll_no, q, editMarks: q.marks_awarded ?? 0 })}
+                                onClick={() => setSelectedCode({ name: r.name, roll: r.roll_no, q, editMarks: q.marks_awarded ?? 0, session_id: r.session_id! })}
                                 style={{
                                   background: 'transparent', border: 'none', cursor: 'pointer',
                                   fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px',
@@ -328,9 +334,9 @@ export default function ResultsPage() {
 
       {/* Code Viewer + Marks Editor Modal */}
       {selectedCode && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(4px)', padding: '20px' }}>
-          <div className="animate-fade-up" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', width: '100%', maxWidth: '860px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="modal-overlay">
+          <div className="modal-content animate-fade-up" style={{ maxWidth: '860px' }}>
+            <div className="modal-header">
               <div>
                 <h3 style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 600 }}>
                   {selectedCode.roll} · {selectedCode.name} — Q{selectedCode.q.order_index + 1}: {selectedCode.q.question_title}
@@ -355,31 +361,41 @@ export default function ResultsPage() {
                 <button onClick={() => setSelectedCode(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '22px', cursor: 'pointer' }}>×</button>
               </div>
             </div>
-            <div style={{ padding: '24px', overflow: 'auto', flex: 1, background: 'var(--surface-1)' }}>
-              <pre style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', color: 'var(--text-primary)', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {selectedCode.q.source_code || '// No code submitted'}
-              </pre>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ background: 'var(--surface-1)', padding: '16px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                <p className="text-label" style={{ marginBottom: '8px' }}>Submitted Code</p>
+                <pre style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', color: 'var(--text-primary)', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {selectedCode.q.source_code || '// No code submitted'}
+                </pre>
+              </div>
+              {selectedCode.q.ai_feedback && (
+                <div style={{ background: 'var(--surface-1)', padding: '16px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                  <p className="text-label" style={{ marginBottom: '8px' }}>AI Feedback</p>
+                  <pre style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', color: 'var(--text-primary)', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {selectedCode.q.ai_feedback}
+                  </pre>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
       {sessionToReset && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-          <div style={{
-            background: 'var(--surface-1)', padding: '24px', borderRadius: '8px',
-            width: '400px', border: '1px solid var(--border)'
-          }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>Reset Session?</h3>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: 1.5 }}>
-              Are you sure you want to completely reset this session? All code and marks will be permanently deleted.
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+        <div className="modal-overlay">
+          <div className="modal-content animate-fade-up" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ fontSize: '18px', fontWeight: 600 }}>Reset Session?</h3>
+              <button onClick={() => setSessionToReset(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '22px', cursor: 'pointer' }}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                Are you sure you want to completely reset this session? All code and marks will be permanently deleted.
+              </p>
+            </div>
+            <div className="modal-footer">
               <button 
                 onClick={() => setSessionToReset(null)}
-                style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: '6px', background: 'transparent', cursor: 'pointer', fontSize: '14px' }}
+                style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: '6px', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '14px' }}
               >
                 Cancel
               </button>

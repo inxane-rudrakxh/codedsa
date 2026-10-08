@@ -276,22 +276,21 @@ export default function TestsPage() {
       </div>
 
       {testToDelete && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-          <div style={{
-            background: 'var(--surface-1)', padding: '24px', borderRadius: '8px',
-            width: '400px', border: '1px solid var(--border)'
-          }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>Delete Test?</h3>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: 1.5 }}>
-              Are you sure you want to delete this test? This will permanently delete all associated questions, sessions, and submissions. This action cannot be undone.
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+        <div className="modal-overlay">
+          <div className="modal-content animate-fade-up" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 style={{ fontSize: '18px', fontWeight: 600 }}>Delete Test?</h3>
+              <button onClick={() => setTestToDelete(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '22px', cursor: 'pointer' }}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                Are you sure you want to delete this test? This will permanently delete all associated questions, sessions, and submissions. This action cannot be undone.
+              </p>
+            </div>
+            <div className="modal-footer">
               <button 
                 onClick={() => setTestToDelete(null)}
-                style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: '6px', background: 'transparent', cursor: 'pointer', fontSize: '14px' }}
+                style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: '6px', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '14px' }}
               >
                 Cancel
               </button>

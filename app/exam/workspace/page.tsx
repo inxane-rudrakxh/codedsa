@@ -297,11 +297,15 @@ export default function WorkspacePage() {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+P, Ctrl+S
+      // Prevent F11, F12, Escape, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+P, Ctrl+S, Ctrl+A
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       if (
+        e.key === 'F11' ||
         e.key === 'F12' ||
-        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
-        (e.ctrlKey && (e.key === 'U' || e.key === 'C' || e.key === 'V' || e.key === 'X' || e.key === 'P' || e.key === 'S')) ||
+        e.key === 'Escape' ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'i' || e.key === 'j')) ||
+        (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'C' || e.key === 'c' || e.key === 'V' || e.key === 'v' || e.key === 'X' || e.key === 'x' || e.key === 'P' || e.key === 'p' || e.key === 'S' || e.key === 's' || e.key === 'A' || e.key === 'a')) ||
+        (isMac && e.metaKey && (e.key === 'C' || e.key === 'c' || e.key === 'V' || e.key === 'v' || e.key === 'X' || e.key === 'x' || e.key === 'A' || e.key === 'a' || e.key === 'P' || e.key === 'p' || e.key === 'S' || e.key === 's')) ||
         e.key === 'PrintScreen' ||
         (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5'))
       ) {
@@ -1162,40 +1166,25 @@ function Modal({
   questionTitle: string;
 }) {
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(0,0,0,0.7)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-    }} onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose}>
       <div
-        style={{
-          background: 'var(--surface-1)',
-          border: '1px solid var(--border)',
-          borderRadius: '6px',
-          padding: '28px',
-          width: '380px',
-          maxWidth: '90vw',
-        }}
-        className="animate-fade-up"
+        className="modal-content animate-fade-up"
+        style={{ maxWidth: '380px' }}
         onClick={e => e.stopPropagation()}
       >
-        <h3 style={{
-          fontSize: '16px',
-          fontWeight: 600,
-          color: 'var(--text-primary)',
-          marginBottom: '8px',
-        }}>
-          Submit this answer?
-        </h3>
-        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '24px' }}>
-          You are submitting your solution for <strong style={{ color: 'var(--text-primary)' }}>{questionTitle}</strong>.
-          You will not be able to edit this question after submission.
-        </p>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div className="modal-header">
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+            Submit this answer?
+          </h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '22px', cursor: 'pointer' }}>×</button>
+        </div>
+        <div className="modal-body">
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            You are submitting your solution for <strong style={{ color: 'var(--text-primary)' }}>{questionTitle}</strong>.
+            You will not be able to edit this question after submission.
+          </p>
+        </div>
+        <div className="modal-footer" style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={onClose}
             style={{

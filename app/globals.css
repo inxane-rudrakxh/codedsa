@@ -67,8 +67,14 @@ select {
   appearance: none;
   background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20fill%3D%22%236c6a64%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M7%2010l5%205%205-5z%22%2F%3E%3C%2Fsvg%3E") !important;
   background-repeat: no-repeat !important;
-  background-position: right 8px center !important;
-  padding-right: 28px !important;
+  background-position: right 12px center !important;
+  padding: 10px 32px 10px 14px !important;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
 }
 
 input[type="checkbox"] {
@@ -86,6 +92,56 @@ input:focus, textarea:focus, select:focus {
 
 input, textarea, select {
   transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+/* Modal UI Coordination */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 19, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 24px;
+}
+
+.modal-content {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 24px rgba(20, 20, 19, 0.1);
+  overflow: hidden;
+}
+
+.modal-header {
+  padding: 24px 32px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface-2);
+}
+
+.modal-body {
+  padding: 32px;
+  overflow-y: auto;
+  background: var(--surface-2);
+}
+
+.modal-footer {
+  padding: 24px 32px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: var(--surface-2);
 }
 
 ::placeholder {
