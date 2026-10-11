@@ -1283,6 +1283,7 @@ export default function WorkspacePage() {
                     language={language}
                     getToken={getToken}
                     questionId={currentQuestion?.id}
+                    input={customInput}
                   />
                 </div>
               </div>
@@ -1504,6 +1505,7 @@ function ConsolePanel({
   language,
   getToken,
   questionId,
+  input,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -1514,6 +1516,7 @@ function ConsolePanel({
   language: string;
   getToken?: () => string;
   questionId?: number;
+  input?: string;
 }) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<any>(null);
@@ -1605,7 +1608,7 @@ function ConsolePanel({
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ code, language, question_id: questionId })
+        body: JSON.stringify({ code, language, question_id: questionId, input: input || '' })
       });
       const data = await res.json();
       
@@ -1655,6 +1658,15 @@ function ConsolePanel({
         term.clear();
         setTimeout(() => fitAddonRef.current?.fit(), 30);
         term.focus();
+
+        const isLocal = typeof window !== 'undefined' && 
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '0.0.0.0');
+
+        // On deployed production, immediately use HTTP Execution Engine (no 4000 port delay or mixed content)
+        if (!isLocal) {
+          runViaHttpFallback(term);
+          return;
+        }
 
         let connected = false;
         let fallbackTriggered = false;

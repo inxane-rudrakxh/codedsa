@@ -359,7 +359,7 @@ export async function compileAndRun(
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout for Judge0
+    const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout for fast response
 
     const res = await fetch(`${JUDGE0_URL}/submissions?base64_encoded=true&wait=true`, {
       method: 'POST',
