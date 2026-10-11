@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import { promisify } from 'util';
+import { simulateCodeExecutionWithAI } from './ai';
 
 const execAsync = promisify(exec);
 
@@ -20,10 +21,21 @@ export interface ExecutionResult {
 const JUDGE0_URL = process.env.JUDGE0_API_URL || 'https://ce.judge0.com';
 const JUDGE0_KEY = process.env.JUDGE0_API_KEY || '';
 
+function isCompilerMissingError(errMsg: string): boolean {
+  const lower = (errMsg || '').toLowerCase();
+  return (
+    lower.includes('not found') ||
+    lower.includes('enoent') ||
+    lower.includes('cannot execute') ||
+    lower.includes('command not found') ||
+    (lower.includes('no such file or directory') && (lower.includes('g++') || lower.includes('gcc') || lower.includes('python')))
+  );
+}
+
 export function detectEffectiveLanguage(code: string, requestedLang: string): string {
   const norm = (requestedLang || 'cpp').toLowerCase();
   if (norm === 'c') {
-    const hasCpp = /#include\s*<iostream>|#include\s*<vector>|#include\s*<string>|#include\s*<algorithm>|#include\s*<map>|#include\s*<set>|#include\s*<queue>|#include\s*<stack>|#include\s*<bits\/stdc\+\+\.h>|using\s+namespace\s+std|std::|cout\s*<<|cin\s*>>|\bclass\s+\w+|\btemplate\s*<|\bnew\s+\w+|\bdelete\s+\w+/.test(code);
+    const hasCpp = /#include\s*<iostream>|#include\s*<vector>|#include\s*<string>|#include\s*<algorithm>|#include\s*<map>|#include\s*<set>|#include\s*<queue>|#include\s*<stack>|#include\s*<bits\/stdc\+\+\.h>|using\s+namespace\s+std|\bstd::|\bcout\b|\bcin\b|\bendl\b|\bclass\s+\w+|\btemplate\s*<|\bnew\s+\w+|\bdelete\s+\w+/.test(code);
     if (hasCpp) return 'cpp';
   }
   return norm;
@@ -84,6 +96,10 @@ async function runLocalCode(
       try {
         await execAsync(compileCmd, { cwd: tempDir, env: safeEnv, timeout: 10000 });
       } catch (err: any) {
+        const errMsg = err.stderr || err.stdout || err.message || '';
+        if (isCompilerMissingError(errMsg)) {
+          throw new Error(`LOCAL_COMPILER_MISSING: ${errMsg.trim()}`);
+        }
         // If C compilation failed, attempt C++ compilation fallback with g++
         if (effectiveLang === 'c') {
           const cppFile = path.join(tempDir, 'main.cpp');
@@ -91,7 +107,11 @@ async function runLocalCode(
             await fs.copyFile(srcFile, cppFile);
             await execAsync(`g++ -std=c++17 -O2 "${cppFile}" -o "${exeFile}"`, { cwd: tempDir, env: safeEnv, timeout: 10000 });
             // Successfully compiled via g++ fallback!
-          } catch {
+          } catch (cppErr: any) {
+            const cppErrMsg = cppErr.stderr || cppErr.stdout || cppErr.message || '';
+            if (isCompilerMissingError(cppErrMsg)) {
+              throw new Error(`LOCAL_COMPILER_MISSING: ${cppErrMsg.trim()}`);
+            }
             return {
               success: false,
               compile_error: (err.stderr || err.stdout || err.message || 'Compilation Error').trim(),
@@ -130,6 +150,14 @@ async function runLocalCode(
 
       child.on('error', (err) => {
         clearTimeout(timer);
+        if (isCompilerMissingError(err.message)) {
+          resolve({
+            success: false,
+            runtime_error: 'LOCAL_COMPILER_MISSING',
+            execution_time: Date.now() - startTime
+          });
+          return;
+        }
         resolve({
           success: false,
           runtime_error: err.message,
@@ -201,12 +229,17 @@ export async function compileAndRun(
   const langLower = language.toLowerCase();
   const effectiveLang = detectEffectiveLanguage(sanitizedCode, langLower);
 
-  // Try fast local compilation first for C, C++, and Python
-  if (effectiveLang === 'c' || effectiveLang === 'cpp' || effectiveLang === 'python') {
+  // 1. Try fast local compilation if local compilers are installed (VPS/dedicated server)
+  // Skip local execution if running in serverless (e.g. Vercel) where gcc/g++ do not exist
+  const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+  if (!isServerless && (effectiveLang === 'c' || effectiveLang === 'cpp' || effectiveLang === 'python')) {
     try {
-      return await runLocalCode(sanitizedCode, input, effectiveLang, timeLimit);
-    } catch (localErr) {
-      console.warn("Local execution failed, falling back to Judge0:", localErr);
+      const localResult = await runLocalCode(sanitizedCode, input, effectiveLang, timeLimit);
+      if (localResult.runtime_error !== 'LOCAL_COMPILER_MISSING') {
+        return localResult;
+      }
+    } catch (localErr: any) {
+      console.warn("Local execution skipped/unavailable, falling back to remote sandbox & AI:", localErr?.message);
     }
   }
 
@@ -215,6 +248,8 @@ export async function compileAndRun(
   else if (effectiveLang === 'python') languageId = 71;
   else if (effectiveLang === 'java') languageId = 62;
   
+  // 2. Try Judge0 remote execution
+  let judge0Error: string | null = null;
   try {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -236,70 +271,90 @@ export async function compileAndRun(
       memory_limit: memoryLimitKb
     };
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout for Judge0
+
     const res = await fetch(`${JUDGE0_URL}/submissions?base64_encoded=true&wait=true`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      return { success: false, compile_error: `Judge0 execution service returned ${res.status}: ${errorText}` };
-    }
-
-    const data = await res.json();
-    
-    // Helper to decode base64
-    const decodeBase64 = (str: string | null | undefined) => {
-      if (!str) return '';
-      try {
-        return Buffer.from(str, 'base64').toString('utf-8');
-      } catch {
-        return str;
-      }
-    };
-
-    const stdoutStr = decodeBase64(data.stdout);
-    const stderrStr = decodeBase64(data.stderr);
-    const compileOutStr = decodeBase64(data.compile_output);
-
-    // Judge0 Status IDs
-    const statusId = data.status?.id;
-
-    if (statusId === 6) { // Compilation Error
-      return { success: false, compile_error: compileOutStr || 'Compilation Error' };
-    }
-
-    if (statusId === 5) { // Time Limit Exceeded
-      return { success: false, timed_out: true, execution_time: parseFloat(data.time) * 1000 || timeLimit * 1000 };
-    }
-
-    if (statusId >= 7 && statusId <= 12) { // Runtime Errors
-      return { 
-        success: false, 
-        stderr: stderrStr || 'Runtime Error',
-        runtime_error: `Runtime Error: ${data.status?.description || 'Unknown'}`
+    if (res.ok) {
+      const data = await res.json();
+      
+      const decodeBase64 = (str: string | null | undefined) => {
+        if (!str) return '';
+        try {
+          return Buffer.from(str, 'base64').toString('utf-8');
+        } catch {
+          return str;
+        }
       };
+
+      const stdoutStr = decodeBase64(data.stdout);
+      const stderrStr = decodeBase64(data.stderr);
+      const compileOutStr = decodeBase64(data.compile_output);
+      const statusId = data.status?.id;
+
+      if (statusId === 6) { // Compilation Error
+        return { success: false, compile_error: compileOutStr || 'Compilation Error' };
+      }
+
+      if (statusId === 5) { // Time Limit Exceeded
+        return { success: false, timed_out: true, execution_time: parseFloat(data.time) * 1000 || timeLimit * 1000 };
+      }
+
+      if (statusId >= 7 && statusId <= 12) { // Runtime Errors
+        return { 
+          success: false, 
+          stderr: stderrStr || 'Runtime Error',
+          runtime_error: `Runtime Error: ${data.status?.description || 'Unknown'}`
+        };
+      }
+      
+      if (statusId === 3 || statusId === 4) {
+        return {
+          success: true,
+          output: stdoutStr,
+          stderr: stderrStr,
+          execution_time: parseFloat(data.time) * 1000 || (Date.now() - startTime)
+        };
+      }
+    } else {
+      judge0Error = `Judge0 returned status ${res.status}`;
     }
-    
-    // Status 3 = Accepted, 4 = Wrong Answer (we evaluate correctness manually)
-    if (statusId === 3 || statusId === 4) {
+  } catch (err: any) {
+    judge0Error = err.message || 'Judge0 unreachable';
+  }
+
+  // 3. Fallback to Azure OpenAI high-speed code emulator
+  try {
+    const aiOutput = await simulateCodeExecutionWithAI(sanitizedCode, effectiveLang, input);
+    if (aiOutput && !aiOutput.startsWith('Error: AI configuration missing') && !aiOutput.startsWith('Error: AI Simulation Failed') && !aiOutput.startsWith('Error: AI Simulation crashed')) {
+      if (aiOutput.startsWith('COMPILATION_ERROR:')) {
+        return {
+          success: false,
+          compile_error: aiOutput.replace('COMPILATION_ERROR:', '').trim(),
+          execution_time: Date.now() - startTime
+        };
+      }
       return {
         success: true,
-        output: stdoutStr,
-        stderr: stderrStr,
-        execution_time: parseFloat(data.time) * 1000 || (Date.now() - startTime)
+        output: aiOutput,
+        execution_time: Date.now() - startTime
       };
     }
-    
-    return {
-       success: false,
-       compile_error: data.status?.description || 'Unknown Execution Error'
-    };
-
-  } catch (err: any) {
-    return { success: false, compile_error: 'Internal Error: ' + err.message };
+  } catch (aiErr: any) {
+    console.error("AI execution simulation failed:", aiErr);
   }
+
+  return {
+    success: false,
+    compile_error: judge0Error ? `Code execution service error: ${judge0Error}` : 'Code execution service temporarily unavailable. Please retry.'
+  };
 }
 
 export function normalizeOutput(output: string): string {

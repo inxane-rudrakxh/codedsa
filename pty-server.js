@@ -99,7 +99,7 @@ io.on('connection', (socket) => {
     let lang = (language || 'cpp').toLowerCase();
 
     // Auto-detect C++ features if language was sent as C
-    const hasCpp = /#include\s*<iostream>|#include\s*<vector>|#include\s*<string>|#include\s*<algorithm>|#include\s*<map>|#include\s*<set>|#include\s*<queue>|#include\s*<stack>|#include\s*<bits\/stdc\+\+\.h>|using\s+namespace\s+std|std::|cout\s*<<|cin\s*>>|\bclass\s+\w+|\btemplate\s*<|\bnew\s+\w+|\bdelete\s+\w+/.test(code);
+    const hasCpp = /#include\s*<iostream>|#include\s*<vector>|#include\s*<string>|#include\s*<algorithm>|#include\s*<map>|#include\s*<set>|#include\s*<queue>|#include\s*<stack>|#include\s*<bits\/stdc\+\+\.h>|using\s+namespace\s+std|\bstd::|\bcout\b|\bcin\b|\bendl\b|\bclass\s+\w+|\btemplate\s*<|\bnew\s+\w+|\bdelete\s+\w+/.test(code);
     if (lang === 'c' && hasCpp) {
       lang = 'cpp';
     }
