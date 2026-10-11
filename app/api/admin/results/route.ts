@@ -46,7 +46,8 @@ export async function GET(request: NextRequest) {
       let total_score = 0;
 
       if (session) {
-        for (const aq of session.assignedQuestions) {
+        for (let qi = 0; qi < session.assignedQuestions.length; qi++) {
+          const aq = session.assignedQuestions[qi];
           // Get the latest submission for this question
           const subs = session.submissions.filter(s => s.question_id === aq.question_id);
           const sub = subs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
           questionsData.push({
             question_id: aq.question_id,
             question_title: aq.question.title,
-            order_index: aq.order_index,
+            order_index: qi + 1,
             submission_id: sub?.id || null,
             source_code: sub?.source_code || draft?.source_code || null,
             status: sub?.status || (draft ? 'DRAFT' : null),
@@ -116,11 +117,27 @@ export async function POST(request: NextRequest) {
     }
     
     if (submission_id) {
+      const submission = await prisma.submission.findUnique({
+        where: { id: submission_id },
+        include: { session: { include: { test: true } } }
+      });
+      if (!submission || (payload.role !== 'ADMIN' && submission.session.test.teacher_id !== payload.user_id)) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      }
+
       await prisma.submission.update({
         where: { id: submission_id },
         data: { marks_awarded: parseFloat(marks_awarded) }
       });
     } else if (session_id && question_id) {
+      const session = await prisma.examSession.findUnique({
+        where: { id: session_id },
+        include: { test: true }
+      });
+      if (!session || (payload.role !== 'ADMIN' && session.test.teacher_id !== payload.user_id)) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      }
+
       // Find draft
       const draft = await prisma.codeDraft.findUnique({
         where: { session_id_question_id: { session_id, question_id } }
@@ -149,7 +166,7 @@ export async function POST(request: NextRequest) {
     const test = await prisma.test.findUnique({ where: { id: test_id } });
     if (!test) return NextResponse.json({ error: 'Test not found' }, { status: 404 });
 
-    if (test.teacher_id !== payload.user_id) {
+    if (payload.role !== 'ADMIN' && test.teacher_id !== payload.user_id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
@@ -176,12 +193,13 @@ export async function POST(request: NextRequest) {
       const qScores: Record<string, number | null> = {};
 
       if (session) {
-        for (const aq of session.assignedQuestions) {
+        for (let qi = 0; qi < session.assignedQuestions.length; qi++) {
+          const aq = session.assignedQuestions[qi];
           const subs = session.submissions.filter(s => s.question_id === aq.question_id);
           const sub = subs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
           const marks = sub?.marks_awarded ?? null;
           if (marks !== null) total_score += marks;
-          qScores[`Q${aq.order_index + 1}`] = marks;
+          qScores[`Q${qi + 1}`] = marks;
         }
       }
 
@@ -219,7 +237,7 @@ export async function POST(request: NextRequest) {
       if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
 
       // Verify ownership
-      if (session.test.teacher_id !== payload.user_id) {
+      if (payload.role !== 'ADMIN' && session.test.teacher_id !== payload.user_id) {
         return NextResponse.json({ error: 'Access denied. You can only reset sessions for tests you created.' }, { status: 403 });
       }
 

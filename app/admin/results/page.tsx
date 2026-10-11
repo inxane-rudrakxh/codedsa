@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { generateCollegeResultsPDF } from '@/lib/pdfGenerator';
 
 interface TestSummary {
   id: string;
@@ -135,10 +136,72 @@ export default function ResultsPage() {
     await loadResults(selectedTestId);
   };
 
+  const exportPDF = () => {
+    const listToExport = filtered.length > 0 ? filtered : results;
+    if (listToExport.length === 0) {
+      alert('No results available to export. Please select a test with results.');
+      return;
+    }
+
+    const pdfResults = listToExport.map(r => ({
+      roll_no: r.roll_no,
+      name: r.name,
+      division: r.division,
+      branch: r.branch,
+      is_submitted: r.is_submitted,
+      total_score: r.total_score,
+      max_total: r.max_total || selectedTest?.total_marks || 30,
+      questions: r.questions.map(q => ({
+        title: q.question_title,
+        marks_awarded: q.marks_awarded,
+        max_marks: q.max_marks,
+        status: q.status || undefined,
+      })),
+    }));
+
+    generateCollegeResultsPDF(
+      {
+        title: selectedTest?.title || 'Assessment Results',
+        subject_name: selectedTest?.subject_name || selectedTest?.subject || 'Data Structures & Algorithms',
+        target_division: selectedTest?.target_division || (divFilter !== 'all' ? divFilter : 'All Divisions'),
+        duration_minutes: selectedTest?.duration_minutes || 60,
+        total_marks: selectedTest?.total_marks || 30,
+      },
+      pdfResults
+    );
+  };
+
   const exportCSV = () => {
-    if (!reportData) return;
-    const keys = Object.keys(reportData[0] || {});
-    const rows = [keys.join(','), ...reportData.map(r => keys.map(k => `"${r[k] ?? ''}"`).join(','))];
+    if (reportData && reportData.length > 0) {
+      const keys = Object.keys(reportData[0] || {});
+      const rows = [keys.join(','), ...reportData.map(r => keys.map(k => `"${r[k] ?? ''}"`).join(','))];
+      const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedTest?.title || 'results'}_marks.csv`;
+      a.click();
+      return;
+    }
+
+    const listToExport = filtered.length > 0 ? filtered : results;
+    if (listToExport.length === 0) return;
+
+    const headers = ['Roll No', 'Name', 'Division', 'Branch', 'Status', 'Total Score', 'Max Marks', 'Violations'];
+    const rows = [
+      headers.join(','),
+      ...listToExport.map(r => [
+        `"${r.roll_no}"`,
+        `"${r.name}"`,
+        `"${r.division}"`,
+        `"${r.branch}"`,
+        `"${r.is_submitted ? 'SUBMITTED' : 'ABSENT'}"`,
+        r.total_score,
+        r.max_total || selectedTest?.total_marks || 30,
+        r.integrity_warnings,
+      ].join(','))
+    ];
+
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -167,12 +230,12 @@ export default function ResultsPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: '32px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <div style={{ marginBottom: '32px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <p className="text-label" style={{ marginBottom: '8px' }}>Evaluation</p>
           <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Results</h1>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           {selectedTestId && !selectedTest?.marks_published && (
             <button onClick={handlePublishMarks} style={{ ...outlineBtn, color: 'var(--success)', borderColor: 'var(--success)' }}>
               Publish Marks to Students
@@ -180,11 +243,29 @@ export default function ResultsPage() {
           )}
           {selectedTestId && (
             <button onClick={handleGenerateReport} disabled={generating} style={outlineBtn}>
-              {generating ? 'Generating...' : 'Generate Report'}
+              {generating ? 'Generating...' : 'Refresh Report'}
             </button>
           )}
-          {reportData && (
-            <button onClick={exportCSV} style={primaryBtn}>Download CSV</button>
+          {selectedTestId && results.length > 0 && (
+            <button
+              onClick={exportPDF}
+              style={{
+                ...primaryBtn,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'var(--accent, #cc785c)',
+                boxShadow: '0 2px 8px rgba(204, 120, 92, 0.25)',
+              }}
+              title="Generate printable official college result PDF for WhatsApp"
+            >
+              <span>✦</span> Export PDF (WhatsApp Report)
+            </button>
+          )}
+          {selectedTestId && results.length > 0 && (
+            <button onClick={exportCSV} style={outlineBtn}>
+              Export CSV
+            </button>
           )}
         </div>
       </div>
@@ -370,8 +451,10 @@ export default function ResultsPage() {
               </div>
               {selectedCode.q.ai_feedback && (
                 <div style={{ background: 'var(--surface-1)', padding: '16px', borderRadius: '6px', border: '1px solid var(--border)' }}>
-                  <p className="text-label" style={{ marginBottom: '8px' }}>AI Feedback</p>
-                  <pre style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', color: 'var(--text-primary)', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  <p className="text-label" style={{ marginBottom: '8px', color: selectedCode.q.status === 'COMPILATION_ERROR' ? 'var(--error)' : 'var(--text-secondary)' }}>
+                    {selectedCode.q.status === 'COMPILATION_ERROR' ? 'Compiler Error' : 'AI Feedback'}
+                  </p>
+                  <pre style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', color: selectedCode.q.status === 'COMPILATION_ERROR' ? 'var(--error)' : 'var(--text-primary)', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {selectedCode.q.ai_feedback}
                   </pre>
                 </div>

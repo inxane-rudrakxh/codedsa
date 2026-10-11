@@ -51,10 +51,19 @@ export default function CreateTestWizard() {
   const handleCreate = async () => {
     setLoading(true);
     const token = localStorage.getItem('admin_token');
+    
+    let payload = { action: 'create_test', ...formData, instructions: formData.description };
+    if (payload.start_time) {
+      payload.start_time = new Date(payload.start_time).toISOString();
+    }
+    if (payload.end_time) {
+      payload.end_time = new Date(payload.end_time).toISOString();
+    }
+    
     const res = await fetch('/api/admin/tests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action: 'create_test', ...formData, instructions: formData.description }),
+      body: JSON.stringify(payload),
     });
 
     if (res.ok) {
@@ -116,13 +125,13 @@ export default function CreateTestWizard() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>Test Name</label>
-              <input value={formData.title} onChange={e => handleChange('title', e.target.value)} style={inputStyle} placeholder="e.g. Data Structures — Unit II" />
+              <input value={formData.title} onChange={e => handleChange('title', e.target.value)} style={inputStyle} />
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>Subject</label>
-                <input value={formData.subject_name} onChange={e => handleChange('subject_name', e.target.value)} style={inputStyle} placeholder="e.g. Data Structures" />
+                <input value={formData.subject_name} onChange={e => handleChange('subject_name', e.target.value)} style={inputStyle} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>Division Eligibility</label>
@@ -196,7 +205,7 @@ export default function CreateTestWizard() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>Topic</label>
-                    <input style={inputStyle} placeholder="e.g. Binary Search" />
+                    <input style={inputStyle} />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>Difficulty</label>

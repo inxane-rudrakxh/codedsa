@@ -97,11 +97,11 @@ export default function TeachersPage() {
           <p className="text-label" style={{ marginBottom: '16px' }}>Add New Teacher</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
             {[
-              { label: 'Full Name', key: 'full_name', placeholder: 'Prof. Kiran K.' },
-              { label: 'Email Address', key: 'email', placeholder: 'faculty@college.edu' },
-              { label: 'Password', key: 'password', placeholder: 'Minimum 6 characters', type: 'password' },
-              { label: 'Department', key: 'department', placeholder: 'e.g. Computer Engineering' },
-              { label: 'Subject', key: 'subject', placeholder: 'e.g. Data Structures' },
+              { label: 'Full Name', key: 'full_name', placeholder: '' },
+              { label: 'Email Address', key: 'email', placeholder: '' },
+              { label: 'Password', key: 'password', placeholder: '', type: 'password' },
+              { label: 'Department', key: 'department', placeholder: '' },
+              { label: 'Subject', key: 'subject', placeholder: '' },
             ].map(({ label, key, placeholder, type }) => (
               <div key={key}>
                 <p className="text-label" style={{ marginBottom: '4px' }}>{label}</p>

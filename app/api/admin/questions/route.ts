@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
   if (action === 'delete') {
     const { id } = body;
     const q = await prisma.question.findUnique({ where: { id } });
-    if (!q || q.teacher_id !== payload.user_id) {
+    if (!q || (payload.role !== 'ADMIN' && q.teacher_id !== payload.user_id)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     await prisma.testCase.deleteMany({ where: { question_id: id } });
@@ -193,12 +193,16 @@ export async function POST(request: NextRequest) {
 
   if (action === 'add_test_case') {
     const { question_id, input, expected_output, is_hidden, marks } = body;
+    const q = await prisma.question.findUnique({ where: { id: question_id } });
+    if (!q || (payload.role !== 'ADMIN' && q.teacher_id !== payload.user_id)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
     const count = await prisma.testCase.count({ where: { question_id } });
     await prisma.testCase.create({
       data: {
         question_id,
-        input,
-        expected_output,
+        input: input ?? '',
+        expected_output: expected_output ?? '',
         is_hidden: is_hidden || false,
         marks: parseInt(marks) || 1,
         order_index: count,
@@ -208,6 +212,13 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === 'delete_test_case') {
+    const tc = await prisma.testCase.findUnique({
+      where: { id: body.id },
+      include: { question: true }
+    });
+    if (!tc || (payload.role !== 'ADMIN' && tc.question.teacher_id !== payload.user_id)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
     await prisma.testCase.delete({ where: { id: body.id } });
     return NextResponse.json({ success: true });
   }

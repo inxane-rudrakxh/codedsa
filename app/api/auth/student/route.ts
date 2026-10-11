@@ -108,18 +108,70 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      // Assign questions
+      // Assign questions deterministically without duplicates
       const testQuestions = await prisma.testQuestion.findMany({
-        where: { test_id: test.id }
+        where: { test_id: test.id },
+        orderBy: { order_index: 'asc' }
       });
-      
-      if (testQuestions.length > 0) {
-        let qs = [...testQuestions];
-        for (let i = qs.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [qs[i], qs[j]] = [qs[j], qs[i]];
+
+      // Guarantee unique questions only
+      const uniqueTestQuestions: typeof testQuestions = [];
+      const seenQIds = new Set<string>();
+      for (const tq of testQuestions) {
+        if (!seenQIds.has(tq.question_id)) {
+          seenQIds.add(tq.question_id);
+          uniqueTestQuestions.push(tq);
         }
-        const assigned = qs.slice(0, test.questions_per_student || 3);
+      }
+      
+      const totalAvailable = uniqueTestQuestions.length;
+      const k = Math.min(test.questions_per_student || 3, totalAvailable);
+
+      if (totalAvailable > 0 && k > 0) {
+        // Calculate student index deterministically by roll number in division
+        let studentOrder = 0;
+        try {
+          const lowerRollCount = await prisma.student.count({
+            where: {
+              roll_number: { lt: studentRecord.roll_number },
+              ...(studentRecord.division_id ? { division_id: studentRecord.division_id } : {})
+            }
+          });
+          studentOrder = lowerRollCount;
+        } catch {
+          const existingSessionCount = await prisma.examSession.count({
+            where: { test_id: test.id, id: { not: sessionId } }
+          });
+          studentOrder = existingSessionCount;
+        }
+
+        // Chunk questions:
+        // Student 1 (index 0): 0, 1, 2
+        // Student 2 (index 1): 3, 4, 5
+        // Student 3 (index 2): 6, 7, 8
+        // Student 4 (index 3): 0, 1, 2 ...
+        const startIdx = (studentOrder * k) % totalAvailable;
+        const assigned: typeof uniqueTestQuestions = [];
+        const assignedIds = new Set<string>();
+
+        for (let i = 0; i < k; i++) {
+          const q = uniqueTestQuestions[(startIdx + i) % totalAvailable];
+          if (!assignedIds.has(q.question_id)) {
+            assignedIds.add(q.question_id);
+            assigned.push(q);
+          }
+        }
+
+        // Fallback: if somehow less than k, fill with remaining unique questions
+        if (assigned.length < k) {
+          for (const q of uniqueTestQuestions) {
+            if (!assignedIds.has(q.question_id)) {
+              assignedIds.add(q.question_id);
+              assigned.push(q);
+              if (assigned.length === k) break;
+            }
+          }
+        }
 
         if (assigned.length > 0) {
           await prisma.assignedQuestion.createMany({

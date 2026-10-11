@@ -55,8 +55,8 @@ export async function POST(request: NextRequest) {
     const password_hash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
-        email,
-        full_name,
+        email: email.trim().toLowerCase(),
+        full_name: full_name.trim(),
         role: 'TEACHER',
         status: 'ACTIVE',
         password_hash,
@@ -68,6 +68,24 @@ export async function POST(request: NextRequest) {
         }
       }
     });
+
+    // Sync to Firebase Admin with emailVerified = true
+    try {
+      const { adminAuth } = await import('@/lib/firebase-admin');
+      try {
+        const existingFb = await adminAuth.getUserByEmail(email.trim().toLowerCase());
+        await adminAuth.updateUser(existingFb.uid, { password, emailVerified: true });
+      } catch {
+        await adminAuth.createUser({
+          email: email.trim().toLowerCase(),
+          password,
+          displayName: full_name.trim(),
+          emailVerified: true,
+        });
+      }
+    } catch (fbErr: any) {
+      console.warn('Firebase sync notice when adding teacher:', fbErr?.message);
+    }
 
     return NextResponse.json({ success: true, id: user.id });
   }
@@ -90,7 +108,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
     }
     const password_hash = await bcrypt.hash(new_password, 10);
-    await prisma.user.update({ where: { id }, data: { password_hash } });
+    const user = await prisma.user.update({ where: { id }, data: { password_hash } });
+
+    // Sync new password to Firebase Admin
+    if (user.email) {
+      try {
+        const { adminAuth } = await import('@/lib/firebase-admin');
+        const fbUser = await adminAuth.getUserByEmail(user.email);
+        await adminAuth.updateUser(fbUser.uid, { password: new_password });
+      } catch (fbErr: any) {
+        console.warn('Firebase reset password sync notice:', fbErr?.message);
+      }
+    }
+
     return NextResponse.json({ success: true });
   }
 

@@ -167,7 +167,6 @@ export default function QuestionsPage() {
               onChange={e => setAiPrompt(e.target.value)} 
               rows={3} 
               style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }} 
-              placeholder="e.g. Generate a hard Dynamic Programming question about finding the longest palindromic subsequence..." 
             />
           </div>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
@@ -186,15 +185,15 @@ export default function QuestionsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
             <div>
               <p className="text-label" style={{ marginBottom: '4px' }}>Title</p>
-              <input value={newData.title} onChange={e => setNewData(p => ({ ...p, title: e.target.value }))} style={inputStyle} placeholder="e.g. Reverse Array" />
+              <input value={newData.title} onChange={e => setNewData(p => ({ ...p, title: e.target.value }))} style={inputStyle} />
             </div>
             <div>
               <p className="text-label" style={{ marginBottom: '4px' }}>Topic</p>
-              <input value={newData.topic} onChange={e => setNewData(p => ({ ...p, topic: e.target.value }))} style={inputStyle} placeholder="e.g. Arrays, Strings" />
+              <input value={newData.topic} onChange={e => setNewData(p => ({ ...p, topic: e.target.value }))} style={inputStyle} />
             </div>
             <div>
               <p className="text-label" style={{ marginBottom: '4px' }}>Subject</p>
-              <input value={newData.subject_name} onChange={e => setNewData(p => ({ ...p, subject_name: e.target.value }))} style={inputStyle} placeholder="e.g. Data Structures" />
+              <input value={newData.subject_name} onChange={e => setNewData(p => ({ ...p, subject_name: e.target.value }))} style={inputStyle} />
             </div>
           </div>
           

@@ -1,7 +1,8 @@
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import crypto from 'crypto';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
@@ -9,6 +10,7 @@ const execAsync = promisify(exec);
 export interface ExecutionResult {
   success: boolean;
   compile_error?: string;
+  runtime_error?: string;
   output?: string;
   stderr?: string;
   timed_out?: boolean;
@@ -17,6 +19,163 @@ export interface ExecutionResult {
 
 const JUDGE0_URL = process.env.JUDGE0_API_URL || 'https://ce.judge0.com';
 const JUDGE0_KEY = process.env.JUDGE0_API_KEY || '';
+
+export function detectEffectiveLanguage(code: string, requestedLang: string): string {
+  const norm = (requestedLang || 'cpp').toLowerCase();
+  if (norm === 'c') {
+    const hasCpp = /#include\s*<iostream>|#include\s*<vector>|#include\s*<string>|#include\s*<algorithm>|#include\s*<map>|#include\s*<set>|#include\s*<queue>|#include\s*<stack>|#include\s*<bits\/stdc\+\+\.h>|using\s+namespace\s+std|std::|cout\s*<<|cin\s*>>|\bclass\s+\w+|\btemplate\s*<|\bnew\s+\w+|\bdelete\s+\w+/.test(code);
+    if (hasCpp) return 'cpp';
+  }
+  return norm;
+}
+
+async function runLocalCode(
+  code: string,
+  input: string,
+  lang: string,
+  timeLimitSec: number
+): Promise<ExecutionResult> {
+  const startTime = Date.now();
+  const runId = crypto.randomBytes(8).toString('hex');
+  const tempDir = path.join(os.tmpdir(), `exec_${runId}`);
+  await fs.mkdir(tempDir, { recursive: true });
+
+  const effectiveLang = detectEffectiveLanguage(code, lang);
+
+  try {
+    let srcFile = '';
+    let exeFile = '';
+    let compileCmd: string | null = null;
+    let runCmd = '';
+    let runArgs: string[] = [];
+
+    if (effectiveLang === 'c') {
+      srcFile = path.join(tempDir, 'main.c');
+      exeFile = path.join(tempDir, 'a.out');
+      compileCmd = `gcc -std=c11 -O2 "${srcFile}" -o "${exeFile}" -lm`;
+      runCmd = exeFile;
+    } else if (effectiveLang === 'cpp') {
+      srcFile = path.join(tempDir, 'main.cpp');
+      exeFile = path.join(tempDir, 'a.out');
+      compileCmd = `g++ -std=c++17 -O2 "${srcFile}" -o "${exeFile}"`;
+      runCmd = exeFile;
+    } else if (effectiveLang === 'python') {
+      srcFile = path.join(tempDir, 'main.py');
+      runCmd = 'python3';
+      runArgs = [srcFile];
+    } else {
+      throw new Error(`Unsupported local language: ${effectiveLang}`);
+    }
+
+    await fs.writeFile(srcFile, code);
+
+    // Whitelist isolated environment variables to prevent leaking server secrets (DATABASE_URL, JWT_SECRET, etc.)
+    const safeEnv: NodeJS.ProcessEnv = {
+      NODE_ENV: 'production',
+      PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+      LANG: 'en_US.UTF-8',
+      LC_ALL: 'en_US.UTF-8',
+      HOME: tempDir,
+      TMPDIR: tempDir,
+    };
+
+    // 1. Compile step (if required)
+    if (compileCmd) {
+      try {
+        await execAsync(compileCmd, { cwd: tempDir, env: safeEnv, timeout: 10000 });
+      } catch (err: any) {
+        // If C compilation failed, attempt C++ compilation fallback with g++
+        if (effectiveLang === 'c') {
+          const cppFile = path.join(tempDir, 'main.cpp');
+          try {
+            await fs.copyFile(srcFile, cppFile);
+            await execAsync(`g++ -std=c++17 -O2 "${cppFile}" -o "${exeFile}"`, { cwd: tempDir, env: safeEnv, timeout: 10000 });
+            // Successfully compiled via g++ fallback!
+          } catch {
+            return {
+              success: false,
+              compile_error: (err.stderr || err.stdout || err.message || 'Compilation Error').trim(),
+              execution_time: Date.now() - startTime
+            };
+          }
+        } else {
+          return {
+            success: false,
+            compile_error: (err.stderr || err.stdout || err.message || 'Compilation Error').trim(),
+            execution_time: Date.now() - startTime
+          };
+        }
+      }
+    }
+
+    // 2. Execution step with piped stdin and timeout
+    return await new Promise<ExecutionResult>((resolve) => {
+      const child = spawn(runCmd, runArgs, {
+        cwd: tempDir,
+        env: safeEnv,
+        timeout: Math.max(timeLimitSec * 1000, 2000)
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let timedOut = false;
+
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill('SIGKILL');
+      }, Math.max(timeLimitSec * 1000, 2000));
+
+      child.stdout.on('data', (d) => { stdout += d.toString(); });
+      child.stderr.on('data', (d) => { stderr += d.toString(); });
+
+      child.on('error', (err) => {
+        clearTimeout(timer);
+        resolve({
+          success: false,
+          runtime_error: err.message,
+          execution_time: Date.now() - startTime
+        });
+      });
+
+      child.on('close', (code, signal) => {
+        clearTimeout(timer);
+        const duration = Date.now() - startTime;
+        if (timedOut || signal === 'SIGKILL' || signal === 'SIGTERM') {
+          resolve({
+            success: false,
+            timed_out: true,
+            execution_time: duration
+          });
+        } else if (code !== 0) {
+          resolve({
+            success: false,
+            output: stdout,
+            stderr: stderr,
+            runtime_error: stderr.trim() || `Process exited with code ${code}`,
+            execution_time: duration
+          });
+        } else {
+          resolve({
+            success: true,
+            output: stdout,
+            stderr: stderr,
+            execution_time: duration
+          });
+        }
+      });
+
+      if (input) {
+        child.stdin.write(input);
+      }
+      child.stdin.end();
+    });
+
+  } finally {
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    } catch {}
+  }
+}
 
 export async function compileAndRun(
   code: string, 
@@ -39,8 +198,22 @@ export async function compileAndRun(
     }
   }
 
-  // Only C++ is supported
+  const langLower = language.toLowerCase();
+  const effectiveLang = detectEffectiveLanguage(sanitizedCode, langLower);
+
+  // Try fast local compilation first for C, C++, and Python
+  if (effectiveLang === 'c' || effectiveLang === 'cpp' || effectiveLang === 'python') {
+    try {
+      return await runLocalCode(sanitizedCode, input, effectiveLang, timeLimit);
+    } catch (localErr) {
+      console.warn("Local execution failed, falling back to Judge0:", localErr);
+    }
+  }
+
   let languageId = 54; // C++ (GCC 9.2.0)
+  if (effectiveLang === 'c') languageId = 50;
+  else if (effectiveLang === 'python') languageId = 71;
+  else if (effectiveLang === 'java') languageId = 62;
   
   try {
     const headers: Record<string, string> = {
@@ -105,7 +278,7 @@ export async function compileAndRun(
       return { 
         success: false, 
         stderr: stderrStr || 'Runtime Error',
-        compile_error: `Runtime Error: ${data.status?.description || 'Unknown'}`
+        runtime_error: `Runtime Error: ${data.status?.description || 'Unknown'}`
       };
     }
     

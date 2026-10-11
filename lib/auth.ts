@@ -1,8 +1,13 @@
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
+import crypto from 'crypto';
+
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET environment variable is required in production.');
+}
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'codedsa-secret-key-change-in-production-2024'
+  process.env.JWT_SECRET || 'codedsa-dev-secret-key-at-least-32-chars-long'
 );
 
 export async function hashPassword(password: string): Promise<string> {
@@ -51,10 +56,10 @@ export async function verifyStudentSessionToken(token: string): Promise<{ user_i
 }
 
 export function generateSessionId(): string {
-  return `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `sess_${Date.now()}_${crypto.randomUUID().replace(/-/g, '')}`;
 }
 
 export function generateSubmissionId(): string {
-  return `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `sub_${Date.now()}_${crypto.randomUUID().replace(/-/g, '')}`;
 }
 

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { verifyStudentSessionToken } from '@/lib/auth';
 import { compileAndRun, compareOutputs, checkCodeLogic } from '@/lib/executor';
 import { evaluateCodeWithAI } from '@/lib/ai';
+import { checkRateLimit } from '@/lib/rateLimiter';
 
 export async function POST(request: NextRequest) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
@@ -11,16 +12,26 @@ export async function POST(request: NextRequest) {
   const payload = await verifyStudentSessionToken(token);
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
+  // Rate limit submission attempts (10 per minute)
+  const rateCheck = checkRateLimit(`submit:${payload.session_id}`, 10, 60 * 1000);
+  if (!rateCheck.allowed) {
+    return NextResponse.json({ error: 'Too many submission requests. Please wait a moment.' }, { status: 429 });
+  }
+
   const body = await request.json();
   const { question_id, code, language } = body;
 
-  if (!question_id || !code) {
+  if (!question_id || !code || typeof code !== 'string') {
     return NextResponse.json({ error: 'question_id and code are required' }, { status: 400 });
+  }
+
+  if (code.length > 65536) {
+    return NextResponse.json({ error: 'Code size exceeds maximum limit of 64KB' }, { status: 400 });
   }
 
   // Check session
   const session = await prisma.examSession.findUnique({ where: { id: payload.session_id } });
-  if (!session || session.status === 'EXPIRED') {
+  if (!session || session.status === 'EXPIRED' || session.is_submitted) {
     return NextResponse.json({ error: 'Session not active' }, { status: 403 });
   }
 
@@ -59,10 +70,6 @@ export async function POST(request: NextRequest) {
     where: { question_id: question_id }
   });
 
-  if (!testCases || testCases.length === 0) {
-    return NextResponse.json({ error: 'No test cases' }, { status: 404 });
-  }
-
   // Run code against all test cases
   const results = [];
   let compileError: string | undefined;
@@ -85,10 +92,14 @@ export async function POST(request: NextRequest) {
     }
 
     const passed = result.success && compareOutputs(result.output || '', tc.expected_output);
+    let actualOut = result.output || '';
+    if (result.timed_out) actualOut = 'TLE';
+    else if (result.runtime_error) actualOut = result.runtime_error;
+
     results.push({
       test_case_id: tc.id,
       passed,
-      actual_output: result.timed_out ? 'TLE' : (result.output || ''),
+      actual_output: actualOut,
       execution_time: result.execution_time || 0,
     });
     totalExecTime += result.execution_time || 0;
@@ -98,38 +109,33 @@ export async function POST(request: NextRequest) {
   const passRate = testCases.length > 0 ? passedCases / testCases.length : 0;
   
   let marks = 0;
-  let subStatus = 'COMPILATION_ERROR';
+  let subStatus = compiledOk ? (passRate === 1 ? 'ACCEPTED' : (passRate > 0 ? 'PARTIAL_ACCEPTED' : 'WRONG_ANSWER')) : 'COMPILATION_ERROR';
 
   if (compiledOk) {
     marks = passRate * question.marks;
-    if (passRate === 1) subStatus = 'ACCEPTED';
-    else if (passRate > 0) subStatus = 'PARTIAL_ACCEPTED';
-    else subStatus = 'WRONG_ANSWER';
   }
 
-  // --- AI EVALUATION (Overrides baseline marks if available) ---
+  // --- AI EVALUATION (Evaluates approach & algorithmic logic and awards marks) ---
   let aiFeedback = null;
-  if (compiledOk) {
-    const aiResult = await evaluateCodeWithAI(
-      question.title,
-      question.description || '', // or statement
-      code,
-      passedCases,
-      testCases.length,
-      question.marks
-    );
+  const aiResult = await evaluateCodeWithAI(
+    question.title,
+    question.description || '',
+    code,
+    passedCases,
+    testCases.length,
+    question.marks
+  );
 
-    if (aiResult) {
-      marks = aiResult.score;
-      aiFeedback = aiResult.feedback;
-      
-      if (marks === question.marks) {
-        subStatus = 'ACCEPTED';
-      } else if (marks > 0) {
-        subStatus = 'PARTIAL_ACCEPTED';
-      } else {
-        subStatus = 'WRONG_ANSWER';
-      }
+  if (aiResult) {
+    marks = aiResult.score;
+    aiFeedback = aiResult.feedback;
+    
+    if (marks === question.marks) {
+      subStatus = 'ACCEPTED';
+    } else if (marks > 0) {
+      subStatus = 'PARTIAL_ACCEPTED';
+    } else {
+      subStatus = 'WRONG_ANSWER';
     }
   }
 

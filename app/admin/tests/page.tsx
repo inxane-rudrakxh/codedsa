@@ -47,10 +47,18 @@ export default function TestsPage() {
   useEffect(() => { fetchData(); }, []);
 
   const handleCreate = async () => {
+    let payload = { action: 'create_test', ...newData };
+    if (payload.start_time) {
+      payload.start_time = new Date(payload.start_time).toISOString();
+    }
+    if (payload.end_time) {
+      payload.end_time = new Date(payload.end_time).toISOString();
+    }
+
     await fetch('/api/admin/tests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'create_test', ...newData }),
+      body: JSON.stringify(payload),
     });
     setIsCreating(false);
     setNewData({ title: '', subject_name: subjects[0]?.name || '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'], target_division: '', instructions: '', start_time: '', end_time: '' });
@@ -58,10 +66,18 @@ export default function TestsPage() {
   };
 
   const handleUpdate = async (id: string) => {
+    let payload = { action: 'update_test', id, ...editData };
+    if (payload.start_time) {
+      payload.start_time = new Date(payload.start_time).toISOString();
+    }
+    if (payload.end_time) {
+      payload.end_time = new Date(payload.end_time).toISOString();
+    }
+    
     await fetch('/api/admin/tests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'update_test', id, ...editData }),
+      body: JSON.stringify(payload),
     });
     setEditingId(null);
     fetchData();
@@ -180,11 +196,11 @@ export default function TestsPage() {
                     </div>
                     <div>
                       <p className="text-label" style={{ marginBottom: '4px' }}>Start Time</p>
-                      <input type="datetime-local" value={editData.start_time ? new Date(editData.start_time).toISOString().slice(0,16) : ''} onChange={e => setEditData((p: any) => ({ ...p, start_time: e.target.value }))} style={inputStyle} />
+                      <input type="datetime-local" value={editData.start_time ? new Date(new Date(editData.start_time).getTime() - new Date(editData.start_time).getTimezoneOffset() * 60000).toISOString().slice(0,16) : ''} onChange={e => setEditData((p: any) => ({ ...p, start_time: e.target.value }))} style={inputStyle} />
                     </div>
                     <div>
                       <p className="text-label" style={{ marginBottom: '4px' }}>End Time</p>
-                      <input type="datetime-local" value={editData.end_time ? new Date(editData.end_time).toISOString().slice(0,16) : ''} onChange={e => setEditData((p: any) => ({ ...p, end_time: e.target.value }))} style={inputStyle} />
+                      <input type="datetime-local" value={editData.end_time ? new Date(new Date(editData.end_time).getTime() - new Date(editData.end_time).getTimezoneOffset() * 60000).toISOString().slice(0,16) : ''} onChange={e => setEditData((p: any) => ({ ...p, end_time: e.target.value }))} style={inputStyle} />
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <p className="text-label" style={{ marginBottom: '4px' }}>Allowed Languages</p>

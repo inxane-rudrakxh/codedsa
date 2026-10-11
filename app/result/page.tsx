@@ -92,98 +92,149 @@ export default function ResultPage() {
         justifyContent: 'center',
         padding: '60px 24px',
       }}>
-        <div className="animate-fade-up" style={{ maxWidth: '440px', width: '100%' }}>
-          <div style={{ marginBottom: '8px' }}>
+        <div className="animate-fade-up" style={{ maxWidth: '520px', width: '100%' }}>
+          <div style={{ marginBottom: '12px' }}>
             <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
               fontSize: '11px',
               fontWeight: 600,
-              letterSpacing: '0.14em',
+              letterSpacing: '0.12em',
               textTransform: 'uppercase',
-              color: 'var(--success)',
+              color: '#4e9a6e',
+              background: 'rgba(78, 154, 110, 0.12)',
+              border: '1px solid rgba(78, 154, 110, 0.3)',
+              padding: '4px 12px',
+              borderRadius: '999px',
             }}>
-              ✓ Test Complete
+              ✓ Submitted Successfully
             </span>
           </div>
 
           <h1 style={{
-            fontSize: '36px',
+            fontSize: '34px',
             fontWeight: 600,
             color: 'var(--text-primary)',
             letterSpacing: '-0.02em',
-            lineHeight: 1.1,
-            marginBottom: '4px',
+            lineHeight: 1.15,
+            marginBottom: '6px',
+            fontFamily: 'Copernicus, "Times New Roman", Georgia, serif',
           }}>
             {data.student.name}
           </h1>
           <p style={{
             fontSize: '13px',
             color: 'var(--text-muted)',
-            marginBottom: '48px',
+            marginBottom: '28px',
             fontFamily: 'Söhne Mono, ui-monospace, monospace',
           }}>
-            Roll {data.student.roll_no} · {data.student.division}
+            Roll {data.student.roll_no} · Division {data.student.division} {data.student.branch ? `· ${data.student.branch}` : ''}
           </p>
 
-          <div style={{ height: '1px', background: 'var(--border)', marginBottom: '32px' }} />
-
-          <p className="text-label" style={{ marginBottom: '4px' }}>
-            {data.submissions.length} / {data.questions.length} Questions Submitted
-          </p>
-
-          <div style={{ marginBottom: '32px' }}>
-            {data.questions.map((q, i) => (
-              <div key={q.id} style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '14px 0',
-                borderBottom: '1px solid var(--border-subtle)',
+          {/* Official Announcement Notice */}
+          <div style={{
+            padding: '20px 22px',
+            background: 'var(--surface-1, #181715)',
+            border: '1px solid var(--accent, #cc785c)',
+            borderRadius: '8px',
+            marginBottom: '32px',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span style={{ color: 'var(--accent, #cc785c)', fontSize: '15px' }}>✦</span>
+              <h2 style={{
+                fontSize: '15px',
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                margin: 0,
+                fontFamily: 'Copernicus, Georgia, serif',
               }}>
-                <div>
-                  <p style={{
-                    fontSize: '10px',
-                    color: 'var(--text-muted)',
-                    marginBottom: '3px',
-                    fontFamily: 'Söhne Mono, ui-monospace, monospace',
-                  }}>
-                    Q{String(i + 1).padStart(2, '0')}
-                  </p>
-                  <p style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 500 }}>{q.title}</p>
-                </div>
-                <span style={{
-                  fontSize: '20px',
-                  fontWeight: 600,
-                  fontFamily: 'Söhne Mono, ui-monospace, monospace',
-                  color: scoreMap[q.id] !== null && scoreMap[q.id] !== undefined ? 'var(--text-primary)' : 'var(--text-muted)',
-                }}>
-                  {data.marks_published && scoreMap[q.id] !== null && scoreMap[q.id] !== undefined ? scoreMap[q.id] : '—'}
-                  {data.marks_published && <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400 }}>/10</span>}
-                </span>
-              </div>
-            ))}
+                Results Will Be Out Soon
+              </h2>
+            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+              Your exam responses and code drafts have been securely saved and submitted. 
+              The official results and evaluation marksheet PDF will be published and shared directly in your <strong>College WhatsApp Group</strong> once faculty verification is completed.
+            </p>
           </div>
 
-          {!data.marks_published && (
-            <div style={{ padding: '16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '4px', marginBottom: '32px' }}>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', textAlign: 'center' }}>
-                Scores are currently hidden. They will be available here once published by your teacher.
-              </p>
-            </div>
-          )}
-
-          {/* Total */}
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'flex-end',
-            padding: '24px 0',
-            borderTop: '1px solid var(--border)',
+            alignItems: 'center',
+            marginBottom: '12px',
+          }}>
+            <p className="text-label" style={{ margin: 0 }}>
+              Questions Summary
+            </p>
+            <span style={{
+              fontSize: '12px',
+              fontFamily: 'Söhne Mono, ui-monospace, monospace',
+              color: 'var(--text-muted)',
+            }}>
+              {data.submissions.length} / {data.questions.length} Attempted
+            </span>
+          </div>
+
+          <div style={{ marginBottom: '28px', borderTop: '1px solid var(--border)' }}>
+            {data.questions.map((q, i) => {
+              const hasSubmission = data.submissions.some(s => s.question_id === q.id);
+              return (
+                <div key={q.id} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '14px 0',
+                  borderBottom: '1px solid var(--border-subtle)',
+                }}>
+                  <div>
+                    <p style={{
+                      fontSize: '10px',
+                      color: 'var(--text-muted)',
+                      marginBottom: '3px',
+                      fontFamily: 'Söhne Mono, ui-monospace, monospace',
+                    }}>
+                      Question {String(i + 1).padStart(2, '0')}
+                    </p>
+                    <p style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: 500, margin: 0 }}>
+                      {q.title}
+                    </p>
+                  </div>
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    letterSpacing: '0.04em',
+                    padding: '4px 10px',
+                    borderRadius: '999px',
+                    background: hasSubmission ? 'rgba(78, 154, 110, 0.12)' : 'rgba(150, 150, 150, 0.08)',
+                    color: hasSubmission ? '#4e9a6e' : 'var(--text-muted)',
+                    border: `1px solid ${hasSubmission ? 'rgba(78, 154, 110, 0.3)' : 'var(--border)'}`,
+                  }}>
+                    {hasSubmission ? '✓ Submitted' : '— Not Attempted'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Submission Timestamp & Exit Guidance */}
+          <div style={{
+            padding: '16px',
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            borderRadius: '6px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}>
             <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Total Score</p>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Submission Recorded
+              </p>
               {data.submitted_at && (
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  Submitted {new Date(data.submitted_at).toLocaleTimeString('en-IN', {
+                <p style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500, margin: '2px 0 0', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
+                  {new Date(data.submitted_at).toLocaleTimeString('en-IN', {
                     hour: '2-digit',
                     minute: '2-digit',
                   })}
@@ -191,20 +242,9 @@ export default function ResultPage() {
               )}
             </div>
             <div style={{ textAlign: 'right' }}>
-              <span style={{
-                fontSize: '48px',
-                fontWeight: 700,
-                fontFamily: 'Söhne Mono, ui-monospace, monospace',
-                color: data.marks_published ? 'var(--text-primary)' : 'var(--text-muted)',
-                letterSpacing: '-0.02em',
-              }}>
-                {data.marks_published && data.total_score !== null ? data.total_score : '—'}
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                ✓ Safe to close this tab
               </span>
-              {data.marks_published && (
-                <span style={{ fontSize: '20px', color: 'var(--text-muted)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
-                  /30
-                </span>
-              )}
             </div>
           </div>
         </div>

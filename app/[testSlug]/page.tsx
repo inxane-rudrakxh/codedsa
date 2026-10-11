@@ -232,7 +232,6 @@ export default function StudentTestPage() {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. AD1306"
                   value={rollNo}
                   onChange={(e) => setRollNo(e.target.value.toUpperCase())}
                   onKeyDown={handleKeyDown}

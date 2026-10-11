@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyStudentSessionToken } from '@/lib/auth';
 import { compileAndRun } from '@/lib/executor';
+import { checkRateLimit } from '@/lib/rateLimiter';
 
 export async function POST(request: NextRequest) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
@@ -10,16 +11,31 @@ export async function POST(request: NextRequest) {
   const payload = await verifyStudentSessionToken(token);
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
+  // Rate limit code execution to 20 requests per minute per session
+  const rateKey = `run:${payload.session_id}`;
+  const rateCheck = checkRateLimit(rateKey, 20, 60 * 1000);
+  if (!rateCheck.allowed) {
+    return NextResponse.json({ error: 'Rate limit exceeded. Please wait a moment before running code again.' }, { status: 429 });
+  }
+
   const body = await request.json();
   const { code, language, input, question_id } = body;
 
-  if (!code) {
-    return NextResponse.json({ error: 'code is required' }, { status: 400 });
+  if (!code || typeof code !== 'string') {
+    return NextResponse.json({ error: 'code must be a non-empty string' }, { status: 400 });
+  }
+
+  if (code.length > 65536) {
+    return NextResponse.json({ error: 'Code size exceeds maximum limit of 64KB' }, { status: 400 });
+  }
+
+  if (input && (typeof input !== 'string' || input.length > 16384)) {
+    return NextResponse.json({ error: 'Custom input exceeds maximum limit of 16KB' }, { status: 400 });
   }
 
   // Verify session is active
   const session = await prisma.examSession.findUnique({ where: { id: payload.session_id } });
-  if (!session || session.status === 'EXPIRED') {
+  if (!session || session.status === 'EXPIRED' || session.is_submitted) {
     return NextResponse.json({ error: 'Exam session is not active' }, { status: 403 });
   }
 

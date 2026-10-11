@@ -9,21 +9,23 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { session_id, action } = body;
 
-  if (!session_id || !action) {
+  if (!action || (action !== 'approve_all' && !session_id)) {
     return NextResponse.json({ error: 'Missing session_id or action' }, { status: 400 });
   }
 
   try {
     // Verify the session belongs to a test this user can manage
-    const session = await prisma.examSession.findUnique({
-      where: { id: session_id },
-      include: { test: true }
-    });
-    if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    if (session_id) {
+      const session = await prisma.examSession.findUnique({
+        where: { id: session_id },
+        include: { test: true }
+      });
+      if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
 
-    // Teacher can only approve sessions for their own tests
-    if (payload.role === 'TEACHER' && session.test.teacher_id !== payload.user_id) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      // Teacher can only manage sessions for their own tests
+      if (payload.role !== 'ADMIN' && session.test.teacher_id !== payload.user_id) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      }
     }
 
     if (action === 'approve') {

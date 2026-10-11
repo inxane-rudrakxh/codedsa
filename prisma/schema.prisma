@@ -88,7 +88,7 @@ model Test {
   randomize_questions   Boolean   @default(true)
   questions_per_student Int       @default(3)
   target_division       String?
-  allowed_languages     String[]  @default(["c", "cpp", "python", "java"])
+  allowed_languages     String[]  @default(["cpp", "c", "python", "java"])
   start_time            DateTime?
   end_time              DateTime?
   created_at            DateTime  @default(now())

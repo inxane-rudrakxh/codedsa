@@ -91,16 +91,21 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Auto-assign the 9 seeded questions to this new test
-    const allQs = await prisma.question.findMany();
-    for (let i = 0; i < allQs.length; i++) {
-      await prisma.testQuestion.create({
-        data: {
-          test_id: test.id,
-          question_id: allQs[i].id,
-          order_index: i
-        }
-      });
+    // Auto-assign unique questions to this new test
+    const allQs = await prisma.question.findMany({ orderBy: { created_at: 'asc' } });
+    const seenTitles = new Set<string>();
+    let orderIdx = 0;
+    for (const q of allQs) {
+      if (!seenTitles.has(q.title)) {
+        seenTitles.add(q.title);
+        await prisma.testQuestion.create({
+          data: {
+            test_id: test.id,
+            question_id: q.id,
+            order_index: orderIdx++
+          }
+        });
+      }
     }
 
     return NextResponse.json({ success: true, test });
@@ -111,7 +116,7 @@ export async function POST(request: NextRequest) {
     
     // Verify ownership
     const test = await prisma.test.findUnique({ where: { id } });
-    if (!test || test.teacher_id !== payload.user_id) {
+    if (!test || (payload.role !== 'ADMIN' && test.teacher_id !== payload.user_id)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     
@@ -138,7 +143,7 @@ export async function POST(request: NextRequest) {
   if (action === 'publish_marks') {
     const { id } = body;
     const test = await prisma.test.findUnique({ where: { id } });
-    if (!test || test.teacher_id !== payload.user_id) {
+    if (!test || (payload.role !== 'ADMIN' && test.teacher_id !== payload.user_id)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     await prisma.test.update({ where: { id }, data: { marks_published: true } });
@@ -147,15 +152,28 @@ export async function POST(request: NextRequest) {
 
   if (action === 'assign_question') {
     const { test_id, question_id } = body;
-    const count = await prisma.testQuestion.count({ where: { test_id } });
-    await prisma.testQuestion.create({
-      data: { test_id, question_id, order_index: count }
+    const test = await prisma.test.findUnique({ where: { id: test_id } });
+    if (!test || (payload.role !== 'ADMIN' && test.teacher_id !== payload.user_id)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+    const existing = await prisma.testQuestion.findFirst({
+      where: { test_id, question_id }
     });
+    if (!existing) {
+      const count = await prisma.testQuestion.count({ where: { test_id } });
+      await prisma.testQuestion.create({
+        data: { test_id, question_id, order_index: count }
+      });
+    }
     return NextResponse.json({ success: true });
   }
 
   if (action === 'remove_question') {
     const { test_id, question_id } = body;
+    const test = await prisma.test.findUnique({ where: { id: test_id } });
+    if (!test || (payload.role !== 'ADMIN' && test.teacher_id !== payload.user_id)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
     await prisma.testQuestion.deleteMany({ where: { test_id, question_id } });
     return NextResponse.json({ success: true });
   }
@@ -163,7 +181,7 @@ export async function POST(request: NextRequest) {
   if (action === 'delete_test') {
     const { id } = body;
     const test = await prisma.test.findUnique({ where: { id } });
-    if (!test || test.teacher_id !== payload.user_id) {
+    if (!test || (payload.role !== 'ADMIN' && test.teacher_id !== payload.user_id)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

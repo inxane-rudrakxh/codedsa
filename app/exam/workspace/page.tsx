@@ -57,15 +57,39 @@ interface SessionData {
   testCases: Record<number, Array<{ input: string; expected_output: string; type: string }>>;
 }
 
-const STARTER_CODE = `#include <iostream>
+const STARTER_CODES: Record<string, string> = {
+  cpp: `#include <iostream>
 using namespace std;
 
 int main() {
     // Write your code here
-    // Example: cout << "Hello World!" << endl;
     
     return 0;
-}`;
+}`,
+  c: `#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    // Write your code here
+    
+    return 0;
+}`,
+  python: `# Write your code here
+def main():
+    pass
+
+if __name__ == '__main__':
+    main()`,
+  java: `import java.util.Scanner;
+
+public class Main {
+    public static void main(String[] args) {
+        // Write your code here
+    }
+}`
+};
+
+const STARTER_CODE = STARTER_CODES.cpp;
 
 const demoBtnStyle = {
   padding: '6px 12px',
@@ -101,6 +125,9 @@ export default function WorkspacePage() {
   const [timeRemaining, setTimeRemaining] = useState(3600);
   const [integrityWarning, setIntegrityWarning] = useState<string | null>(null);
   const [warningCount, setWarningCount] = useState(0);
+  const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
+  const [showTabSwitchModal, setShowTabSwitchModal] = useState(false);
+  const [tabSwitchReason, setTabSwitchReason] = useState('Tab switch or window inactive');
   const [loading, setLoading] = useState(true);
   const [consoleOpen, setConsoleOpen] = useState(true);
   const [submitScores, setSubmitScores] = useState<Record<number, number>>({});
@@ -146,14 +173,14 @@ export default function WorkspacePage() {
         setTimeRemaining(data.session.remaining_seconds);
         setWarningCount(data.session.integrity_warnings);
         
-        if (data.session.allowed_languages && data.session.allowed_languages.length > 0) {
-          setLanguage(data.session.allowed_languages[0]);
-        }
+        const allowedLangs = data.session.allowed_languages || ['cpp', 'c', 'python', 'java'];
+        const initialLang = allowedLangs.includes('cpp') ? 'cpp' : (allowedLangs[0] || 'cpp');
+        setLanguage(initialLang);
 
         // Initialize codes from saves
         const initialCodes: Record<number, string> = {};
         data.questions.forEach(q => {
-          initialCodes[q.id] = data.saves[q.id] || STARTER_CODE;
+          initialCodes[q.id] = data.saves[q.id] || STARTER_CODES[initialLang] || STARTER_CODES.cpp;
         });
         setCodes(initialCodes);
 
@@ -249,6 +276,7 @@ export default function WorkspacePage() {
   }, [sessionData, activeQuestion, codes, loading, getToken]);
 
   const lastWarningRef = useRef<number>(0);
+  const lastEventTypeRef = useRef<string>('');
 
   // Integrity monitoring
   useEffect(() => {
@@ -261,7 +289,7 @@ export default function WorkspacePage() {
       }
     };
     
-    // Some browsers require interaction, so we also listen for the first click
+    // Listen for interaction to trigger fullscreen
     const firstClick = () => {
       requestFullscreen();
       document.removeEventListener('click', firstClick);
@@ -270,18 +298,24 @@ export default function WorkspacePage() {
 
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
+        setShowFullscreenPrompt(true);
         reportIntegrity('fullscreen_exit');
-        requestFullscreen(); // Force back to fullscreen
+      } else {
+        setShowFullscreenPrompt(false);
       }
     };
 
     const handleVisibilityChange = () => {
-      if (document.hidden) {
+      if (document.hidden || document.visibilityState === 'hidden') {
+        setTabSwitchReason('You navigated away from the exam tab (Tab Switch / Minimized)');
+        setShowTabSwitchModal(true);
         reportIntegrity('tab_hidden');
       }
     };
 
     const handleBlur = () => {
+      setTabSwitchReason('Exam window lost focus (Application Switch / Window Inactive)');
+      setShowTabSwitchModal(true);
       reportIntegrity('window_blur');
     };
 
@@ -293,60 +327,164 @@ export default function WorkspacePage() {
 
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
+      e.stopPropagation();
       reportIntegrity('right_click');
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent F11, F12, Escape, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+P, Ctrl+S, Ctrl+A
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      if (
-        e.key === 'F11' ||
-        e.key === 'F12' ||
-        e.key === 'Escape' ||
-        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'i' || e.key === 'j')) ||
-        (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'C' || e.key === 'c' || e.key === 'V' || e.key === 'v' || e.key === 'X' || e.key === 'x' || e.key === 'P' || e.key === 'p' || e.key === 'S' || e.key === 's' || e.key === 'A' || e.key === 'a')) ||
-        (isMac && e.metaKey && (e.key === 'C' || e.key === 'c' || e.key === 'V' || e.key === 'v' || e.key === 'X' || e.key === 'x' || e.key === 'A' || e.key === 'a' || e.key === 'P' || e.key === 'p' || e.key === 'S' || e.key === 's')) ||
-        e.key === 'PrintScreen' ||
-        (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5'))
-      ) {
+      const key = e.key;
+      const code = e.code || '';
+      const lowerKey = key.toLowerCase();
+
+      // 1. Strictly block F11
+      if (key === 'F11' || code === 'F11' || e.keyCode === 122) {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        setShowFullscreenPrompt(true);
+        reportIntegrity('fullscreen_exit');
+        return false;
+      }
+
+      // 2. Block all Function Keys F1 - F12
+      if (/^F([1-9]|1[0-2])$/.test(key) || /^F([1-9]|1[0-2])$/.test(code)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        reportIntegrity('forbidden_key');
+        return false;
+      }
+
+      // 3. Block Windows Start Key / Meta Key / Command Key
+      if (e.metaKey || key === 'Meta' || key === 'OS' || code === 'MetaLeft' || code === 'MetaRight') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        reportIntegrity('forbidden_key');
+        return false;
+      }
+
+      // 4. Block Escape key
+      if (key === 'Escape' || code === 'Escape' || e.keyCode === 27) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        reportIntegrity('forbidden_key');
+        return false;
+      }
+
+      // 5. Block PrintScreen / Screen Capture
+      if (key === 'PrintScreen' || code === 'PrintScreen' || e.keyCode === 44 || (e.metaKey && e.shiftKey && ['3', '4', '5'].includes(key))) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText('').catch(() => {});
+        }
+        reportIntegrity('forbidden_key');
+        return false;
+      }
+
+      // 6. Block ContextMenu key
+      if (key === 'ContextMenu' || code === 'ContextMenu') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        reportIntegrity('right_click');
+        return false;
+      }
+
+      // 7. Block Alt combinations (Alt+Tab, Alt+F4, Alt+Left/Right)
+      if (e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        reportIntegrity('forbidden_key');
+        return false;
+      }
+
+      // 8. Block Ctrl/Cmd combinations: C, V, X, A, U, S, P, I, J
+      if (e.ctrlKey || (isMac && e.metaKey)) {
+        if (['c', 'v', 'x', 'a', 'u', 's', 'p', 'i', 'j'].includes(lowerKey)) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          if (['c', 'v', 'x'].includes(lowerKey)) {
+            reportIntegrity('copy_paste_attempt');
+          } else {
+            reportIntegrity('forbidden_key');
+          }
+          return false;
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44) {
+        e.preventDefault();
+        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText('').catch(() => {});
+        }
         reportIntegrity('forbidden_key');
       }
     };
 
     const handleCopyPaste = (e: ClipboardEvent) => {
       e.preventDefault();
+      e.stopPropagation();
       reportIntegrity('copy_paste_attempt');
     };
+
+    const handlePreventSelection = (e: Event) => {
+      e.preventDefault();
+    };
+
+    // Use capture phase (true) so listeners trigger BEFORE Monaco/Terminal or child inputs
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
+    window.addEventListener('contextmenu', handleContextMenu, true);
+    window.addEventListener('copy', handleCopyPaste, true);
+    window.addEventListener('paste', handleCopyPaste, true);
+    window.addEventListener('cut', handleCopyPaste, true);
+    document.addEventListener('selectstart', handlePreventSelection, true);
+    document.addEventListener('dragstart', handlePreventSelection, true);
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('contextmenu', handleContextMenu);
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('copy', handleCopyPaste);
-    document.addEventListener('paste', handleCopyPaste);
-    document.addEventListener('cut', handleCopyPaste);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       document.removeEventListener('click', firstClick);
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
+      window.removeEventListener('contextmenu', handleContextMenu, true);
+      window.removeEventListener('copy', handleCopyPaste, true);
+      window.removeEventListener('paste', handleCopyPaste, true);
+      window.removeEventListener('cut', handleCopyPaste, true);
+      document.removeEventListener('selectstart', handlePreventSelection, true);
+      document.removeEventListener('dragstart', handlePreventSelection, true);
+
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('contextmenu', handleContextMenu);
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('copy', handleCopyPaste);
-      document.removeEventListener('paste', handleCopyPaste);
-      document.removeEventListener('cut', handleCopyPaste);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [sessionData]);
 
   const reportIntegrity = async (event_type: string) => {
     const now = Date.now();
-    if (now - lastWarningRef.current < 2000) return; // Prevent spamming
+    // Allow distinct event types immediately; throttle identical repeats within 1.5s
+    if (lastEventTypeRef.current === event_type && (now - lastWarningRef.current < 1500)) {
+      return;
+    }
     lastWarningRef.current = now;
+    lastEventTypeRef.current = event_type;
 
     const token = getToken();
     if (!token) return;
@@ -369,11 +507,10 @@ export default function WorkspacePage() {
       };
       
       if (data.warnings >= 3) {
-        setIntegrityWarning('Maximum warnings exceeded. Your test is being auto-submitted.');
+        setIntegrityWarning('Maximum warnings exceeded (3/3). Your exam is being automatically submitted.');
         handleAutoSubmit();
       } else {
         setIntegrityWarning(`${eventMap[event_type] || 'A forbidden action'} has been detected. Warning ${data.warnings} of 3.`);
-        setTimeout(() => setIntegrityWarning(null), 5000);
       }
     } catch {}
   };
@@ -499,23 +636,345 @@ export default function WorkspacePage() {
       {/* Integrity Warning */}
       {integrityWarning && (
         <div style={{
-          background: 'var(--warning-dim)',
-          borderBottom: '1px solid var(--warning)',
+          background: '#252320',
+          borderBottom: '1px solid rgba(204, 120, 92, 0.3)',
           padding: '10px 24px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '12px',
+          gap: '16px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
         }}>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--warning)' }}>
-              EXAM INTEGRITY WARNING
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 10px',
+              borderRadius: '9999px',
+              background: 'rgba(204, 120, 92, 0.15)',
+              border: '1px solid rgba(204, 120, 92, 0.35)',
+              color: '#cc785c',
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              fontFamily: 'StyreneB, Inter, sans-serif'
+            }}>
+              <span>✦</span> Integrity Notice
             </span>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{integrityWarning}</span>
+            <span style={{ fontSize: '13px', color: '#faf9f5', fontFamily: 'StyreneB, Inter, sans-serif' }}>
+              {integrityWarning}
+            </span>
           </div>
-          <span style={{ fontSize: '12px', color: 'var(--warning)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
-            Warnings: {warningCount} / 3
-          </span>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: '#181715',
+            border: '1px solid rgba(230, 223, 216, 0.12)',
+            borderRadius: '6px',
+            padding: '4px 10px',
+            fontSize: '12px',
+            color: '#e8a55a',
+            fontFamily: 'JetBrains Mono, ui-monospace, monospace'
+          }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#e8a55a' }} />
+            Warnings: <strong style={{ color: '#faf9f5' }}>{warningCount}</strong> / 3
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Required Modal Overlay */}
+      {showFullscreenPrompt && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 999999,
+          background: 'rgba(18, 17, 15, 0.94)',
+          backdropFilter: 'blur(16px)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            maxWidth: '520px',
+            width: '100%',
+            background: '#181715',
+            border: '1px solid rgba(230, 223, 216, 0.14)',
+            borderRadius: '16px',
+            padding: '40px 36px 36px',
+            boxShadow: '0 24px 64px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(204, 120, 92, 0.15)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            {/* Top decorative accent bar in Claude warm gradient */}
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '3px',
+              background: 'linear-gradient(90deg, #cc785c 0%, #e8a55a 50%, #cc785c 100%)'
+            }} />
+
+            {/* Pill Badge */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 14px',
+              borderRadius: '9999px',
+              background: 'rgba(204, 120, 92, 0.14)',
+              border: '1px solid rgba(204, 120, 92, 0.35)',
+              color: '#cc785c',
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              marginBottom: '20px',
+              fontFamily: 'StyreneB, Inter, sans-serif'
+            }}>
+              <span>✦</span> Security & Integrity Lock
+            </div>
+
+            {/* Editorial Serif Headline */}
+            <h2 style={{
+              fontFamily: 'Copernicus, "Tiempos Headline", "Georgia", "Iowan Old Style", serif',
+              fontSize: '26px',
+              fontWeight: 400,
+              color: '#faf9f5',
+              marginBottom: '14px',
+              lineHeight: 1.25,
+              letterSpacing: '-0.4px'
+            }}>
+              Fullscreen Mode Required
+            </h2>
+
+            <p style={{
+              fontFamily: 'StyreneB, Inter, sans-serif',
+              fontSize: '14px',
+              color: '#a09d96',
+              lineHeight: 1.6,
+              marginBottom: '24px',
+              maxWidth: '440px'
+            }}>
+              Leaving fullscreen or switching windows is prohibited. This incident has been logged to your proctoring audit log.
+            </p>
+
+            {/* Warning counter pill */}
+            <div style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#252320',
+              border: '1px solid rgba(230, 223, 216, 0.10)',
+              borderRadius: '8px',
+              padding: '12px 18px',
+              marginBottom: '28px'
+            }}>
+              <span style={{
+                fontFamily: 'StyreneB, Inter, sans-serif',
+                fontSize: '12px',
+                color: '#a09d96',
+                fontWeight: 500
+              }}>
+                Recorded Violations
+              </span>
+              <span style={{
+                fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+                fontSize: '13px',
+                color: '#e8a55a',
+                fontWeight: 600
+              }}>
+                {warningCount} of 3 Allowed
+              </span>
+            </div>
+
+            <button
+              onClick={() => {
+                if (document.documentElement.requestFullscreen) {
+                  document.documentElement.requestFullscreen().then(() => {
+                    setShowFullscreenPrompt(false);
+                  }).catch(() => {
+                    setShowFullscreenPrompt(false);
+                  });
+                } else {
+                  setShowFullscreenPrompt(false);
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '12px 20px',
+                background: '#cc785c',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 500,
+                letterSpacing: '0',
+                cursor: 'pointer',
+                fontFamily: 'StyreneB, Inter, sans-serif',
+                boxShadow: '0 4px 16px rgba(204, 120, 92, 0.35)',
+                transition: 'background 0.15s ease'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#a9583e')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#cc785c')}
+            >
+              Return to Fullscreen & Resume Exam
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Switch / Focus Loss Modal */}
+      {showTabSwitchModal && !showFullscreenPrompt && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 999998,
+          background: 'rgba(18, 17, 15, 0.94)',
+          backdropFilter: 'blur(16px)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            maxWidth: '520px',
+            width: '100%',
+            background: '#181715',
+            border: '1px solid rgba(230, 223, 216, 0.14)',
+            borderRadius: '16px',
+            padding: '40px 36px 36px',
+            boxShadow: '0 24px 64px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(232, 165, 90, 0.15)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            {/* Top decorative accent bar */}
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '3px',
+              background: 'linear-gradient(90deg, #e8a55a 0%, #cc785c 100%)'
+            }} />
+
+            {/* Pill Badge */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 14px',
+              borderRadius: '9999px',
+              background: 'rgba(232, 165, 90, 0.14)',
+              border: '1px solid rgba(232, 165, 90, 0.35)',
+              color: '#e8a55a',
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              marginBottom: '20px',
+              fontFamily: 'StyreneB, Inter, sans-serif'
+            }}>
+              <span>✦</span> Assessment Focus Notice
+            </div>
+
+            {/* Editorial Serif Headline */}
+            <h2 style={{
+              fontFamily: 'Copernicus, "Tiempos Headline", "Georgia", "Iowan Old Style", serif',
+              fontSize: '26px',
+              fontWeight: 400,
+              color: '#faf9f5',
+              marginBottom: '14px',
+              lineHeight: 1.25,
+              letterSpacing: '-0.4px'
+            }}>
+              Window Focus Lost
+            </h2>
+
+            <p style={{
+              fontFamily: 'StyreneB, Inter, sans-serif',
+              fontSize: '14px',
+              color: '#a09d96',
+              lineHeight: 1.6,
+              marginBottom: '24px',
+              maxWidth: '440px'
+            }}>
+              {tabSwitchReason || 'Window focus was lost'}. Navigating away from the active assessment window is strictly monitored.
+            </p>
+
+            {/* Violation counter */}
+            <div style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#252320',
+              border: '1px solid rgba(230, 223, 216, 0.10)',
+              borderRadius: '8px',
+              padding: '12px 18px',
+              marginBottom: '28px'
+            }}>
+              <span style={{
+                fontFamily: 'StyreneB, Inter, sans-serif',
+                fontSize: '12px',
+                color: '#a09d96',
+                fontWeight: 500
+              }}>
+                Recorded Violations
+              </span>
+              <span style={{
+                fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+                fontSize: '13px',
+                color: '#e8a55a',
+                fontWeight: 600
+              }}>
+                {warningCount} of 3 Allowed
+              </span>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowTabSwitchModal(false);
+                if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+                  document.documentElement.requestFullscreen().catch(() => {});
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '12px 20px',
+                background: '#cc785c',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 500,
+                letterSpacing: '0',
+                cursor: 'pointer',
+                fontFamily: 'StyreneB, Inter, sans-serif',
+                boxShadow: '0 4px 16px rgba(204, 120, 92, 0.35)',
+                transition: 'background 0.15s ease'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#a9583e')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#cc785c')}
+            >
+              I Understand & Resume Exam
+            </button>
+          </div>
         </div>
       )}
 
@@ -640,7 +1099,15 @@ export default function WorkspacePage() {
                       </span>
                       <select
                         value={language}
-                        onChange={(e) => setLanguage(e.target.value)}
+                        onChange={(e) => {
+                          const newLang = e.target.value;
+                          setLanguage(newLang);
+                          const currCode = codes[currentQuestion.id];
+                          const isStarter = !currCode || Object.values(STARTER_CODES).some(t => t.trim() === currCode.trim());
+                          if (isStarter && STARTER_CODES[newLang]) {
+                            setCodes(prev => ({ ...prev, [currentQuestion.id]: STARTER_CODES[newLang] }));
+                          }
+                        }}
                         disabled={isSubmitted}
                         style={{
                           background: 'var(--surface-2)',
@@ -654,7 +1121,7 @@ export default function WorkspacePage() {
                           fontFamily: 'Söhne Mono, ui-monospace, monospace',
                         }}
                       >
-                        {(sessionData.session.allowed_languages || ['c', 'cpp', 'python', 'java']).map(l => (
+                        {(sessionData.session.allowed_languages || ['cpp', 'c', 'python', 'java']).map(l => (
                           <option key={l} value={l}>
                             {l === 'cpp' ? 'C++' : l === 'c' ? 'C' : l === 'python' ? 'Python' : 'Java'}
                           </option>
@@ -663,7 +1130,7 @@ export default function WorkspacePage() {
                       
                       {!isSubmitted && (
                         <button
-                          onClick={() => setCodes(prev => ({ ...prev, [currentQuestion.id]: STARTER_CODE }))}
+                          onClick={() => setCodes(prev => ({ ...prev, [currentQuestion.id]: STARTER_CODES[language] || STARTER_CODES.cpp }))}
                           style={{
                             fontSize: '11px',
                             color: 'var(--text-muted)',
@@ -698,16 +1165,17 @@ export default function WorkspacePage() {
                           <button
                             id="run-code-btn"
                             onClick={handleRunCode}
-                            disabled={running || submitting}
+                            disabled={submitting}
+                            title={running ? 'Click to restart execution' : 'Compile & run in terminal'}
                             style={{
                               padding: '6px 16px',
-                              background: 'var(--surface-2)',
-                              border: '1px solid var(--border)',
+                              background: running ? 'rgba(56, 189, 248, 0.15)' : 'var(--surface-2)',
+                              border: running ? '1px solid #38bdf8' : '1px solid var(--border)',
                               borderRadius: '4px',
-                              color: running ? 'var(--text-muted)' : 'var(--text-primary)',
+                              color: running ? '#38bdf8' : 'var(--text-primary)',
                               fontSize: '11px',
                               fontWeight: 600,
-                              cursor: running ? 'not-allowed' : 'pointer',
+                              cursor: submitting ? 'not-allowed' : 'pointer',
                               transition: 'all 0.15s ease',
                             }}
                           >
@@ -778,10 +1246,27 @@ export default function WorkspacePage() {
                         padding: { top: 16, bottom: 16 },
                         contextmenu: false,
                         dragAndDrop: false,
+                        copyWithSyntaxHighlighting: false,
                       }}
                       onMount={(editor, monaco) => {
                         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
                           if (!isSubmitted) handleRunCode();
+                        });
+                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
+                          reportIntegrity('copy_paste_attempt');
+                        });
+                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+                          reportIntegrity('copy_paste_attempt');
+                        });
+                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
+                          reportIntegrity('copy_paste_attempt');
+                        });
+                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyA, () => {
+                          reportIntegrity('forbidden_key');
+                        });
+                        editor.addCommand(monaco.KeyCode.F11, () => {
+                          setShowFullscreenPrompt(true);
+                          reportIntegrity('fullscreen_exit');
                         });
                       }}
                     />
@@ -796,6 +1281,8 @@ export default function WorkspacePage() {
                     runTrigger={runTrigger}
                     code={codes[currentQuestion?.id || 0] || STARTER_CODE}
                     language={language}
+                    getToken={getToken}
+                    questionId={currentQuestion?.id}
                   />
                 </div>
               </div>
@@ -1015,6 +1502,8 @@ function ConsolePanel({
   runTrigger,
   code,
   language,
+  getToken,
+  questionId,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -1023,135 +1512,349 @@ function ConsolePanel({
   runTrigger: number;
   code: string;
   language: string;
+  getToken?: () => string;
+  questionId?: number;
 }) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<any>(null);
+  const fitAddonRef = useRef<any>(null);
   const socketRef = useRef<any>(null);
+  const onDataDisposableRef = useRef<any>(null);
+
+  const ensureTerminal = async () => {
+    if (xtermRef.current) return xtermRef.current;
+    const el = terminalRef.current;
+    if (!el) return null;
+    const { Terminal } = await import('xterm');
+    const { FitAddon } = await import('xterm-addon-fit');
+    await import('xterm/css/xterm.css');
+    
+    if (xtermRef.current) return xtermRef.current;
+
+    const term = new Terminal({
+      theme: {
+        background: '#090a0f',
+        foreground: '#e2e8f0',
+        cursor: '#38bdf8',
+        selectionBackground: '#1e293b',
+        black: '#090a0f',
+        red: '#ef4444',
+        green: '#22c55e',
+        yellow: '#eab308',
+        blue: '#3b82f6',
+        magenta: '#a855f7',
+        cyan: '#06b6d4',
+        white: '#f8fafc',
+        brightBlack: '#475569',
+        brightRed: '#f87171',
+        brightGreen: '#4ade80',
+        brightYellow: '#facc15',
+        brightBlue: '#60a5fa',
+        brightMagenta: '#c084fc',
+        brightCyan: '#38bdf8',
+        brightWhite: '#ffffff',
+      },
+      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, Menlo, monospace",
+      fontSize: 13,
+      lineHeight: 1.4,
+      cursorBlink: true,
+      cursorStyle: 'block',
+      scrollback: 1000,
+    });
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(el);
+    fitAddon.fit();
+    xtermRef.current = term;
+    fitAddonRef.current = fitAddon;
+
+    window.addEventListener('resize', () => {
+      try { fitAddonRef.current?.fit(); } catch {}
+    });
+
+    term.writeln('\x1b[1;36m═══════════════════════════════════════════════════════════════\x1b[0m');
+    term.writeln('\x1b[1;32m  DSA Interactive Terminal\x1b[0m \x1b[90m(Stdin / Terminal Mode Active)\x1b[0m');
+    term.writeln('\x1b[90m  Press "Run Code" above or Ctrl+Enter to compile & run.\x1b[0m');
+    term.writeln('\x1b[1;36m═══════════════════════════════════════════════════════════════\x1b[0m\r\n');
+
+    return term;
+  };
 
   useEffect(() => {
-    if (!open || !terminalRef.current) return;
-    
-    let isMounted = true;
-    (async () => {
-      if (!xtermRef.current) {
-        const { Terminal } = await import('xterm');
-        const { FitAddon } = await import('xterm-addon-fit');
-        await import('xterm/css/xterm.css');
-        
-        const el = terminalRef.current;
-        if (!el || !isMounted) return;
-        const term = new Terminal({
-          theme: { background: '#f5f0e8', foreground: '#141413', cursor: '#cc785c' },
-          fontFamily: 'Söhne Mono, ui-monospace, monospace',
-          fontSize: 13,
-          cursorBlink: true
-        });
-        const fitAddon = new FitAddon();
-        term.loadAddon(fitAddon);
-        term.open(el);
-        fitAddon.fit();
-        xtermRef.current = term;
-
-        window.addEventListener('resize', () => fitAddon.fit());
-        
-        term.writeln('\x1b[90mTerminal ready. Click "Run Code" to execute.\x1b[0m');
+    ensureTerminal().then(() => {
+      if (open && fitAddonRef.current) {
+        setTimeout(() => fitAddonRef.current?.fit(), 60);
       }
-    })();
-    return () => { isMounted = false; };
+    });
   }, [open]);
 
-  useEffect(() => {
-    if (!running || !xtermRef.current || !code || runTrigger === 0) return;
+  const runViaHttpFallback = async (termInstance?: any) => {
+    const term = termInstance || xtermRef.current;
+    if (!term) {
+      setRunning(false);
+      return;
+    }
+    const displayLang = (language || 'cpp').toUpperCase();
+    term.writeln(`\x1b[1;33m● Compiling source via Execution Engine (${displayLang})...\x1b[0m\r\n`);
     
-    (async () => {
-      const { io } = await import('socket.io-client');
-      const term = xtermRef.current;
-      term.clear();
+    try {
+      const token = getToken ? getToken() : '';
+      const res = await fetch('/api/exam/run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ code, language, question_id: questionId })
+      });
+      const data = await res.json();
       
-      const host = window.location.hostname;
-      const socket = io(`http://${host}:4000`);
-      socketRef.current = socket;
+      if (!data.success && data.compile_error) {
+        term.writeln(`\r\n\x1b[1;31m✖ Compilation Error:\x1b[0m\r\n\x1b[31m${data.compile_error.replace(/\n/g, '\r\n')}\x1b[0m\r\n`);
+      } else if (data.timed_out) {
+        term.writeln(`\r\n\x1b[1;31m✖ Time Limit Exceeded (5s)\x1b[0m\r\n`);
+      } else {
+        term.writeln(`\x1b[1;32m✔ Build successful\x1b[0m\r\n\x1b[1;36m$\x1b[0m \x1b[90m./a.out\x1b[0m\r\n`);
+        if (data.output) {
+          term.write(data.output.replace(/\n/g, '\r\n'));
+        }
+        if (data.stderr) {
+          term.write(`\r\n\x1b[31m${data.stderr.replace(/\n/g, '\r\n')}\x1b[0m`);
+        }
+        term.writeln(`\r\n\x1b[90m----------------------------------------\r\n[Process completed in ${data.execution_time || 0}ms]\x1b[0m\r\n`);
+      }
+    } catch (err: any) {
+      term.writeln(`\r\n\x1b[1;31m✖ Execution Engine Error: ${err.message || 'Unknown'}\x1b[0m\r\n`);
+    } finally {
+      setRunning(false);
+    }
+  };
 
-      socket.on('connect_error', (err) => {
-        term.writeln(`\\r\\n\\x1b[31m[Connection Error: ${err.message}]\\x1b[0m`);
-        term.writeln('\\x1b[90mMake sure the PTY execution server is running on port 4000.\\x1b[0m\\r\\n');
-        setRunning(false);
-        socket.disconnect();
-      });
+  useEffect(() => {
+    if (runTrigger === 0 || !code) return;
 
-      socket.on('connect', () => {
-        socket.emit('execute', { code, language });
-      });
+    if (socketRef.current) {
+      try { socketRef.current.disconnect(); } catch {}
+      socketRef.current = null;
+    }
+    if (onDataDisposableRef.current) {
+      try { onDataDisposableRef.current.dispose(); } catch {}
+      onDataDisposableRef.current = null;
+    }
 
-      socket.on('output', (data: string) => {
-        term.write(data);
-      });
+    let isCancelled = false;
 
-      socket.on('finished', () => {
-        setRunning(false);
-        socket.disconnect();
-      });
+    (async () => {
+      try {
+        const term = await ensureTerminal();
+        if (!term || isCancelled) {
+          setRunning(false);
+          return;
+        }
 
-      term.onData((data: string) => {
-        socket.emit('input', data);
-      });
+        term.clear();
+        setTimeout(() => fitAddonRef.current?.fit(), 30);
+        term.focus();
 
+        let connected = false;
+        let fallbackTriggered = false;
+
+        const { io } = await import('socket.io-client');
+        const host = window.location.hostname || 'localhost';
+        const sessionToken = (typeof window !== 'undefined' ? localStorage.getItem('session_token') : null) || '';
+        const socket = io(`http://${host}:4000`, {
+          timeout: 2500,
+          reconnection: false,
+          auth: {
+            token: sessionToken
+          }
+        });
+        socketRef.current = socket;
+
+        const connectionTimeout = setTimeout(() => {
+          if (!connected && !fallbackTriggered && !isCancelled) {
+            fallbackTriggered = true;
+            try { socket.disconnect(); } catch {}
+            runViaHttpFallback(term);
+          }
+        }, 2000);
+
+        socket.on('connect_error', () => {
+          if (!fallbackTriggered && !isCancelled) {
+            clearTimeout(connectionTimeout);
+            fallbackTriggered = true;
+            try { socket.disconnect(); } catch {}
+            runViaHttpFallback(term);
+          }
+        });
+
+        socket.on('connect', () => {
+          connected = true;
+          clearTimeout(connectionTimeout);
+          socket.emit('execute', { code, language });
+        });
+
+        socket.on('output', (data: string) => {
+          if (!isCancelled) term.write(data);
+        });
+
+        socket.on('finished', () => {
+          if (!isCancelled) {
+            setRunning(false);
+            try { socket.disconnect(); } catch {}
+          }
+        });
+
+        onDataDisposableRef.current = term.onData((data: string) => {
+          if (socket.connected) {
+            socket.emit('input', data);
+          }
+        });
+
+        setTimeout(() => {
+          if (!isCancelled) setRunning(false);
+        }, 30000);
+
+      } catch (err: any) {
+        if (!isCancelled) {
+          if (xtermRef.current) {
+            xtermRef.current.writeln(`\r\n\x1b[31mExecution Error: ${err.message || 'Unknown'}\x1b[0m\r\n`);
+          }
+          setRunning(false);
+        }
+      }
     })();
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
+      isCancelled = true;
     };
   }, [runTrigger]);
 
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (xtermRef.current) {
+      xtermRef.current.clear();
+    }
+  };
+
+  const handleKill = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (socketRef.current) {
+      try { socketRef.current.disconnect(); } catch {}
+      socketRef.current = null;
+    }
+    setRunning(false);
+    if (xtermRef.current) {
+      xtermRef.current.writeln('\r\n\x1b[31m[Process stopped by user]\x1b[0m\r\n');
+    }
+  };
+
   return (
     <div style={{
-      height: open ? '280px' : '40px',
-      borderTop: '1px solid var(--border)',
-      background: 'var(--bg)',
+      height: open ? '300px' : '38px',
+      borderTop: '1px solid #1e2230',
+      background: '#090a0f',
       flexShrink: 0,
       display: 'flex',
       flexDirection: 'column',
       transition: 'height 0.2s ease',
+      boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.4)',
     }}>
+      {/* Terminal Title Bar */}
       <div
         onClick={onToggle}
         style={{
-          height: '40px',
-          padding: '0 16px',
+          height: '38px',
+          padding: '0 14px',
           display: 'flex',
           alignItems: 'center',
-          gap: '12px',
+          justifyContent: 'space-between',
           cursor: 'pointer',
-          background: 'var(--surface-1)',
+          background: '#10121a',
+          borderBottom: '1px solid #1a1d28',
           userSelect: 'none',
         }}
       >
-        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-          Interactive Terminal {open ? '▼' : '▲'}
-        </span>
-        {running && (
-          <span style={{ fontSize: '10px', fontFamily: 'Söhne Mono, ui-monospace, monospace', color: 'var(--warning)' }}>
-            Running...
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* macOS window control circles */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+          </div>
+          <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.04em', fontFamily: 'Söhne Mono, monospace' }}>
+            terminal ~ {language.toLowerCase()}
           </span>
-        )}
+          {running && (
+            <span style={{
+              fontSize: '10px',
+              fontFamily: 'Söhne Mono, monospace',
+              color: '#38bdf8',
+              background: 'rgba(56, 189, 248, 0.1)',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              border: '1px solid rgba(56, 189, 248, 0.3)'
+            }}>
+              ● Executing...
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {open && (
+            <>
+              <button
+                onClick={handleClear}
+                style={{
+                  padding: '3px 8px',
+                  background: '#1e2230',
+                  border: '1px solid #2d3348',
+                  borderRadius: '3px',
+                  color: '#cbd5e1',
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Clear
+              </button>
+              {running && (
+                <button
+                  onClick={handleKill}
+                  style={{
+                    padding: '3px 8px',
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    border: '1px solid #ef4444',
+                    borderRadius: '3px',
+                    color: '#f87171',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Kill
+                </button>
+              )}
+            </>
+          )}
+          <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '4px' }}>
+            {open ? '▼' : '▲'}
+          </span>
+        </div>
       </div>
 
-      {open && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '8px 16px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Execution Output (Interactive)
-            </span>
-          </div>
-          <div 
-            ref={terminalRef} 
-            style={{ flex: 1, padding: '12px', background: 'var(--surface-1)', overflow: 'hidden' }}
-          />
-        </div>
-      )}
+      <div style={{
+        flex: 1,
+        display: open ? 'flex' : 'none',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        background: '#090a0f'
+      }}>
+        <div 
+          ref={terminalRef} 
+          style={{ flex: 1, padding: '10px 14px', background: '#090a0f', overflow: 'hidden' }}
+        />
+      </div>
     </div>
   );
 }
@@ -1166,40 +1869,122 @@ function Modal({
   questionTitle: string;
 }) {
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 999990,
+        background: 'rgba(18, 17, 15, 0.85)',
+        backdropFilter: 'blur(12px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px'
+      }}
+      onClick={onClose}
+    >
       <div
-        className="modal-content animate-fade-up"
-        style={{ maxWidth: '380px' }}
+        className="animate-fade-up"
+        style={{
+          maxWidth: '440px',
+          width: '100%',
+          background: '#181715',
+          border: '1px solid rgba(230, 223, 216, 0.14)',
+          borderRadius: '16px',
+          padding: '32px',
+          boxShadow: '0 24px 64px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(204, 120, 92, 0.15)',
+          position: 'relative',
+          overflow: 'hidden'
+        }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="modal-header">
-          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            Submit this answer?
-          </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '22px', cursor: 'pointer' }}>×</button>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '3px',
+          background: 'linear-gradient(90deg, #cc785c 0%, #e8a55a 100%)'
+        }} />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+          <div>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 10px',
+              borderRadius: '9999px',
+              background: 'rgba(204, 120, 92, 0.12)',
+              border: '1px solid rgba(204, 120, 92, 0.3)',
+              color: '#cc785c',
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              marginBottom: '10px',
+              fontFamily: 'StyreneB, Inter, sans-serif'
+            }}>
+              <span>✦</span> Submission Confirm
+            </div>
+            <h3 style={{
+              fontFamily: 'Copernicus, "Tiempos Headline", "Georgia", "Iowan Old Style", serif',
+              fontSize: '22px',
+              fontWeight: 400,
+              color: '#faf9f5',
+              letterSpacing: '-0.3px',
+              margin: 0
+            }}>
+              Submit Solution?
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#a09d96',
+              fontSize: '22px',
+              lineHeight: 1,
+              cursor: 'pointer',
+              padding: '4px',
+              transition: 'color 0.15s'
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#faf9f5')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#a09d96')}
+          >
+            ×
+          </button>
         </div>
-        <div className="modal-body">
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            You are submitting your solution for <strong style={{ color: 'var(--text-primary)' }}>{questionTitle}</strong>.
-            You will not be able to edit this question after submission.
-          </p>
-        </div>
-        <div className="modal-footer" style={{ display: 'flex', gap: '8px' }}>
+
+        <p style={{
+          fontFamily: 'StyreneB, Inter, sans-serif',
+          fontSize: '14px',
+          color: '#a09d96',
+          lineHeight: 1.6,
+          marginBottom: '28px'
+        }}>
+          You are about to finalize and submit your solution for <strong style={{ color: '#faf9f5', fontWeight: 600 }}>{questionTitle}</strong>. Once submitted, your code is recorded and cannot be edited.
+        </p>
+
+        <div style={{ display: 'flex', gap: '12px' }}>
           <button
             onClick={onClose}
             style={{
               flex: 1,
-              padding: '11px',
-              background: 'transparent',
-              border: '1px solid var(--border)',
-              borderRadius: '3px',
-              color: 'var(--text-secondary)',
-              fontSize: '11px',
-              fontWeight: 600,
-              letterSpacing: '0.10em',
-              textTransform: 'uppercase',
+              padding: '11px 16px',
+              background: '#252320',
+              border: '1px solid rgba(230, 223, 216, 0.12)',
+              borderRadius: '8px',
+              color: '#faf9f5',
+              fontSize: '13px',
+              fontWeight: 500,
               cursor: 'pointer',
+              fontFamily: 'StyreneB, Inter, sans-serif',
+              transition: 'background 0.15s ease'
             }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#2e2b27')}
+            onMouseLeave={e => (e.currentTarget.style.background = '#252320')}
           >
             Cancel
           </button>
@@ -1207,20 +1992,23 @@ function Modal({
             id="confirm-submit-btn"
             onClick={onConfirm}
             style={{
-              flex: 2,
-              padding: '11px',
-              background: 'var(--accent)',
-              border: '1px solid transparent',
-              borderRadius: '3px',
-              color: '#fff',
-              fontSize: '11px',
-              fontWeight: 600,
-              letterSpacing: '0.10em',
-              textTransform: 'uppercase',
+              flex: 1.5,
+              padding: '11px 16px',
+              background: '#cc785c',
+              border: 'none',
+              borderRadius: '8px',
+              color: '#ffffff',
+              fontSize: '13px',
+              fontWeight: 500,
               cursor: 'pointer',
+              fontFamily: 'StyreneB, Inter, sans-serif',
+              boxShadow: '0 4px 14px rgba(204, 120, 92, 0.35)',
+              transition: 'background 0.15s ease'
             }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#a9583e')}
+            onMouseLeave={e => (e.currentTarget.style.background = '#cc785c')}
           >
-            Submit
+            Confirm Submission
           </button>
         </div>
       </div>
@@ -1252,77 +2040,142 @@ function FinalScreen({
       padding: '40px 20px',
     }}>
       <div className="animate-fade-up" style={{ maxWidth: '440px', width: '100%' }}>
-        <p style={{
-          fontSize: '11px',
-          fontWeight: 600,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: 'var(--success)',
-          marginBottom: '12px',
-        }}>
-          ✓ Test Complete
-        </p>
+        <div style={{ marginBottom: '12px' }}>
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '11px',
+            fontWeight: 600,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: '#4e9a6e',
+            background: 'rgba(78, 154, 110, 0.12)',
+            border: '1px solid rgba(78, 154, 110, 0.3)',
+            padding: '4px 12px',
+            borderRadius: '999px',
+          }}>
+            ✓ Submitted Successfully
+          </span>
+        </div>
+
         <h1 style={{
-          fontSize: '36px',
+          fontSize: '34px',
           fontWeight: 600,
           color: 'var(--text-primary)',
           letterSpacing: '-0.02em',
-          marginBottom: '4px',
+          lineHeight: 1.15,
+          marginBottom: '6px',
+          fontFamily: 'Copernicus, "Times New Roman", Georgia, serif',
         }}>
           {student.name}
         </h1>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '40px', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
-          Roll {student.roll_no} · {student.division}
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '28px', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
+          Roll {student.roll_no} · Division {student.division}
         </p>
 
-        <div style={{ height: '1px', background: 'var(--border)', marginBottom: '32px' }} />
-
-        {/* Per-question scores */}
-        {questions.map((q, i) => (
-          <div key={q.id} style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '12px 0',
-            borderBottom: '1px solid var(--border-subtle)',
-          }}>
-            <div>
-              <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '2px', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
-                Q{String(i + 1).padStart(2, '0')}
-              </p>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{q.title}</p>
-            </div>
-            <span style={{
-              fontSize: '18px',
+        {/* Official Announcement Notice */}
+        <div style={{
+          padding: '20px 22px',
+          background: 'var(--surface-1, #181715)',
+          border: '1px solid var(--accent, #cc785c)',
+          borderRadius: '8px',
+          marginBottom: '32px',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ color: 'var(--accent, #cc785c)', fontSize: '15px' }}>✦</span>
+            <h2 style={{
+              fontSize: '15px',
               fontWeight: 600,
-              fontFamily: 'Söhne Mono, ui-monospace, monospace',
-              color: submissions[q.id] ? 'var(--text-primary)' : 'var(--text-muted)',
+              color: 'var(--text-primary)',
+              margin: 0,
+              fontFamily: 'Copernicus, Georgia, serif',
             }}>
-              {submitScores[q.id] !== undefined ? `${submitScores[q.id]}` : '—'}<span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>/10</span>
-            </span>
+              Results Will Be Out Soon
+            </h2>
           </div>
-        ))}
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+            Your exam responses and code drafts have been securely saved and submitted. 
+            The official results and evaluation marksheet PDF will be published and shared directly in your <strong>College WhatsApp Group</strong> once faculty verification is completed.
+          </p>
+        </div>
 
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '24px 0 0',
+          marginBottom: '12px',
+        }}>
+          <p className="text-label" style={{ margin: 0 }}>
+            Questions Summary
+          </p>
+          <span style={{
+            fontSize: '12px',
+            fontFamily: 'Söhne Mono, ui-monospace, monospace',
+            color: 'var(--text-muted)',
+          }}>
+            {Object.keys(submissions).length} / {questions.length} Attempted
+          </span>
+        </div>
+
+        <div style={{ marginBottom: '28px', borderTop: '1px solid var(--border)' }}>
+          {questions.map((q, i) => {
+            const hasSubmission = Boolean(submissions[q.id]);
+            return (
+              <div key={q.id} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '12px 0',
+                borderBottom: '1px solid var(--border-subtle)',
+              }}>
+                <div>
+                  <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '2px', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
+                    Question {String(i + 1).padStart(2, '0')}
+                  </p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500, margin: 0 }}>{q.title}</p>
+                </div>
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  letterSpacing: '0.04em',
+                  padding: '4px 10px',
+                  borderRadius: '999px',
+                  background: hasSubmission ? 'rgba(78, 154, 110, 0.12)' : 'rgba(150, 150, 150, 0.08)',
+                  color: hasSubmission ? '#4e9a6e' : 'var(--text-muted)',
+                  border: `1px solid ${hasSubmission ? 'rgba(78, 154, 110, 0.3)' : 'var(--border)'}`,
+                }}>
+                  {hasSubmission ? '✓ Submitted' : '— Not Attempted'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Submission Timestamp & Exit Guidance */}
+        <div style={{
+          padding: '16px',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border)',
+          borderRadius: '6px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
         }}>
           <div>
-            <p className="text-label" style={{ marginBottom: '4px' }}>Total Score</p>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-              Submitted at {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Submission Recorded
+            </p>
+            <p style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500, margin: '2px 0 0', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
+              {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
             </p>
           </div>
-          <span style={{
-            fontSize: '36px',
-            fontWeight: 700,
-            fontFamily: 'Söhne Mono, ui-monospace, monospace',
-            color: 'var(--text-primary)',
-          }}>
-            {totalScore}<span style={{ fontSize: '18px', color: 'var(--text-muted)' }}>/30</span>
-          </span>
+          <div style={{ textAlign: 'right' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              ✓ Safe to close this tab
+            </span>
+          </div>
         </div>
       </div>
     </div>
