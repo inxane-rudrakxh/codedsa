@@ -20,6 +20,81 @@ export interface ExecutionResult {
 
 const JUDGE0_URL = process.env.JUDGE0_API_URL || 'https://ce.judge0.com';
 const JUDGE0_KEY = process.env.JUDGE0_API_KEY || '';
+const PISTON_URL = process.env.PISTON_API_URL || '';
+
+async function runPistonCode(
+  code: string,
+  input: string,
+  lang: string,
+  timeLimitSec: number
+): Promise<ExecutionResult | null> {
+  const url = PISTON_URL || 'https://emkc.org/api/v2/piston';
+  const startTime = Date.now();
+  const langMap: Record<string, string> = {
+    c: 'c',
+    cpp: 'cpp',
+    python: 'python3',
+    java: 'java',
+  };
+  const pistonLang = langMap[lang] || lang;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.max((timeLimitSec + 4) * 1000, 7000));
+
+    const endpoint = url.endsWith('/execute') ? url : `${url.replace(/\/+$/, '')}/execute`;
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: pistonLang,
+        version: '*',
+        files: [{ content: code }],
+        stdin: input || '',
+        run_timeout: Math.round(timeLimitSec * 1000),
+        compile_timeout: 10000
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    if (data.message && typeof data.message === 'string' && !data.run && !data.compile) {
+      console.warn('Piston API message:', data.message);
+      return null;
+    }
+
+    if (data.compile && data.compile.code !== 0) {
+      return {
+        success: false,
+        compile_error: data.compile.stderr || data.compile.output || 'Compilation Error',
+        execution_time: Date.now() - startTime
+      };
+    }
+
+    if (data.run) {
+      if (data.run.signal === 'SIGKILL' || data.run.signal === 'SIGTERM') {
+        return {
+          success: false,
+          timed_out: true,
+          execution_time: Date.now() - startTime
+        };
+      }
+      return {
+        success: data.run.code === 0,
+        output: data.run.stdout || data.run.output || '',
+        stderr: data.run.stderr || '',
+        runtime_error: data.run.code !== 0 ? (data.run.stderr || `Exit code ${data.run.code}`) : undefined,
+        execution_time: Date.now() - startTime
+      };
+    }
+  } catch (err: any) {
+    console.warn('Piston execution attempt failed:', err?.message);
+  }
+  return null;
+}
 
 function isCompilerMissingError(errMsg: string): boolean {
   const lower = (errMsg || '').toLowerCase();
@@ -247,8 +322,20 @@ export async function compileAndRun(
   if (effectiveLang === 'c') languageId = 50;
   else if (effectiveLang === 'python') languageId = 71;
   else if (effectiveLang === 'java') languageId = 62;
-  
-  // 2. Try Judge0 remote execution
+
+  // 2. Try Piston API if configured (e.g. self-hosted Piston container or custom endpoint)
+  if (PISTON_URL) {
+    try {
+      const pistonRes = await runPistonCode(sanitizedCode, input, effectiveLang, timeLimit);
+      if (pistonRes) {
+        return pistonRes;
+      }
+    } catch (pistonErr: any) {
+      console.warn("Piston execution failed, falling back:", pistonErr?.message);
+    }
+  }
+
+  // 3. Try Judge0 remote execution
   let judge0Error: string | null = null;
   try {
     const headers: Record<string, string> = {
