@@ -202,7 +202,12 @@ export default function WorkspacePage() {
     setDemoPlaying(false);
     setDemoCode('');
     setDemoIndex(0);
-  }, [activeQuestion]);
+    if (sessionData?.questions?.[activeQuestion]) {
+      const q = sessionData.questions[activeQuestion];
+      const sample = q.example_input || (sessionData.testCases?.[q.id]?.[0]?.input) || '';
+      setCustomInput(sample);
+    }
+  }, [activeQuestion, sessionData]);
 
   // Demo playback loop
   useEffect(() => {
@@ -897,6 +902,30 @@ export default function WorkspacePage() {
                             {running ? 'Running...' : 'Run Code'}
                           </button>
                           <button
+                            type="button"
+                            onClick={() => {
+                              setConsoleOpen(true);
+                            }}
+                            title="Open Stdin / Custom Input for program execution"
+                            style={{
+                              padding: '6px 12px',
+                              background: customInput.trim() ? 'rgba(34, 197, 94, 0.12)' : 'var(--surface-2)',
+                              border: customInput.trim() ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid var(--border)',
+                              borderRadius: '4px',
+                              color: customInput.trim() ? '#22c55e' : 'var(--text-secondary)',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <span>⌨</span>
+                            <span>{customInput.trim() ? `Stdin (${customInput.trim().split(/\s+/).length})` : 'Custom Input'}</span>
+                          </button>
+                          <button
                             id="submit-btn"
                             onClick={() => setShowSubmitConfirm(true)}
                             disabled={submitting || running}
@@ -979,6 +1008,9 @@ export default function WorkspacePage() {
                     getToken={getToken}
                     questionId={currentQuestion?.id}
                     input={customInput}
+                    setInput={setCustomInput}
+                    exampleInput={currentQuestion?.example_input || (sessionData?.testCases?.[currentQuestion?.id]?.[0]?.input) || ''}
+                    onRunCode={handleRunCode}
                   />
                 </div>
               </div>
@@ -1172,6 +1204,22 @@ function QuestionPanel({ question, index }: { question: Question; index: number 
         </Section>
       )}
 
+      {question.example_input && (
+        <Section label="Sample Input">
+          <pre style={{ background: 'var(--surface-2)', padding: '10px 14px', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '12px', fontFamily: 'Söhne Mono, monospace', color: 'var(--text-primary)', overflowX: 'auto', margin: 0 }}>
+            {question.example_input}
+          </pre>
+        </Section>
+      )}
+
+      {question.example_output && (
+        <Section label="Sample Output">
+          <pre style={{ background: 'var(--surface-2)', padding: '10px 14px', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '12px', fontFamily: 'Söhne Mono, monospace', color: 'var(--text-primary)', overflowX: 'auto', margin: 0 }}>
+            {question.example_output}
+          </pre>
+        </Section>
+      )}
+
       <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: '3px', border: '1px solid var(--border)' }}>
         <p style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
           💡 <strong style={{ color: 'var(--text-secondary)' }}>Note:</strong> You can use a hardcoded array or take input from the user.
@@ -1201,6 +1249,9 @@ function ConsolePanel({
   getToken,
   questionId,
   input,
+  setInput,
+  exampleInput,
+  onRunCode,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -1212,12 +1263,16 @@ function ConsolePanel({
   getToken?: () => string;
   questionId?: number;
   input?: string;
+  setInput?: (val: string | ((prev: string) => string)) => void;
+  exampleInput?: string;
+  onRunCode?: () => void;
 }) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<any>(null);
   const fitAddonRef = useRef<any>(null);
   const socketRef = useRef<any>(null);
   const onDataDisposableRef = useRef<any>(null);
+  const [activeTab, setActiveTab] = useState<'terminal' | 'input'>('terminal');
 
   const ensureTerminal = async () => {
     if (xtermRef.current) return xtermRef.current;
@@ -1272,7 +1327,7 @@ function ConsolePanel({
 
     term.writeln('\x1b[1;36m═══════════════════════════════════════════════════════════════\x1b[0m');
     term.writeln('\x1b[1;32m  DSA Interactive Terminal\x1b[0m \x1b[90m(Stdin / Terminal Mode Active)\x1b[0m');
-    term.writeln('\x1b[90m  Press "Run Code" above or Ctrl+Enter to compile & run.\x1b[0m');
+    term.writeln('\x1b[90m  Press "Run Code" above or switch to "Custom Input" tab for stdin.\x1b[0m');
     term.writeln('\x1b[1;36m═══════════════════════════════════════════════════════════════\x1b[0m\r\n');
 
     return term;
@@ -1280,11 +1335,17 @@ function ConsolePanel({
 
   useEffect(() => {
     ensureTerminal().then(() => {
-      if (open && fitAddonRef.current) {
+      if (open && activeTab === 'terminal' && fitAddonRef.current) {
         setTimeout(() => fitAddonRef.current?.fit(), 60);
       }
     });
-  }, [open]);
+  }, [open, activeTab]);
+
+  useEffect(() => {
+    if (runTrigger > 0) {
+      setActiveTab('terminal');
+    }
+  }, [runTrigger]);
 
   const runViaHttpFallback = async (termInstance?: any) => {
     const term = termInstance || xtermRef.current;
@@ -1294,6 +1355,9 @@ function ConsolePanel({
     }
     const displayLang = (language || 'cpp').toUpperCase();
     term.writeln(`\x1b[1;33m● Compiling source via Execution Engine (${displayLang})...\x1b[0m\r\n`);
+    if (input && input.trim()) {
+      term.writeln(`\x1b[90m↳ Standard Input: "${input.trim().replace(/\r?\n/g, ' ')}"\x1b[0m\r\n`);
+    }
     
     try {
       const token = getToken ? getToken() : '';
@@ -1308,16 +1372,16 @@ function ConsolePanel({
       const data = await res.json();
       
       if (!data.success && data.compile_error) {
-        term.writeln(`\r\n\x1b[1;31m✖ Compilation Error:\x1b[0m\r\n\x1b[31m${data.compile_error.replace(/\n/g, '\r\n')}\x1b[0m\r\n`);
+        term.writeln(`\r\n\x1b[1;31m✖ Compilation Error:\x1b[0m\r\n\x1b[31m${data.compile_error.replace(/\r?\n/g, '\r\n')}\x1b[0m\r\n`);
       } else if (data.timed_out) {
         term.writeln(`\r\n\x1b[1;31m✖ Time Limit Exceeded (5s)\x1b[0m\r\n`);
       } else {
         term.writeln(`\x1b[1;32m✔ Build successful\x1b[0m\r\n\x1b[1;36m$\x1b[0m \x1b[90m./a.out\x1b[0m\r\n`);
         if (data.output) {
-          term.write(data.output.replace(/\n/g, '\r\n'));
+          term.write(data.output.replace(/\r?\n/g, '\r\n'));
         }
         if (data.stderr) {
-          term.write(`\r\n\x1b[31m${data.stderr.replace(/\n/g, '\r\n')}\x1b[0m`);
+          term.write(`\r\n\x1b[31m${data.stderr.replace(/\r?\n/g, '\r\n')}\x1b[0m`);
         }
         term.writeln(`\r\n\x1b[90m----------------------------------------\r\n[Process completed in ${data.execution_time || 0}ms]\x1b[0m\r\n`);
       }
@@ -1412,9 +1476,28 @@ function ConsolePanel({
           }
         });
 
+        let liveBuffer = '';
         onDataDisposableRef.current = term.onData((data: string) => {
           if (socket.connected) {
             socket.emit('input', data);
+            return;
+          }
+          if (data === '\r' || data === '\n') {
+            term.write('\r\n');
+            const typed = liveBuffer;
+            liveBuffer = '';
+            if (setInput && typed) {
+              setInput(prev => (prev && prev.trim() ? prev + '\n' + typed : typed));
+              term.writeln(`\x1b[90m↳ Added to Stdin buffer. Press "Run Code" or Ctrl+Enter to execute.\x1b[0m`);
+            }
+          } else if (data === '\u007F' || data === '\b') {
+            if (liveBuffer.length > 0) {
+              liveBuffer = liveBuffer.slice(0, -1);
+              term.write('\b \b');
+            }
+          } else if (data >= ' ' || data === '\t') {
+            liveBuffer += data;
+            term.write(data);
           }
         });
 
@@ -1458,7 +1541,7 @@ function ConsolePanel({
 
   return (
     <div style={{
-      height: open ? '300px' : '38px',
+      height: open ? '320px' : '38px',
       borderTop: '1px solid #1e2230',
       background: '#090a0f',
       flexShrink: 0,
@@ -1489,9 +1572,75 @@ function ConsolePanel({
             <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
             <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
           </div>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.04em', fontFamily: 'Söhne Mono, monospace' }}>
-            terminal ~ {language.toLowerCase()}
-          </span>
+
+          {/* Navigation Tabs */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '6px' }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTab('terminal');
+                setTimeout(() => fitAddonRef.current?.fit(), 30);
+              }}
+              style={{
+                padding: '3px 10px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: activeTab === 'terminal' ? '#1e293b' : 'transparent',
+                color: activeTab === 'terminal' ? '#38bdf8' : '#94a3b8',
+                border: activeTab === 'terminal' ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid transparent',
+                fontFamily: 'Söhne Mono, monospace',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <span>🖥</span> Terminal Output
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTab('input');
+              }}
+              style={{
+                padding: '3px 10px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: activeTab === 'input' ? '#1e293b' : 'transparent',
+                color: activeTab === 'input' ? '#38bdf8' : '#94a3b8',
+                border: activeTab === 'input' ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid transparent',
+                fontFamily: 'Söhne Mono, monospace',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <span>⌨</span> Custom Input (stdin)
+              {input && input.trim().length > 0 ? (
+                <span style={{
+                  background: '#22c55e',
+                  color: '#000',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  padding: '1px 5px',
+                  borderRadius: '999px',
+                  marginLeft: '2px'
+                }}>
+                  {input.trim().split(/\s+/).length}
+                </span>
+              ) : (
+                <span style={{ color: '#64748b', fontSize: '10px' }}>(empty)</span>
+              )}
+            </button>
+          </div>
+
           {running && (
             <span style={{
               fontSize: '10px',
@@ -1550,6 +1699,7 @@ function ConsolePanel({
         </div>
       </div>
 
+      {/* Panel Body */}
       <div style={{
         flex: 1,
         display: open ? 'flex' : 'none',
@@ -1557,10 +1707,120 @@ function ConsolePanel({
         overflow: 'hidden',
         background: '#090a0f'
       }}>
+        {/* Terminal Tab Container (Kept in DOM so xterm stays alive) */}
         <div 
           ref={terminalRef} 
-          style={{ flex: 1, padding: '10px 14px', background: '#090a0f', overflow: 'hidden' }}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            background: '#090a0f',
+            overflow: 'hidden',
+            display: activeTab === 'terminal' ? 'block' : 'none'
+          }}
         />
+
+        {/* Custom Input (stdin) Tab Container */}
+        {activeTab === 'input' && (
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '12px 16px',
+            background: '#090a0f',
+            overflow: 'hidden'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: '#e2e8f0', fontFamily: 'Söhne Mono, monospace' }}>
+                  STANDARD INPUT (STDIN)
+                </span>
+                <span style={{ fontSize: '11px', color: '#64748b' }}>
+                  — Values here are sequentially read by cin &gt;&gt; / scanf()
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {exampleInput && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setInput?.(exampleInput); }}
+                    style={{
+                      padding: '3px 9px',
+                      background: '#1e2230',
+                      border: '1px solid #2d3348',
+                      borderRadius: '4px',
+                      color: '#38bdf8',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    📋 Use Sample Input
+                  </button>
+                )}
+                {input && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setInput?.(''); }}
+                    style={{
+                      padding: '3px 9px',
+                      background: '#1e2230',
+                      border: '1px solid #2d3348',
+                      borderRadius: '4px',
+                      color: '#94a3b8',
+                      fontSize: '11px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveTab('terminal');
+                    onRunCode?.();
+                  }}
+                  disabled={running}
+                  style={{
+                    padding: '4px 12px',
+                    background: '#38bdf8',
+                    border: 'none',
+                    borderRadius: '4px',
+                    color: '#090a0f',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: running ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <span>▶</span> Run Code with Stdin
+                </button>
+              </div>
+            </div>
+            <textarea
+              value={input || ''}
+              onChange={(e) => setInput?.(e.target.value)}
+              placeholder={'Enter input values for your program here...\nExample:\n5\n10 20 30 40 50\n\n(Each line or space-separated value will be read by cin >> / scanf)'}
+              style={{
+                flex: 1,
+                width: '100%',
+                background: '#0d1117',
+                border: '1px solid #1e293b',
+                borderRadius: '6px',
+                color: '#f8fafc',
+                fontFamily: "'JetBrains Mono', 'Söhne Mono', monospace",
+                fontSize: '12px',
+                lineHeight: '1.5',
+                padding: '10px 12px',
+                resize: 'none',
+                outline: 'none',
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

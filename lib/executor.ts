@@ -280,6 +280,33 @@ async function runLocalCode(
   }
 }
 
+export function formatInteractiveOutput(output: string, input: string): string {
+  if (!output) return output;
+  const inputTokens = (input || '').trim().split(/\s+/).filter(Boolean);
+  if (inputTokens.length === 0) return output;
+
+  // Match prompt phrases ending in : or ? that are followed immediately by another text/prompt without newline
+  // e.g. "Enter a: Enter b: Sum: 30" -> "Enter a: 10\nEnter b: 20\nSum: 30"
+  const promptRegex = /([A-Za-z][A-Za-z0-9_\s]{1,40}[:\?]\s*)(?=[^\r\n])/g;
+  const matches = [...output.matchAll(promptRegex)];
+  if (matches.length > 0 && inputTokens.length > 0) {
+    let result = '';
+    let lastIdx = 0;
+    let tokenIdx = 0;
+    for (const m of matches) {
+      if (m.index === undefined) continue;
+      result += output.substring(lastIdx, m.index + m[0].length);
+      if (tokenIdx < inputTokens.length) {
+        result += inputTokens[tokenIdx++] + '\n';
+      }
+      lastIdx = m.index + m[0].length;
+    }
+    result += output.substring(lastIdx);
+    return result;
+  }
+  return output;
+}
+
 export async function compileAndRun(
   code: string, 
   input: string, 
@@ -311,6 +338,9 @@ export async function compileAndRun(
     try {
       const localResult = await runLocalCode(sanitizedCode, input, effectiveLang, timeLimit);
       if (localResult.runtime_error !== 'LOCAL_COMPILER_MISSING') {
+        if (localResult.output) {
+          localResult.output = formatInteractiveOutput(localResult.output, input);
+        }
         return localResult;
       }
     } catch (localErr: any) {
@@ -328,6 +358,9 @@ export async function compileAndRun(
     try {
       const pistonRes = await runPistonCode(sanitizedCode, input, effectiveLang, timeLimit);
       if (pistonRes) {
+        if (pistonRes.output) {
+          pistonRes.output = formatInteractiveOutput(pistonRes.output, input);
+        }
         return pistonRes;
       }
     } catch (pistonErr: any) {
@@ -403,9 +436,19 @@ export async function compileAndRun(
       }
       
       if (statusId === 3 || statusId === 4) {
+        let finalOut = formatInteractiveOutput(stdoutStr, input);
+        // If stdin was empty, and code expected cin/scanf, and raw output has bunched prompts without linebreaks:
+        if ((!input || !input.trim()) && (sanitizedCode.includes('cin') || sanitizedCode.includes('scanf')) && /[:\?]\s*[A-Za-z]/.test(finalOut)) {
+          try {
+            const aiOutput = await simulateCodeExecutionWithAI(sanitizedCode, effectiveLang, input);
+            if (aiOutput && !aiOutput.startsWith('Error:')) {
+              finalOut = aiOutput;
+            }
+          } catch {}
+        }
         return {
           success: true,
-          output: stdoutStr,
+          output: finalOut,
           stderr: stderrStr,
           execution_time: parseFloat(data.time) * 1000 || (Date.now() - startTime)
         };
