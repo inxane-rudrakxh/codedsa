@@ -275,244 +275,9 @@ export default function WorkspacePage() {
     return () => { if (saveTimerRef.current) clearInterval(saveTimerRef.current); };
   }, [sessionData, activeQuestion, codes, loading, getToken]);
 
-  const lastWarningRef = useRef<number>(0);
-  const lastEventTypeRef = useRef<string>('');
-
-  // Integrity monitoring
-  useEffect(() => {
-    if (!sessionData) return;
-
-    // Try to enter fullscreen on mount
-    const requestFullscreen = () => {
-      if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      }
-    };
-    
-    // Listen for interaction to trigger fullscreen
-    const firstClick = () => {
-      requestFullscreen();
-      document.removeEventListener('click', firstClick);
-    };
-    document.addEventListener('click', firstClick);
-
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        setShowFullscreenPrompt(true);
-        reportIntegrity('fullscreen_exit');
-      } else {
-        setShowFullscreenPrompt(false);
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.hidden || document.visibilityState === 'hidden') {
-        setTabSwitchReason('You navigated away from the exam tab (Tab Switch / Minimized)');
-        setShowTabSwitchModal(true);
-        reportIntegrity('tab_hidden');
-      }
-    };
-
-    const handleBlur = () => {
-      setTabSwitchReason('Exam window lost focus (Application Switch / Window Inactive)');
-      setShowTabSwitchModal(true);
-      reportIntegrity('window_blur');
-    };
-
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-      return '';
-    };
-
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      reportIntegrity('right_click');
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const key = e.key;
-      const code = e.code || '';
-      const lowerKey = key.toLowerCase();
-
-      // 1. Strictly block F11
-      if (key === 'F11' || code === 'F11' || e.keyCode === 122) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        setShowFullscreenPrompt(true);
-        reportIntegrity('fullscreen_exit');
-        return false;
-      }
-
-      // 2. Block all Function Keys F1 - F12
-      if (/^F([1-9]|1[0-2])$/.test(key) || /^F([1-9]|1[0-2])$/.test(code)) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        reportIntegrity('forbidden_key');
-        return false;
-      }
-
-      // 3. Block Windows Start Key / Meta Key / Command Key
-      if (e.metaKey || key === 'Meta' || key === 'OS' || code === 'MetaLeft' || code === 'MetaRight') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        reportIntegrity('forbidden_key');
-        return false;
-      }
-
-      // 4. Block Escape key
-      if (key === 'Escape' || code === 'Escape' || e.keyCode === 27) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        reportIntegrity('forbidden_key');
-        return false;
-      }
-
-      // 5. Block PrintScreen / Screen Capture
-      if (key === 'PrintScreen' || code === 'PrintScreen' || e.keyCode === 44 || (e.metaKey && e.shiftKey && ['3', '4', '5'].includes(key))) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText('').catch(() => {});
-        }
-        reportIntegrity('forbidden_key');
-        return false;
-      }
-
-      // 6. Block ContextMenu key
-      if (key === 'ContextMenu' || code === 'ContextMenu') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        reportIntegrity('right_click');
-        return false;
-      }
-
-      // 7. Block Alt combinations (Alt+Tab, Alt+F4, Alt+Left/Right)
-      if (e.altKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        reportIntegrity('forbidden_key');
-        return false;
-      }
-
-      // 8. Block Ctrl/Cmd combinations: C, V, X, A, U, S, P, I, J
-      if (e.ctrlKey || (isMac && e.metaKey)) {
-        if (['c', 'v', 'x', 'a', 'u', 's', 'p', 'i', 'j'].includes(lowerKey)) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          if (['c', 'v', 'x'].includes(lowerKey)) {
-            reportIntegrity('copy_paste_attempt');
-          } else {
-            reportIntegrity('forbidden_key');
-          }
-          return false;
-        }
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44) {
-        e.preventDefault();
-        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText('').catch(() => {});
-        }
-        reportIntegrity('forbidden_key');
-      }
-    };
-
-    const handleCopyPaste = (e: ClipboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      reportIntegrity('copy_paste_attempt');
-    };
-
-    const handlePreventSelection = (e: Event) => {
-      e.preventDefault();
-    };
-
-    // Use capture phase (true) so listeners trigger BEFORE Monaco/Terminal or child inputs
-    window.addEventListener('keydown', handleKeyDown, true);
-    window.addEventListener('keyup', handleKeyUp, true);
-    window.addEventListener('contextmenu', handleContextMenu, true);
-    window.addEventListener('copy', handleCopyPaste, true);
-    window.addEventListener('paste', handleCopyPaste, true);
-    window.addEventListener('cut', handleCopyPaste, true);
-    document.addEventListener('selectstart', handlePreventSelection, true);
-    document.addEventListener('dragstart', handlePreventSelection, true);
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('blur', handleBlur);
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      document.removeEventListener('click', firstClick);
-      window.removeEventListener('keydown', handleKeyDown, true);
-      window.removeEventListener('keyup', handleKeyUp, true);
-      window.removeEventListener('contextmenu', handleContextMenu, true);
-      window.removeEventListener('copy', handleCopyPaste, true);
-      window.removeEventListener('paste', handleCopyPaste, true);
-      window.removeEventListener('cut', handleCopyPaste, true);
-      document.removeEventListener('selectstart', handlePreventSelection, true);
-      document.removeEventListener('dragstart', handlePreventSelection, true);
-
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('blur', handleBlur);
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [sessionData]);
-
-  const reportIntegrity = async (event_type: string) => {
-    const now = Date.now();
-    // Allow distinct event types immediately; throttle identical repeats within 1.5s
-    if (lastEventTypeRef.current === event_type && (now - lastWarningRef.current < 1500)) {
-      return;
-    }
-    lastWarningRef.current = now;
-    lastEventTypeRef.current = event_type;
-
-    const token = getToken();
-    if (!token) return;
-    try {
-      const res = await fetch('/api/integrity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ event_type }),
-      });
-      const data = await res.json();
-      setWarningCount(data.warnings);
-      
-      const eventMap: Record<string, string> = {
-        'tab_hidden': 'Leaving the exam tab',
-        'window_blur': 'Switching away from the exam window',
-        'fullscreen_exit': 'Exiting fullscreen mode',
-        'right_click': 'Right-clicking',
-        'forbidden_key': 'Using forbidden keyboard shortcuts',
-        'copy_paste_attempt': 'Copying or pasting'
-      };
-      
-      if (data.warnings >= 3) {
-        setIntegrityWarning('Maximum warnings exceeded (3/3). Your exam is being automatically submitted.');
-        handleAutoSubmit();
-      } else {
-        setIntegrityWarning(`${eventMap[event_type] || 'A forbidden action'} has been detected. Warning ${data.warnings} of 3.`);
-      }
-    } catch {}
+  // Anti-cheating and integrity monitoring disabled
+  const reportIntegrity = async (_event_type?: string) => {
+    // No-op: anti-cheating is disabled
   };
 
   const handleAutoSubmit = async () => {
@@ -633,60 +398,10 @@ export default function WorkspacePage() {
         warningCount={warningCount}
       />
 
-      {/* Integrity Warning */}
-      {integrityWarning && (
-        <div style={{
-          background: '#252320',
-          borderBottom: '1px solid rgba(204, 120, 92, 0.3)',
-          padding: '10px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
-        }}>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <span style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '3px 10px',
-              borderRadius: '9999px',
-              background: 'rgba(204, 120, 92, 0.15)',
-              border: '1px solid rgba(204, 120, 92, 0.35)',
-              color: '#cc785c',
-              fontSize: '11px',
-              fontWeight: 600,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              fontFamily: 'StyreneB, Inter, sans-serif'
-            }}>
-              <span>✦</span> Integrity Notice
-            </span>
-            <span style={{ fontSize: '13px', color: '#faf9f5', fontFamily: 'StyreneB, Inter, sans-serif' }}>
-              {integrityWarning}
-            </span>
-          </div>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: '#181715',
-            border: '1px solid rgba(230, 223, 216, 0.12)',
-            borderRadius: '6px',
-            padding: '4px 10px',
-            fontSize: '12px',
-            color: '#e8a55a',
-            fontFamily: 'JetBrains Mono, ui-monospace, monospace'
-          }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#e8a55a' }} />
-            Warnings: <strong style={{ color: '#faf9f5' }}>{warningCount}</strong> / 3
-          </div>
-        </div>
-      )}
 
-      {/* Fullscreen Required Modal Overlay */}
-      {showFullscreenPrompt && (
+
+      {/* Fullscreen Required Modal Overlay (disabled) */}
+      {false && showFullscreenPrompt && (
         <div style={{
           position: 'fixed',
           inset: 0,
@@ -834,8 +549,8 @@ export default function WorkspacePage() {
         </div>
       )}
 
-      {/* Tab Switch / Focus Loss Modal */}
-      {showTabSwitchModal && !showFullscreenPrompt && (
+      {/* Tab Switch / Focus Loss Modal (disabled) */}
+      {false && showTabSwitchModal && (
         <div style={{
           position: 'fixed',
           inset: 0,
@@ -1207,10 +922,6 @@ export default function WorkspacePage() {
                   {/* Monaco Editor */}
                   <div 
                     style={{ flex: 1, overflow: 'hidden', position: 'relative' }}
-                    onCopy={e => { e.preventDefault(); setIntegrityWarning("Copying is disabled during the exam."); setTimeout(() => setIntegrityWarning(null), 3000); }}
-                    onPaste={e => { e.preventDefault(); setIntegrityWarning("Pasting is disabled during the exam."); setTimeout(() => setIntegrityWarning(null), 3000); }}
-                    onCut={e => { e.preventDefault(); }}
-                    onContextMenu={e => e.preventDefault()}
                   >
                     <MonacoEditor
                       height="100%"
@@ -1244,29 +955,13 @@ export default function WorkspacePage() {
                         tabSize: 4,
                         wordWrap: 'on',
                         padding: { top: 16, bottom: 16 },
-                        contextmenu: false,
-                        dragAndDrop: false,
-                        copyWithSyntaxHighlighting: false,
+                        contextmenu: true,
+                        dragAndDrop: true,
+                        copyWithSyntaxHighlighting: true,
                       }}
                       onMount={(editor, monaco) => {
                         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
                           if (!isSubmitted) handleRunCode();
-                        });
-                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {
-                          reportIntegrity('copy_paste_attempt');
-                        });
-                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
-                          reportIntegrity('copy_paste_attempt');
-                        });
-                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {
-                          reportIntegrity('copy_paste_attempt');
-                        });
-                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyA, () => {
-                          reportIntegrity('forbidden_key');
-                        });
-                        editor.addCommand(monaco.KeyCode.F11, () => {
-                          setShowFullscreenPrompt(true);
-                          reportIntegrity('fullscreen_exit');
                         });
                       }}
                     />

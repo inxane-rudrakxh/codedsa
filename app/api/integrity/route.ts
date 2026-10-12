@@ -16,24 +16,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'event_type is required' }, { status: 400 });
   }
 
-  // Increment warning count
-  const sessionData = await prisma.examSession.findUnique({ where: { id: payload.session_id } });
-  const currentWarnings = sessionData?.integrity_warnings || 0;
-  const newWarnings = currentWarnings + 1;
-
-  await prisma.examSession.update({
-    where: { id: payload.session_id },
-    data: { integrity_warnings: newWarnings }
-  });
-
-  // Get max warnings
-  const maxWarnSetting = await prisma.setting.findUnique({ where: { key: 'max_integrity_warnings' } });
-  const maxWarnings = parseInt(maxWarnSetting?.value || '3', 10);
-
+  // Integrity / cheating monitoring is disabled
   return NextResponse.json({
     success: true,
-    warnings: newWarnings,
-    max_warnings: maxWarnings,
-    exceeded: newWarnings >= maxWarnings,
+    warnings: 0,
+    max_warnings: 999999,
+    exceeded: false,
   });
 }

@@ -203,7 +203,7 @@ export default function InstructionsPage() {
               }}
             />
             <span style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              I have read and understood the instructions. I acknowledge that any violation of exam integrity will be recorded.
+              I have read and understood the instructions and am ready to begin the test.
             </span>
           </label>
 
@@ -282,7 +282,7 @@ const instructions = [
   'Use the "Run Code" button to test your program against visible test cases before submitting. Each question is evaluated independently.',
   'Click "Submit" for each question individually when you are satisfied with your solution. Submitted questions cannot be edited.',
   'Your code is automatically saved every few seconds. If you accidentally close the tab, your work will be restored.',
-  'Do not switch browser tabs or exit fullscreen during the exam. These actions are detected and recorded as integrity events.',
+  'You can run and test your code freely. Code is automatically saved every few seconds.',
   'Each question is worth 10 marks (Total: 30). Scoring is based on test case passage — partial credit is awarded.',
   'Do not refresh the page unnecessarily. Your session and timer persist on the server and will not reset.',
   'Ensure you have a stable internet connection before starting. Network interruptions may affect code submission.',
