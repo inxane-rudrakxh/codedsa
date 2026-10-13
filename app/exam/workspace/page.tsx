@@ -132,7 +132,6 @@ export default function WorkspacePage() {
   const [consoleOpen, setConsoleOpen] = useState(true);
   const [submitScores, setSubmitScores] = useState<Record<number, number>>({});
   const [showFinalScreen, setShowFinalScreen] = useState(false);
-  const [customInput, setCustomInput] = useState('');
   
   // Demo Mode State
   const [demoActive, setDemoActive] = useState(false);
@@ -196,17 +195,12 @@ export default function WorkspacePage() {
       .catch(() => router.push('/'));
   }, [router]);
 
-  // Handle active question change
+  // Handle active question change — reset demo state
   useEffect(() => {
     setDemoActive(false);
     setDemoPlaying(false);
     setDemoCode('');
     setDemoIndex(0);
-    if (sessionData?.questions?.[activeQuestion]) {
-      const q = sessionData.questions[activeQuestion];
-      const sample = q.example_input || (sessionData.testCases?.[q.id]?.[0]?.input) || '';
-      setCustomInput(sample);
-    }
   }, [activeQuestion, sessionData]);
 
   // Demo playback loop
@@ -984,9 +978,6 @@ export default function WorkspacePage() {
                     language={language}
                     getToken={getToken}
                     questionId={currentQuestion?.id}
-                    input={customInput}
-                    setInput={setCustomInput}
-                    exampleInput={currentQuestion?.example_input || (sessionData?.testCases?.[currentQuestion?.id]?.[0]?.input) || ''}
                     onRunCode={handleRunCode}
                   />
                 </div>
@@ -1249,48 +1240,53 @@ function ConsolePanel({
   const fitAddonRef = useRef<any>(null);
   const socketRef = useRef<any>(null);
   const onDataDisposableRef = useRef<any>(null);
-  const [activeTab, setActiveTab] = useState<'terminal' | 'input'>('terminal');
 
+  // ── Build the xterm instance once ──────────────────────────────────────────
   const ensureTerminal = async () => {
     if (xtermRef.current) return xtermRef.current;
     const el = terminalRef.current;
     if (!el) return null;
+
     const { Terminal } = await import('xterm');
     const { FitAddon } = await import('xterm-addon-fit');
     await import('xterm/css/xterm.css');
-    
-    if (xtermRef.current) return xtermRef.current;
+
+    if (xtermRef.current) return xtermRef.current; // double-check after async gap
 
     const term = new Terminal({
       theme: {
-        background: '#090a0f',
-        foreground: '#e2e8f0',
-        cursor: '#38bdf8',
-        selectionBackground: '#1e293b',
-        black: '#090a0f',
-        red: '#ef4444',
-        green: '#22c55e',
-        yellow: '#eab308',
-        blue: '#3b82f6',
-        magenta: '#a855f7',
-        cyan: '#06b6d4',
-        white: '#f8fafc',
-        brightBlack: '#475569',
-        brightRed: '#f87171',
-        brightGreen: '#4ade80',
-        brightYellow: '#facc15',
-        brightBlue: '#60a5fa',
-        brightMagenta: '#c084fc',
-        brightCyan: '#38bdf8',
-        brightWhite: '#ffffff',
+        background: '#0d1117',
+        foreground: '#c9d1d9',
+        cursor: '#58a6ff',
+        cursorAccent: '#0d1117',
+        selectionBackground: '#264f78',
+        black: '#0d1117',
+        red: '#ff7b72',
+        green: '#3fb950',
+        yellow: '#d29922',
+        blue: '#58a6ff',
+        magenta: '#bc8cff',
+        cyan: '#39c5cf',
+        white: '#b1bac4',
+        brightBlack: '#6e7681',
+        brightRed: '#ffa198',
+        brightGreen: '#56d364',
+        brightYellow: '#e3b341',
+        brightBlue: '#79c0ff',
+        brightMagenta: '#d2a8ff',
+        brightCyan: '#56d4dd',
+        brightWhite: '#f0f6fc',
       },
-      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, Menlo, monospace",
+      fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, 'Menlo', monospace",
       fontSize: 13,
-      lineHeight: 1.4,
+      lineHeight: 1.5,
+      letterSpacing: 0,
       cursorBlink: true,
       cursorStyle: 'block',
-      scrollback: 1000,
+      scrollback: 5000,
+      allowProposedApi: true,
     });
+
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(el);
@@ -1298,80 +1294,85 @@ function ConsolePanel({
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    window.addEventListener('resize', () => {
+    const ro = new ResizeObserver(() => {
       try { fitAddonRef.current?.fit(); } catch {}
     });
+    ro.observe(el);
 
-    term.writeln('\x1b[1;36m═══════════════════════════════════════════════════════════════\x1b[0m');
-    term.writeln('\x1b[1;32m  DSA Interactive Terminal\x1b[0m \x1b[90m(Stdin / Terminal Mode Active)\x1b[0m');
-    term.writeln('\x1b[90m  Press "Run Code" above or switch to "Custom Input" tab for stdin.\x1b[0m');
-    term.writeln('\x1b[1;36m═══════════════════════════════════════════════════════════════\x1b[0m\r\n');
+    // Welcome banner
+    term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
+    term.writeln('  \x1b[1;32mCODE//ZEAL\x1b[0m \x1b[38;5;240mInteractive Terminal  ·  Run Code or press Ctrl+Enter\x1b[0m');
+    term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m\r\n');
 
     return term;
   };
 
+  // Keep terminal fitted when panel opens
   useEffect(() => {
     ensureTerminal().then(() => {
-      if (open && activeTab === 'terminal' && fitAddonRef.current) {
+      if (open && fitAddonRef.current) {
         setTimeout(() => fitAddonRef.current?.fit(), 60);
       }
     });
-  }, [open, activeTab]);
+  }, [open]);
 
-  useEffect(() => {
-    if (runTrigger > 0) {
-      setActiveTab('terminal');
-    }
-  }, [runTrigger]);
+  // ── HTTP fallback execution (production / Vercel) ───────────────────────────
+  // Uses a two-phase approach:
+  //   Phase 1: if the program reads from stdin, let the user type their input first.
+  //   Phase 2: send everything to /api/exam/run with the captured stdin.
+  const stdinBufferRef = useRef<string>('');
+  const [awaitingStdin, setAwaitingStdin] = useState(false);
+  const awaitingStdinRef = useRef(false);  // mirror for use inside callbacks
 
-  const runViaHttpFallback = async (termInstance?: any) => {
-    const term = termInstance || xtermRef.current;
-    if (!term) {
-      setRunning(false);
-      return;
-    }
+  const runViaHttp = async (termInstance: any, stdinInput: string) => {
+    const term = termInstance;
     const displayLang = (language || 'cpp').toUpperCase();
-    term.writeln(`\x1b[1;33m● Compiling source via Execution Engine (${displayLang})...\x1b[0m\r\n`);
-    if (input && input.trim()) {
-      term.writeln(`\x1b[90m↳ Standard Input: "${input.trim().replace(/\r?\n/g, ' ')}"\x1b[0m\r\n`);
-    }
-    
+
+    term.writeln(`\x1b[1;33m▶ Compiling & running (${displayLang})...\x1b[0m\r\n`);
+
     try {
       const token = getToken ? getToken() : '';
       const res = await fetch('/api/exam/run', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ code, language, question_id: questionId, input: input || '' })
+        body: JSON.stringify({ code, language, question_id: questionId, input: stdinInput }),
       });
       const data = await res.json();
-      
+
       if (!data.success && data.compile_error) {
-        term.writeln(`\r\n\x1b[1;31m✖ Compilation Error:\x1b[0m\r\n\x1b[31m${data.compile_error.replace(/\r?\n/g, '\r\n')}\x1b[0m\r\n`);
+        term.writeln(`\x1b[1;31m✖ Compilation Error\x1b[0m\r\n`);
+        term.write(`\x1b[31m${data.compile_error.replace(/\r?\n/g, '\r\n')}\x1b[0m\r\n`);
       } else if (data.timed_out) {
-        term.writeln(`\r\n\x1b[1;31m✖ Time Limit Exceeded (5s)\x1b[0m\r\n`);
+        term.writeln(`\x1b[1;31m✖ Time Limit Exceeded\x1b[0m\r\n`);
       } else {
-        term.writeln(`\x1b[1;32m✔ Build successful\x1b[0m\r\n\x1b[1;36m$\x1b[0m \x1b[90m./a.out\x1b[0m\r\n`);
-        if (data.output) {
-          term.write(data.output.replace(/\r?\n/g, '\r\n'));
-        }
+        // Write program output exactly, every \n → \r\n for xterm
+        const out = (data.output || '').replace(/\r?\n/g, '\r\n');
+        term.write(out);
+        // Ensure we end on a fresh line
+        if (out && !out.endsWith('\r\n')) term.write('\r\n');
         if (data.stderr) {
-          term.write(`\r\n\x1b[31m${data.stderr.replace(/\r?\n/g, '\r\n')}\x1b[0m`);
+          term.write(`\x1b[31m${data.stderr.replace(/\r?\n/g, '\r\n')}\x1b[0m\r\n`);
         }
-        term.writeln(`\r\n\x1b[90m----------------------------------------\r\n[Process completed in ${data.execution_time || 0}ms]\x1b[0m\r\n`);
       }
+      term.writeln(`\r\n\x1b[38;5;240m[Exited · ${data.execution_time || 0}ms]\x1b[0m\r\n`);
     } catch (err: any) {
-      term.writeln(`\r\n\x1b[1;31m✖ Execution Engine Error: ${err.message || 'Unknown'}\x1b[0m\r\n`);
+      term.writeln(`\x1b[1;31m✖ Engine Error: ${err.message || 'Unknown'}\x1b[0m\r\n`);
     } finally {
       setRunning(false);
+      setAwaitingStdin(false);
+      awaitingStdinRef.current = false;
+      stdinBufferRef.current = '';
     }
   };
 
+  // ── Main run effect ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (runTrigger === 0 || !code) return;
 
+    // Tear down any existing socket/listeners
     if (socketRef.current) {
       try { socketRef.current.disconnect(); } catch {}
       socketRef.current = null;
@@ -1386,101 +1387,164 @@ function ConsolePanel({
     (async () => {
       try {
         const term = await ensureTerminal();
-        if (!term || isCancelled) {
-          setRunning(false);
-          return;
-        }
+        if (!term || isCancelled) { setRunning(false); return; }
 
         term.clear();
         setTimeout(() => fitAddonRef.current?.fit(), 30);
         term.focus();
 
-        const isLocal = typeof window !== 'undefined' && 
-          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '0.0.0.0');
+        const isLocal =
+          typeof window !== 'undefined' &&
+          (window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname === '0.0.0.0');
 
-        // On deployed production, immediately use HTTP Execution Engine (no 4000 port delay or mixed content)
-        if (!isLocal) {
-          runViaHttpFallback(term);
+        // ── PTY path (local dev) ────────────────────────────────────────────
+        // Full interactive terminal: student types directly, cin/scanf work in
+        // real time — identical to a real VS Code terminal.
+        if (isLocal) {
+          let connected = false;
+          let fell = false;
+
+          const { io } = await import('socket.io-client');
+          const host = window.location.hostname || 'localhost';
+          const sessionToken =
+            (typeof window !== 'undefined' ? localStorage.getItem('session_token') : null) || '';
+          const socket = io(`http://${host}:4000`, {
+            timeout: 2500,
+            reconnection: false,
+            auth: { token: sessionToken },
+          });
+          socketRef.current = socket;
+
+          const connTimer = setTimeout(() => {
+            if (!connected && !fell && !isCancelled) {
+              fell = true;
+              try { socket.disconnect(); } catch {}
+              // Fall through to HTTP path below
+              runViaHttp(term, '');
+            }
+          }, 2000);
+
+          socket.on('connect_error', () => {
+            if (!fell && !isCancelled) {
+              clearTimeout(connTimer);
+              fell = true;
+              try { socket.disconnect(); } catch {}
+              runViaHttp(term, '');
+            }
+          });
+
+          socket.on('connect', () => {
+            connected = true;
+            clearTimeout(connTimer);
+            socket.emit('execute', { code, language });
+          });
+
+          // PTY output → xterm (raw passthrough, PTY handles \r\n itself)
+          socket.on('output', (chunk: string) => {
+            if (!isCancelled) term.write(chunk);
+          });
+
+          socket.on('finished', () => {
+            if (!isCancelled) {
+              setRunning(false);
+              try { socket.disconnect(); } catch {}
+            }
+          });
+
+          // xterm keystrokes → PTY stdin (real interactive input)
+          onDataDisposableRef.current = term.onData((data: string) => {
+            if (socket.connected) {
+              socket.emit('input', data);
+            }
+          });
+
+          setTimeout(() => { if (!isCancelled) setRunning(false); }, 31000);
           return;
         }
 
-        let connected = false;
-        let fallbackTriggered = false;
+        // ── HTTP path (production / Vercel) ────────────────────────────────
+        // No persistent process available. We collect stdin from the terminal
+        // first, then fire the request. Feels like a VS Code "run with input".
+        //
+        // How it works:
+        //   1. Show the program immediately so the user sees its prompts.
+        //   2. Let the user type each input line into the terminal (echoed).
+        //   3. When they press Ctrl+D or the Run button again, we have the
+        //      collected stdin — send it to /api/exam/run.
+        //
+        // For programs that don't need stdin (pure output), we just run right away.
 
-        const { io } = await import('socket.io-client');
-        const host = window.location.hostname || 'localhost';
-        const sessionToken = (typeof window !== 'undefined' ? localStorage.getItem('session_token') : null) || '';
-        const socket = io(`http://${host}:4000`, {
-          timeout: 2500,
-          reconnection: false,
-          auth: {
-            token: sessionToken
-          }
-        });
-        socketRef.current = socket;
+        const needsStdin =
+          /\bcin\b|\bscanf\b|\bgets\b|\binput\s*\(|\bgetline\b|\bread\s*\(/.test(code);
 
-        const connectionTimeout = setTimeout(() => {
-          if (!connected && !fallbackTriggered && !isCancelled) {
-            fallbackTriggered = true;
-            try { socket.disconnect(); } catch {}
-            runViaHttpFallback(term);
-          }
-        }, 2000);
+        if (!needsStdin) {
+          // No stdin needed — run immediately
+          runViaHttp(term, '');
+          return;
+        }
 
-        socket.on('connect_error', () => {
-          if (!fallbackTriggered && !isCancelled) {
-            clearTimeout(connectionTimeout);
-            fallbackTriggered = true;
-            try { socket.disconnect(); } catch {}
-            runViaHttpFallback(term);
-          }
-        });
+        // Show stdin collection prompt
+        stdinBufferRef.current = '';
+        setAwaitingStdin(true);
+        awaitingStdinRef.current = true;
 
-        socket.on('connect', () => {
-          connected = true;
-          clearTimeout(connectionTimeout);
-          socket.emit('execute', { code, language });
-        });
+        term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
+        term.writeln('  \x1b[1;33mSTDIN\x1b[0m \x1b[38;5;240m— Type your input below. Press \x1b[0m\x1b[1;32mEnter\x1b[0m\x1b[38;5;240m after each value.\x1b[0m');
+        term.writeln('  \x1b[38;5;240mWhen done, press \x1b[0m\x1b[1;32mCtrl+D\x1b[0m\x1b[38;5;240m (or Run Code again) to execute.\x1b[0m');
+        term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m\r\n');
 
-        socket.on('output', (data: string) => {
-          if (!isCancelled) term.write(data);
-        });
+        let lineBuffer = '';
 
-        socket.on('finished', () => {
-          if (!isCancelled) {
-            setRunning(false);
-            try { socket.disconnect(); } catch {}
-          }
-        });
+        if (onDataDisposableRef.current) {
+          try { onDataDisposableRef.current.dispose(); } catch {}
+        }
 
-        let liveBuffer = '';
         onDataDisposableRef.current = term.onData((data: string) => {
-          if (socket.connected) {
-            socket.emit('input', data);
+          if (!awaitingStdinRef.current) return;
+
+          // Ctrl+D → execute with collected stdin
+          if (data === '\x04') {
+            if (lineBuffer.trim()) {
+              stdinBufferRef.current += lineBuffer + '\n';
+              lineBuffer = '';
+            }
+            if (onDataDisposableRef.current) {
+              try { onDataDisposableRef.current.dispose(); } catch {}
+              onDataDisposableRef.current = null;
+            }
+            setAwaitingStdin(false);
+            awaitingStdinRef.current = false;
+            term.writeln('');
+            term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
+            runViaHttp(term, stdinBufferRef.current);
             return;
           }
+
+          // Enter → commit this line
           if (data === '\r' || data === '\n') {
             term.write('\r\n');
-            const typed = liveBuffer;
-            liveBuffer = '';
-            if (setInput && typed) {
-              setInput(prev => (prev && prev.trim() ? prev + '\n' + typed : typed));
-              term.writeln(`\x1b[90m↳ Added to Stdin buffer. Press "Run Code" or Ctrl+Enter to execute.\x1b[0m`);
-            }
-          } else if (data === '\u007F' || data === '\b') {
-            if (liveBuffer.length > 0) {
-              liveBuffer = liveBuffer.slice(0, -1);
+            stdinBufferRef.current += lineBuffer + '\n';
+            lineBuffer = '';
+            return;
+          }
+
+          // Backspace
+          if (data === '\u007F' || data === '\b') {
+            if (lineBuffer.length > 0) {
+              lineBuffer = lineBuffer.slice(0, -1);
               term.write('\b \b');
             }
-          } else if (data >= ' ' || data === '\t') {
-            liveBuffer += data;
+            return;
+          }
+
+          // Regular printable character
+          if (data >= ' ' || data === '\t') {
+            lineBuffer += data;
             term.write(data);
           }
         });
-
-        setTimeout(() => {
-          if (!isCancelled) setRunning(false);
-        }, 30000);
 
       } catch (err: any) {
         if (!isCancelled) {
@@ -1492,16 +1556,31 @@ function ConsolePanel({
       }
     })();
 
-    return () => {
-      isCancelled = true;
-    };
+    return () => { isCancelled = true; };
+  }, [runTrigger]);
+
+  // If "Run Code" is pressed again while awaiting stdin, flush and execute
+  const prevRunTrigger = useRef(0);
+  useEffect(() => {
+    if (runTrigger === 0) return;
+    if (runTrigger === prevRunTrigger.current) return;
+    prevRunTrigger.current = runTrigger;
+
+    if (awaitingStdinRef.current && xtermRef.current) {
+      if (onDataDisposableRef.current) {
+        try { onDataDisposableRef.current.dispose(); } catch {}
+        onDataDisposableRef.current = null;
+      }
+      setAwaitingStdin(false);
+      awaitingStdinRef.current = false;
+      xtermRef.current.writeln('\r\n\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
+      runViaHttp(xtermRef.current, stdinBufferRef.current);
+    }
   }, [runTrigger]);
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (xtermRef.current) {
-      xtermRef.current.clear();
-    }
+    xtermRef.current?.clear();
   };
 
   const handleKill = (e: React.MouseEvent) => {
@@ -1510,121 +1589,123 @@ function ConsolePanel({
       try { socketRef.current.disconnect(); } catch {}
       socketRef.current = null;
     }
-    setRunning(false);
-    if (xtermRef.current) {
-      xtermRef.current.writeln('\r\n\x1b[31m[Process stopped by user]\x1b[0m\r\n');
+    if (onDataDisposableRef.current) {
+      try { onDataDisposableRef.current.dispose(); } catch {}
+      onDataDisposableRef.current = null;
     }
+    setAwaitingStdin(false);
+    awaitingStdinRef.current = false;
+    setRunning(false);
+    xtermRef.current?.writeln('\r\n\x1b[31m[Process terminated]\x1b[0m\r\n');
   };
 
   return (
     <div style={{
-      height: open ? '320px' : '38px',
-      borderTop: '1px solid #1e2230',
-      background: '#090a0f',
+      height: open ? '320px' : '36px',
+      borderTop: '1px solid #21262d',
+      background: '#0d1117',
       flexShrink: 0,
       display: 'flex',
       flexDirection: 'column',
-      transition: 'height 0.2s ease',
-      boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.4)',
+      transition: 'height 0.18s ease',
     }}>
-      {/* Terminal Title Bar */}
+      {/* Title bar */}
       <div
         onClick={onToggle}
         style={{
-          height: '38px',
-          padding: '0 14px',
+          height: '36px',
+          padding: '0 12px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           cursor: 'pointer',
-          background: '#10121a',
-          borderBottom: '1px solid #1a1d28',
+          background: '#161b22',
+          borderBottom: open ? '1px solid #21262d' : 'none',
           userSelect: 'none',
+          flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* macOS window control circles */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
-            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
-            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* VS Code-style terminal tab */}
+          <span style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            color: '#58a6ff',
+            fontFamily: 'Söhne Mono, monospace',
+            letterSpacing: '0.04em',
+            background: '#1c2128',
+            border: '1px solid #30363d',
+            padding: '2px 10px',
+            borderRadius: '3px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+          }}>
+            <span style={{ fontSize: '9px' }}>▶</span> TERMINAL
+          </span>
 
-          {/* Navigation Tabs */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '6px' }}>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveTab('terminal');
-                setTimeout(() => fitAddonRef.current?.fit(), 30);
-              }}
-              style={{
-                padding: '3px 10px',
-                borderRadius: '4px',
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: activeTab === 'terminal' ? '#1e293b' : 'transparent',
-                color: activeTab === 'terminal' ? '#38bdf8' : '#94a3b8',
-                border: activeTab === 'terminal' ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid transparent',
-                fontFamily: 'Söhne Mono, monospace',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <span>🖥</span> Terminal Output
-            </button>
-
-          </div>
-
-          {running && (
+          {running && !awaitingStdin && (
             <span style={{
               fontSize: '10px',
               fontFamily: 'Söhne Mono, monospace',
-              color: '#38bdf8',
-              background: 'rgba(56, 189, 248, 0.1)',
+              color: '#3fb950',
+              background: 'rgba(63, 185, 80, 0.1)',
               padding: '2px 8px',
-              borderRadius: '4px',
-              border: '1px solid rgba(56, 189, 248, 0.3)'
+              borderRadius: '3px',
+              border: '1px solid rgba(63, 185, 80, 0.3)',
+              animation: 'none',
             }}>
-              ● Executing...
+              ● Running
+            </span>
+          )}
+
+          {awaitingStdin && (
+            <span style={{
+              fontSize: '10px',
+              fontFamily: 'Söhne Mono, monospace',
+              color: '#d29922',
+              background: 'rgba(210, 153, 34, 0.1)',
+              padding: '2px 8px',
+              borderRadius: '3px',
+              border: '1px solid rgba(210, 153, 34, 0.3)',
+            }}>
+              ⌨ Awaiting input · Ctrl+D to run
             </span>
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={e => e.stopPropagation()}>
           {open && (
             <>
               <button
                 onClick={handleClear}
                 style={{
-                  padding: '3px 8px',
-                  background: '#1e2230',
-                  border: '1px solid #2d3348',
+                  padding: '2px 8px',
+                  background: 'transparent',
+                  border: '1px solid #30363d',
                   borderRadius: '3px',
-                  color: '#cbd5e1',
+                  color: '#8b949e',
                   fontSize: '10px',
                   fontWeight: 600,
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  fontFamily: 'Söhne Mono, monospace',
                 }}
               >
                 Clear
               </button>
-              {running && (
+              {(running || awaitingStdin) && (
                 <button
                   onClick={handleKill}
                   style={{
-                    padding: '3px 8px',
-                    background: 'rgba(239, 68, 68, 0.2)',
-                    border: '1px solid #ef4444',
+                    padding: '2px 8px',
+                    background: 'rgba(255, 123, 114, 0.1)',
+                    border: '1px solid rgba(255, 123, 114, 0.4)',
                     borderRadius: '3px',
-                    color: '#f87171',
+                    color: '#ff7b72',
                     fontSize: '10px',
                     fontWeight: 600,
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontFamily: 'Söhne Mono, monospace',
                   }}
                 >
                   Kill
@@ -1632,34 +1713,23 @@ function ConsolePanel({
               )}
             </>
           )}
-          <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '4px' }}>
-            {open ? '▼' : '▲'}
+          <span style={{ fontSize: '11px', color: '#6e7681' }}>
+            {open ? '▾' : '▴'}
           </span>
         </div>
       </div>
 
-      {/* Panel Body */}
-      <div style={{
-        flex: 1,
-        display: open ? 'flex' : 'none',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        background: '#090a0f'
-      }}>
-        {/* Terminal Tab Container (Kept in DOM so xterm stays alive) */}
-        <div 
-          ref={terminalRef} 
-          style={{
-            flex: 1,
-            padding: '10px 14px',
-            background: '#090a0f',
-            overflow: 'hidden',
-            display: activeTab === 'terminal' ? 'block' : 'none'
-          }}
-        />
-
-
-      </div>
+      {/* xterm container — always mounted so the terminal instance survives */}
+      <div
+        ref={terminalRef}
+        style={{
+          flex: 1,
+          padding: '6px 8px',
+          background: '#0d1117',
+          overflow: 'hidden',
+          display: open ? 'block' : 'none',
+        }}
+      />
     </div>
   );
 }

@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
 
     activeSessions.push({
       session_id: session.id,
+      test_id: session.test_id,
       roll_no: session.student.roll_number,
       name: session.student.user.full_name,
       division: session.student.division?.name || '',

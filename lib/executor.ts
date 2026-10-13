@@ -316,29 +316,44 @@ async function runLocalCode(
 
 export function formatInteractiveOutput(output: string, input: string): string {
   if (!output) return output;
-  const inputTokens = (input || '').trim().split(/\s+/).filter(Boolean);
-  if (inputTokens.length === 0) return output;
 
-  // Match prompt phrases ending in : or ? that are followed immediately by another text/prompt without newline
-  // e.g. "Enter a: Enter b: Sum: 30" -> "Enter a: 10\nEnter b: 20\nSum: 30"
-  const promptRegex = /([A-Za-z][A-Za-z0-9_\s]{1,40}[:\?]\s*)(?=[^\r\n])/g;
-  const matches = [...output.matchAll(promptRegex)];
-  if (matches.length > 0 && inputTokens.length > 0) {
-    let result = '';
-    let lastIdx = 0;
-    let tokenIdx = 0;
-    for (const m of matches) {
-      if (m.index === undefined) continue;
-      result += output.substring(lastIdx, m.index + m[0].length);
-      if (tokenIdx < inputTokens.length) {
-        result += inputTokens[tokenIdx++] + '\n';
-      }
-      lastIdx = m.index + m[0].length;
+  // Normalize line endings first
+  const normalized = output.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // If there are already multiple lines or no input tokens, return as-is
+  const lines = normalized.split('\n');
+  const inputTokens = (input || '').trim().split(/\r?\n/).flatMap(line => line.split(/\s+/)).filter(Boolean);
+
+  if (lines.length > 1 || inputTokens.length === 0) return normalized;
+
+  // Single-line output + we had input tokens: try to re-interleave prompts with typed values.
+  // e.g. "Enter a: Enter b: Sum: 30" → "Enter a: 5\nEnter b: 10\nSum: 30\n"
+  const singleLine = lines[0];
+
+  // Match prompt patterns: text ending with :, ?, or > optionally followed by spaces,
+  // where the next char is non-whitespace (i.e. the next prompt or result is concatenated).
+  const promptPattern = /([A-Za-z][A-Za-z0-9_,\s\-]{0,60}[:\?>]\s*)(?=[^\s])/g;
+  const matches = [...singleLine.matchAll(promptPattern)];
+
+  if (matches.length === 0) return normalized;
+
+  let result = '';
+  let lastIdx = 0;
+  let tokenIdx = 0;
+
+  for (const m of matches) {
+    if (m.index === undefined) continue;
+    result += singleLine.substring(lastIdx, m.index + m[0].length);
+    if (tokenIdx < inputTokens.length) {
+      result += inputTokens[tokenIdx++] + '\n';
+    } else {
+      result += '\n';
     }
-    result += output.substring(lastIdx);
-    return result;
+    lastIdx = m.index + m[0].length;
   }
-  return output;
+  result += singleLine.substring(lastIdx);
+
+  return result;
 }
 
 export async function compileAndRun(

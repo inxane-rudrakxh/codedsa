@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 export default function TestsPage() {
   const router = useRouter();
   const [tests, setTests] = useState<any[]>([]);
-  const [allQuestions, setAllQuestions] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [divisions, setDivisions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +33,6 @@ export default function TestsPage() {
     if (res.ok) {
       const data = await res.json();
       setTests(data.tests || []);
-      setAllQuestions(data.allQuestions || []);
       setSubjects(data.subjects || []);
       setDivisions(data.divisions || []);
       if (data.subjects && data.subjects.length > 0 && !newData.subject_name) {
@@ -83,25 +81,6 @@ export default function TestsPage() {
     fetchData();
   };
 
-  const handleAssignQuestion = async (testId: string, questionId: string) => {
-    if (!questionId) return;
-    await fetch('/api/admin/tests', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'assign_question', test_id: testId, question_id: questionId }),
-    });
-    fetchData();
-  };
-
-  const handleRemoveQuestion = async (testId: string, questionId: string) => {
-    await fetch('/api/admin/tests', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'remove_question', test_id: testId, question_id: questionId }),
-    });
-    fetchData();
-  };
-
   if (loading) return <div style={{ padding: '24px', color: 'var(--text-muted)' }}>Loading...</div>;
 
   return (
@@ -130,7 +109,12 @@ export default function TestsPage() {
             <div style={{ padding: '20px', borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                 <div>
-                  <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>{test.title}</h2>
+                  <h2
+                    onClick={() => router.push(`/admin/tests/${test.id}`)}
+                    style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px', cursor: 'pointer' }}
+                  >
+                    {test.title}
+                  </h2>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                     {test.subject?.name} · {test.duration_minutes} Mins · {test.total_marks} Marks · {test.questions_per_student} Qs/Student 
                     {test.target_division ? ` · Div: ${test.target_division}` : ''}
@@ -244,46 +228,21 @@ export default function TestsPage() {
                 </div>
               )}
 
-              {/* Question Bank for this test */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <p className="text-label">Test Question Bank ({test.testQuestions.length} Questions)</p>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <select 
-                      id={`qselect-${test.id}`}
-                      style={{ ...inputStyle, width: '200px', padding: '6px 12px' }}
-                      defaultValue=""
-                    >
-                      <option value="" disabled>Select question to add...</option>
-                      {allQuestions.filter(q => !test.testQuestions.find((tq: any) => tq.question_id === q.id)).map(q => (
-                        <option key={q.id} value={q.id}>[{q.topic}] {q.title}</option>
-                      ))}
-                    </select>
-                    <button 
-                      onClick={() => {
-                        const sel = document.getElementById(`qselect-${test.id}`) as HTMLSelectElement;
-                        handleAssignQuestion(test.id, sel.value);
-                        sel.value = '';
-                      }} 
-                      style={outlineBtn}
-                    >Add to Test</button>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {test.testQuestions.length === 0 ? (
-                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>No questions added yet.</p>
-                  ) : test.testQuestions.map((tq: any, idx: number) => (
-                    <div key={tq.question_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px' }}>
-                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>{idx + 1}</span>
-                        <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{tq.question.title}</span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{tq.question.topic}</span>
-                      </div>
-                      <button onClick={() => handleRemoveQuestion(test.id, tq.question_id)} style={{ background: 'none', border: 'none', color: 'var(--error)', fontSize: '12px', cursor: 'pointer' }}>Remove</button>
-                    </div>
-                  ))}
-                </div>
+              {/* Test quick-links */}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                {[
+                  { label: `Questions (${test.testQuestions.length})`, href: `/admin/tests/${test.id}/questions` },
+                  { label: 'Requests', href: `/admin/tests/${test.id}/requests` },
+                  { label: 'Results', href: `/admin/tests/${test.id}/results` },
+                ].map(({ label, href }) => (
+                  <button
+                    key={href}
+                    onClick={() => router.push(href)}
+                    style={outlineBtn}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
 
             </div>

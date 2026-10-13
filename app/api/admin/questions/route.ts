@@ -7,6 +7,8 @@ export async function GET(request: NextRequest) {
   if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const scope = teacherScope(payload);
+  const url = new URL(request.url);
+  const test_id = url.searchParams.get('test_id');
 
   const questions = await prisma.question.findMany({
     where: scope ? { teacher_id: scope } : {},
@@ -18,7 +20,16 @@ export async function GET(request: NextRequest) {
   });
 
   const subjects = await prisma.subject.findMany();
-  
+
+  // If test_id is provided, also return the questions assigned to that test
+  if (test_id) {
+    const testQuestions = await prisma.testQuestion.findMany({
+      where: { test_id },
+      orderBy: { order_index: 'asc' },
+    });
+    return NextResponse.json({ questions, subjects, assignedQuestions: testQuestions });
+  }
+
   return NextResponse.json({ questions, subjects });
 }
 
