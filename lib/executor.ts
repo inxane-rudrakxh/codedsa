@@ -20,7 +20,52 @@ export interface ExecutionResult {
 
 const JUDGE0_URL = process.env.JUDGE0_API_URL || 'https://ce.judge0.com';
 const JUDGE0_KEY = process.env.JUDGE0_API_KEY || '';
-const PISTON_URL = process.env.PISTON_API_URL || '';
+// Default to self-hosted Piston on localhost:2000 if not configured otherwise
+const PISTON_URL = process.env.PISTON_API_URL || 'http://localhost:2000/api/v2';
+
+// Language + version map for engineer-man/piston self-hosted container.
+// Run: curl http://localhost:2000/api/v2/runtimes  to see all installed runtimes.
+const PISTON_LANG_MAP: Record<string, { language: string; version: string }> = {
+  cpp:    { language: 'c++',    version: '10.2.0' },
+  c:      { language: 'c',      version: '10.2.0' },
+  python: { language: 'python', version: '3.10.0' },
+  java:   { language: 'java',   version: '15.0.2' },
+};
+
+async function getPistonLangVersion(lang: string): Promise<{ language: string; version: string }> {
+  // Try to find the best matching installed runtime from the Piston server
+  const base = PISTON_URL.replace(/\/execute\/?$/, '').replace(/\/+$/, '');
+  try {
+    const res = await fetch(`${base}/runtimes`, { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const runtimes: Array<{ language: string; version: string }> = await res.json();
+      const defaults = PISTON_LANG_MAP[lang];
+      if (defaults) {
+        // Find matching language (case-insensitive) and pick latest version
+        const matches = runtimes.filter(r => r.language.toLowerCase() === defaults.language.toLowerCase());
+        if (matches.length > 0) {
+          matches.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
+          return { language: matches[0].language, version: matches[0].version };
+        }
+      }
+      // Fallback: search by common aliases
+      const aliases: Record<string, string[]> = {
+        cpp: ['c++', 'cpp', 'g++'],
+        c:   ['c', 'gcc'],
+        python: ['python', 'python3', 'python3.10'],
+        java: ['java'],
+      };
+      const aliasList = aliases[lang] || [lang];
+      for (const alias of aliasList) {
+        const found = runtimes.find(r => r.language.toLowerCase() === alias.toLowerCase());
+        if (found) return { language: found.language, version: found.version };
+      }
+    }
+  } catch {
+    // Couldn't reach /runtimes — use hardcoded defaults
+  }
+  return PISTON_LANG_MAP[lang] || { language: lang, version: '*' };
+}
 
 async function runPistonCode(
   code: string,
@@ -28,48 +73,48 @@ async function runPistonCode(
   lang: string,
   timeLimitSec: number
 ): Promise<ExecutionResult | null> {
-  const url = PISTON_URL || 'https://emkc.org/api/v2/piston';
   const startTime = Date.now();
-  const langMap: Record<string, string> = {
-    c: 'c',
-    cpp: 'cpp',
-    python: 'python3',
-    java: 'java',
-  };
-  const pistonLang = langMap[lang] || lang;
+  const base = PISTON_URL.replace(/\/execute\/?$/, '').replace(/\/+$/, '');
+  const endpoint = `${base}/execute`;
+
+  const { language, version } = await getPistonLangVersion(lang);
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), Math.max((timeLimitSec + 4) * 1000, 7000));
+    const timeout = setTimeout(() => controller.abort(), Math.max((timeLimitSec + 6) * 1000, 10000));
 
-    const endpoint = url.endsWith('/execute') ? url : `${url.replace(/\/+$/, '')}/execute`;
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        language: pistonLang,
-        version: '*',
+        language,
+        version,
         files: [{ content: code }],
         stdin: input || '',
         run_timeout: Math.round(timeLimitSec * 1000),
-        compile_timeout: 10000
+        compile_timeout: 15000
       }),
       signal: controller.signal
     });
     clearTimeout(timeout);
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.warn(`Piston HTTP ${res.status}: ${errText}`);
+      return null;
+    }
     const data = await res.json();
 
+    // Piston returns { message } when language is not installed
     if (data.message && typeof data.message === 'string' && !data.run && !data.compile) {
-      console.warn('Piston API message:', data.message);
+      console.warn('Piston runtime not installed:', data.message);
       return null;
     }
 
     if (data.compile && data.compile.code !== 0) {
       return {
         success: false,
-        compile_error: data.compile.stderr || data.compile.output || 'Compilation Error',
+        compile_error: (data.compile.stderr || data.compile.output || 'Compilation Error').trim(),
         execution_time: Date.now() - startTime
       };
     }
@@ -82,11 +127,13 @@ async function runPistonCode(
           execution_time: Date.now() - startTime
         };
       }
+      const rawOut = data.run.stdout || data.run.output || '';
+      const rawErr = data.run.stderr || '';
       return {
         success: data.run.code === 0,
-        output: data.run.stdout || data.run.output || '',
-        stderr: data.run.stderr || '',
-        runtime_error: data.run.code !== 0 ? (data.run.stderr || `Exit code ${data.run.code}`) : undefined,
+        output: rawOut,
+        stderr: rawErr,
+        runtime_error: data.run.code !== 0 ? (rawErr || `Exit code ${data.run.code}`) : undefined,
         execution_time: Date.now() - startTime
       };
     }
@@ -331,8 +378,22 @@ export async function compileAndRun(
   const langLower = language.toLowerCase();
   const effectiveLang = detectEffectiveLanguage(sanitizedCode, langLower);
 
-  // 1. Try fast local compilation if local compilers are installed (VPS/dedicated server)
-  // Skip local execution if running in serverless (e.g. Vercel) where gcc/g++ do not exist
+  // 1. PISTON (self-hosted, primary executor)
+  // Piston supports C/C++/Python/Java via the engineer-man/piston Docker container.
+  // Falls back gracefully if unreachable (e.g. Vercel serverless, container not running).
+  try {
+    const pistonRes = await runPistonCode(sanitizedCode, input, effectiveLang, timeLimit);
+    if (pistonRes) {
+      if (pistonRes.output) {
+        pistonRes.output = formatInteractiveOutput(pistonRes.output, input);
+      }
+      return pistonRes;
+    }
+  } catch (pistonErr: any) {
+    console.warn('Piston execution failed, falling back:', pistonErr?.message);
+  }
+
+  // 2. Local compilation (fast, zero-latency — only on machines with gcc/g++ installed)
   const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
   if (!isServerless && (effectiveLang === 'c' || effectiveLang === 'cpp' || effectiveLang === 'python')) {
     try {
@@ -344,7 +405,7 @@ export async function compileAndRun(
         return localResult;
       }
     } catch (localErr: any) {
-      console.warn("Local execution skipped/unavailable, falling back to remote sandbox & AI:", localErr?.message);
+      console.warn('Local execution skipped/unavailable:', localErr?.message);
     }
   }
 
@@ -352,21 +413,6 @@ export async function compileAndRun(
   if (effectiveLang === 'c') languageId = 50;
   else if (effectiveLang === 'python') languageId = 71;
   else if (effectiveLang === 'java') languageId = 62;
-
-  // 2. Try Piston API if configured (e.g. self-hosted Piston container or custom endpoint)
-  if (PISTON_URL) {
-    try {
-      const pistonRes = await runPistonCode(sanitizedCode, input, effectiveLang, timeLimit);
-      if (pistonRes) {
-        if (pistonRes.output) {
-          pistonRes.output = formatInteractiveOutput(pistonRes.output, input);
-        }
-        return pistonRes;
-      }
-    } catch (pistonErr: any) {
-      console.warn("Piston execution failed, falling back:", pistonErr?.message);
-    }
-  }
 
   // 3. Try Judge0 remote execution
   let judge0Error: string | null = null;
