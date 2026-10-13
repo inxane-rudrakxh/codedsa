@@ -39,21 +39,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Exam session is not active' }, { status: 403 });
   }
 
-  let timeLimit = 1.0;
   let memoryLimit = 256000;
 
   if (question_id) {
     const question = await prisma.question.findUnique({ where: { id: question_id } });
     if (question) {
-      // For "Run Code" (not submission judging), use a generous 10s so interactive
-      // programs with multiple cin reads don't time out while the student is testing.
-      timeLimit = Math.max(question.time_limit || 1.0, 10.0);
       memoryLimit = question.memory_limit || 256000;
     }
-  } else {
-    // No question context — still allow 10s for free-run
-    timeLimit = 10.0;
   }
+
+  // No time limit for "Run Code" — 30s ceiling so programs always complete
+  const timeLimit = 30.0;
 
   const result = await compileAndRun(code, input || '', language || 'cpp', timeLimit, memoryLimit);
 
