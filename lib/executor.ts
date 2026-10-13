@@ -24,47 +24,34 @@ const JUDGE0_KEY = process.env.JUDGE0_API_KEY || '';
 const PISTON_URL = process.env.PISTON_API_URL || 'http://localhost:2000/api/v2';
 
 // Language + version map for engineer-man/piston self-hosted container.
-// Run: curl http://localhost:2000/api/v2/runtimes  to see all installed runtimes.
-const PISTON_LANG_MAP: Record<string, { language: string; version: string }> = {
-  cpp:    { language: 'c++',    version: '10.2.0' },
-  c:      { language: 'c',      version: '10.2.0' },
-  python: { language: 'python', version: '3.10.0' },
-  java:   { language: 'java',   version: '15.0.2' },
+// Piston uses 'gcc' for both C and C++ — file extension (.c vs .cpp) selects the compiler.
+// Run: curl http://localhost:2000/api/v2/runtimes  to see installed runtimes.
+const PISTON_LANG_MAP: Record<string, { language: string; version: string; filename: string }> = {
+  cpp:    { language: 'gcc', version: '10.2.0', filename: 'main.cpp' },
+  c:      { language: 'gcc', version: '10.2.0', filename: 'main.c'   },
+  python: { language: 'python', version: '3.10.0', filename: 'main.py' },
+  java:   { language: 'java',   version: '15.0.2', filename: 'Main.java' },
 };
 
-async function getPistonLangVersion(lang: string): Promise<{ language: string; version: string }> {
-  // Try to find the best matching installed runtime from the Piston server
+async function getPistonLangMeta(lang: string): Promise<{ language: string; version: string; filename: string }> {
+  const defaults = PISTON_LANG_MAP[lang] || { language: lang, version: '*', filename: 'main.cpp' };
   const base = PISTON_URL.replace(/\/execute\/?$/, '').replace(/\/+$/, '');
   try {
     const res = await fetch(`${base}/runtimes`, { signal: AbortSignal.timeout(3000) });
     if (res.ok) {
       const runtimes: Array<{ language: string; version: string }> = await res.json();
-      const defaults = PISTON_LANG_MAP[lang];
-      if (defaults) {
-        // Find matching language (case-insensitive) and pick latest version
-        const matches = runtimes.filter(r => r.language.toLowerCase() === defaults.language.toLowerCase());
-        if (matches.length > 0) {
-          matches.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
-          return { language: matches[0].language, version: matches[0].version };
-        }
-      }
-      // Fallback: search by common aliases
-      const aliases: Record<string, string[]> = {
-        cpp: ['c++', 'cpp', 'g++'],
-        c:   ['c', 'gcc'],
-        python: ['python', 'python3', 'python3.10'],
-        java: ['java'],
-      };
-      const aliasList = aliases[lang] || [lang];
-      for (const alias of aliasList) {
-        const found = runtimes.find(r => r.language.toLowerCase() === alias.toLowerCase());
-        if (found) return { language: found.language, version: found.version };
+      // Find the installed runtime matching our target language
+      const matches = runtimes.filter(r => r.language.toLowerCase() === defaults.language.toLowerCase());
+      if (matches.length > 0) {
+        // Pick the highest installed version
+        matches.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
+        return { language: matches[0].language, version: matches[0].version, filename: defaults.filename };
       }
     }
   } catch {
     // Couldn't reach /runtimes — use hardcoded defaults
   }
-  return PISTON_LANG_MAP[lang] || { language: lang, version: '*' };
+  return defaults;
 }
 
 async function runPistonCode(
@@ -77,7 +64,7 @@ async function runPistonCode(
   const base = PISTON_URL.replace(/\/execute\/?$/, '').replace(/\/+$/, '');
   const endpoint = `${base}/execute`;
 
-  const { language, version } = await getPistonLangVersion(lang);
+  const { language, version, filename } = await getPistonLangMeta(lang);
 
   try {
     const controller = new AbortController();
@@ -89,7 +76,7 @@ async function runPistonCode(
       body: JSON.stringify({
         language,
         version,
-        files: [{ content: code }],
+        files: [{ name: filename, content: code }],
         stdin: input || '',
         run_timeout: Math.round(timeLimitSec * 1000),
         compile_timeout: 15000
