@@ -128,47 +128,51 @@ export async function POST(request: NextRequest) {
       const k = Math.min(test.questions_per_student || 3, totalAvailable);
 
       if (totalAvailable > 0 && k > 0) {
-        // Calculate student index deterministically by roll number in division
-        let studentOrder = 0;
-        try {
-          const lowerRollCount = await prisma.student.count({
-            where: {
-              roll_number: { lt: studentRecord.roll_number },
-              ...(studentRecord.division_id ? { division_id: studentRecord.division_id } : {})
-            }
-          });
-          studentOrder = lowerRollCount;
-        } catch {
-          const existingSessionCount = await prisma.examSession.count({
-            where: { test_id: test.id, id: { not: sessionId } }
-          });
-          studentOrder = existingSessionCount;
-        }
 
-        // Chunk questions:
-        // Student 1 (index 0): 0, 1, 2
-        // Student 2 (index 1): 3, 4, 5
-        // Student 3 (index 2): 6, 7, 8
-        // Student 4 (index 3): 0, 1, 2 ...
-        const startIdx = (studentOrder * k) % totalAvailable;
+
+        // ── Category-based assignment ─────────────────────────────────────────
+        // Questions in the test are split into 3 fixed categories by their
+        // 1-based position (order_index rank) among uniqueTestQuestions:
+        //   Category 1 → positions 1, 2, 8, 9
+        //   Category 2 → positions 3, 4
+        //   Category 3 → positions 5, 6, 7
+        // One question is picked from each category using a deterministic seed
+        // derived from the student's roll number so the result is stable on reconnect.
+
+        const rollSeed = studentRecord.roll_number
+          .split('')
+          .reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0);
+
+        const CATEGORY_POSITIONS: number[][] = [
+          [1, 2, 8, 9],  // Category 1
+          [3, 4],        // Category 2
+          [5, 6, 7],     // Category 3
+        ];
+
         const assigned: typeof uniqueTestQuestions = [];
         const assignedIds = new Set<string>();
 
-        for (let i = 0; i < k; i++) {
-          const q = uniqueTestQuestions[(startIdx + i) % totalAvailable];
-          if (!assignedIds.has(q.question_id)) {
-            assignedIds.add(q.question_id);
-            assigned.push(q);
-          }
+        for (let catIdx = 0; catIdx < CATEGORY_POSITIONS.length; catIdx++) {
+          const positions = CATEGORY_POSITIONS[catIdx];
+          const pool = positions
+            .map((pos: number) => uniqueTestQuestions[pos - 1])
+            .filter((q: typeof uniqueTestQuestions[number] | undefined): q is typeof uniqueTestQuestions[number] =>
+              q !== undefined && !assignedIds.has(q.question_id)
+            );
+          if (pool.length === 0) continue;
+          const pick = pool[Math.abs(rollSeed + catIdx * 31) % pool.length];
+          assignedIds.add(pick.question_id);
+          assigned.push(pick);
         }
 
-        // Fallback: if somehow less than k, fill with remaining unique questions
-        if (assigned.length < k) {
+        // Fallback: if a category was empty, fill remaining slots with any unassigned question
+        const kTarget = test.questions_per_student || 3;
+        if (assigned.length < kTarget) {
           for (const q of uniqueTestQuestions) {
             if (!assignedIds.has(q.question_id)) {
               assignedIds.add(q.question_id);
               assigned.push(q);
-              if (assigned.length === k) break;
+              if (assigned.length === kTarget) break;
             }
           }
         }
