@@ -1446,8 +1446,13 @@ function ConsolePanel({
       } else if (data.timed_out) {
         term.writeln(`\x1b[1;31m✖ Time Limit Exceeded\x1b[0m\r\n`);
       } else {
-        // Write program output exactly, every \n → \r\n for xterm
-        const out = (data.output || '').replace(/\r?\n/g, '\r\n');
+        // Write program output — normalize newlines for xterm
+        // Also inject \r\n after colon-terminated lines (cin prompts) so
+        // programs that use cout without endl still display line-by-line
+        let out = (data.output || '').replace(/\r?\n/g, '\r\n');
+        // Insert \r\n after every "prompt" segment ending with ':' or ': '
+        // that is immediately followed by more text (no newline between them)
+        out = out.replace(/(:[  ]?)(?=[^\r\n])/g, '$1\r\n');
         term.write(out);
         // Ensure we end on a fresh line
         if (out && !out.endsWith('\r\n')) term.write('\r\n');
@@ -1480,195 +1485,157 @@ function ConsolePanel({
       onDataDisposableRef.current = null;
     }
 
-    let isCancelled = false;
+    // Reset awaiting-stdin state from any previous run
+    setAwaitingStdin(false);
+    awaitingStdinRef.current = false;
+    stdinBufferRef.current = '';
+
+    let cancelled = false;
 
     (async () => {
-      try {
-        const term = await ensureTerminal();
-        if (!term || isCancelled) { setRunning(false); return; }
+      const term = await ensureTerminal();
+      if (!term) { setRunning(false); return; }
+      if (cancelled) return; // effect was torn down while terminal was loading
 
-        term.clear();
-        setTimeout(() => fitAddonRef.current?.fit(), 30);
-        term.focus();
+      term.clear();
+      setTimeout(() => fitAddonRef.current?.fit(), 30);
+      term.focus();
 
-        const isLocal =
-          typeof window !== 'undefined' &&
-          (window.location.hostname === 'localhost' ||
-            window.location.hostname === '127.0.0.1' ||
-            window.location.hostname === '0.0.0.0');
+      const isLocal =
+        typeof window !== 'undefined' &&
+        (window.location.hostname === 'localhost' ||
+          window.location.hostname === '127.0.0.1' ||
+          window.location.hostname === '0.0.0.0');
 
-        // ── PTY path (local dev) ────────────────────────────────────────────
-        // Full interactive terminal: student types directly, cin/scanf work in
-        // real time — identical to a real VS Code terminal.
-        if (isLocal) {
-          let connected = false;
-          let fell = false;
+      // ── PTY path (local dev) ──────────────────────────────────────────────
+      if (isLocal) {
+        let connected = false;
+        let fell = false;
 
-          const { io } = await import('socket.io-client');
-          const host = window.location.hostname || 'localhost';
-          const sessionToken =
-            (typeof window !== 'undefined' ? localStorage.getItem('session_token') : null) || '';
-          const socket = io(`http://${host}:4000`, {
-            timeout: 2500,
-            reconnection: false,
-            auth: { token: sessionToken },
-          });
-          socketRef.current = socket;
-
-          const connTimer = setTimeout(() => {
-            if (!connected && !fell && !isCancelled) {
-              fell = true;
-              try { socket.disconnect(); } catch {}
-              // Fall through to HTTP path below
-              runViaHttp(term, '');
-            }
-          }, 2000);
-
-          socket.on('connect_error', () => {
-            if (!fell && !isCancelled) {
-              clearTimeout(connTimer);
-              fell = true;
-              try { socket.disconnect(); } catch {}
-              runViaHttp(term, '');
-            }
-          });
-
-          socket.on('connect', () => {
-            connected = true;
-            clearTimeout(connTimer);
-            socket.emit('execute', { code, language });
-          });
-
-          // PTY output → xterm (raw passthrough, PTY handles \r\n itself)
-          socket.on('output', (chunk: string) => {
-            if (!isCancelled) term.write(chunk);
-          });
-
-          socket.on('finished', () => {
-            if (!isCancelled) {
-              setRunning(false);
-              try { socket.disconnect(); } catch {}
-            }
-          });
-
-          // xterm keystrokes → PTY stdin (real interactive input)
-          onDataDisposableRef.current = term.onData((data: string) => {
-            if (socket.connected) {
-              socket.emit('input', data);
-            }
-          });
-
-          setTimeout(() => { if (!isCancelled) setRunning(false); }, 31000);
-          return;
-        }
-
-        // ── HTTP path (production / Vercel) ────────────────────────────────
-        // No persistent process available. We collect stdin from the terminal
-        // first, then fire the request. Feels like a VS Code "run with input".
-        //
-        // How it works:
-        //   1. Show the program immediately so the user sees its prompts.
-        //   2. Let the user type each input line into the terminal (echoed).
-        //   3. When they press Ctrl+D or the Run button again, we have the
-        //      collected stdin — send it to /api/exam/run.
-        //
-        // For programs that don't need stdin (pure output), we just run right away.
-
-        const needsStdin =
-          /\bcin\b|\bscanf\b|\bgets\b|\binput\s*\(|\bgetline\b|\bread\s*\(/.test(code);
-
-        if (!needsStdin) {
-          // No stdin needed — run immediately
+        let socketModule: any;
+        try {
+          socketModule = await import('socket.io-client');
+        } catch {
           runViaHttp(term, '');
           return;
         }
+        if (cancelled) return;
 
-        // Show stdin collection prompt
-        stdinBufferRef.current = '';
-        setAwaitingStdin(true);
-        awaitingStdinRef.current = true;
+        const host = window.location.hostname || 'localhost';
+        const sessionToken =
+          (typeof window !== 'undefined' ? localStorage.getItem('session_token') : null) || '';
+        const socket = socketModule.io(`http://${host}:4000`, {
+          timeout: 2500,
+          reconnection: false,
+          auth: { token: sessionToken },
+        });
+        socketRef.current = socket;
 
-        term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
-        term.writeln('  \x1b[1;33mSTDIN\x1b[0m \x1b[38;5;240m— Type your input below. Press \x1b[0m\x1b[1;32mEnter\x1b[0m\x1b[38;5;240m after each value.\x1b[0m');
-        term.writeln('  \x1b[38;5;240mWhen done, press \x1b[0m\x1b[1;32mCtrl+D\x1b[0m\x1b[38;5;240m (or Run Code again) to execute.\x1b[0m');
-        term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m\r\n');
-
-        let lineBuffer = '';
-
-        if (onDataDisposableRef.current) {
-          try { onDataDisposableRef.current.dispose(); } catch {}
-        }
-
-        onDataDisposableRef.current = term.onData((data: string) => {
-          if (!awaitingStdinRef.current) return;
-
-          // Ctrl+D → execute with collected stdin
-          if (data === '\x04') {
-            if (lineBuffer.trim()) {
-              stdinBufferRef.current += lineBuffer + '\n';
-              lineBuffer = '';
-            }
-            if (onDataDisposableRef.current) {
-              try { onDataDisposableRef.current.dispose(); } catch {}
-              onDataDisposableRef.current = null;
-            }
-            setAwaitingStdin(false);
-            awaitingStdinRef.current = false;
-            term.writeln('');
-            term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
-            runViaHttp(term, stdinBufferRef.current);
-            return;
+        const connTimer = setTimeout(() => {
+          if (!connected && !fell) {
+            fell = true;
+            try { socket.disconnect(); } catch {}
+            if (!cancelled) runViaHttp(term, '');
           }
+        }, 2000);
 
-          // Enter → commit this line
-          if (data === '\r' || data === '\n') {
-            term.write('\r\n');
-            stdinBufferRef.current += lineBuffer + '\n';
-            lineBuffer = '';
-            return;
-          }
-
-          // Backspace
-          if (data === '\u007F' || data === '\b') {
-            if (lineBuffer.length > 0) {
-              lineBuffer = lineBuffer.slice(0, -1);
-              term.write('\b \b');
-            }
-            return;
-          }
-
-          // Regular printable character
-          if (data >= ' ' || data === '\t') {
-            lineBuffer += data;
-            term.write(data);
+        socket.on('connect_error', () => {
+          if (!fell) {
+            clearTimeout(connTimer);
+            fell = true;
+            try { socket.disconnect(); } catch {}
+            if (!cancelled) runViaHttp(term, '');
           }
         });
 
-      } catch (err: any) {
-        if (!isCancelled) {
-          if (xtermRef.current) {
-            xtermRef.current.writeln(`\r\n\x1b[31mExecution Error: ${err.message || 'Unknown'}\x1b[0m\r\n`);
+        socket.on('connect', () => {
+          if (cancelled) { try { socket.disconnect(); } catch {} return; }
+          connected = true;
+          clearTimeout(connTimer);
+          socket.emit('execute', { code, language });
+        });
+
+        socket.on('output', (chunk: string) => {
+          if (!cancelled) term.write(chunk);
+        });
+
+        socket.on('finished', () => {
+          if (!cancelled) {
+            setRunning(false);
+            try { socket.disconnect(); } catch {}
           }
-          setRunning(false);
-        }
+        });
+
+        onDataDisposableRef.current = term.onData((data: string) => {
+          if (socket.connected) socket.emit('input', data);
+        });
+
+        // Safety timeout
+        setTimeout(() => { if (!cancelled) setRunning(false); }, 31000);
+        return;
       }
+
+      // ── HTTP path (production) ────────────────────────────────────────────
+      const needsStdin =
+        /\bcin\b|\bscanf\b|\bgets\b|\binput\s*\(|\bgetline\b|\bread\s*\(/.test(code);
+
+      if (!needsStdin) {
+        runViaHttp(term, '');
+        return;
+      }
+
+      // Collect stdin interactively before running
+      setAwaitingStdin(true);
+      awaitingStdinRef.current = true;
+
+      term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
+      term.writeln('  \x1b[1;33mSTDIN\x1b[0m \x1b[38;5;240m— Type your input. Press \x1b[0m\x1b[1;32mEnter\x1b[0m\x1b[38;5;240m after each value.\x1b[0m');
+      term.writeln('  \x1b[38;5;240mWhen done, press \x1b[0m\x1b[1;32mCtrl+D\x1b[0m\x1b[38;5;240m (or Run Code again) to execute.\x1b[0m');
+      term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m\r\n');
+
+      let lineBuffer = '';
+
+      onDataDisposableRef.current = term.onData((data: string) => {
+        if (!awaitingStdinRef.current) return;
+
+        if (data === '\x04') {
+          if (lineBuffer.trim()) { stdinBufferRef.current += lineBuffer + '\n'; lineBuffer = ''; }
+          if (onDataDisposableRef.current) { try { onDataDisposableRef.current.dispose(); } catch {} onDataDisposableRef.current = null; }
+          setAwaitingStdin(false);
+          awaitingStdinRef.current = false;
+          term.writeln('\r\n\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
+          runViaHttp(term, stdinBufferRef.current);
+          return;
+        }
+        if (data === '\r' || data === '\n') {
+          term.write('\r\n');
+          stdinBufferRef.current += lineBuffer + '\n';
+          lineBuffer = '';
+          return;
+        }
+        if (data === '\u007F' || data === '\b') {
+          if (lineBuffer.length > 0) { lineBuffer = lineBuffer.slice(0, -1); term.write('\b \b'); }
+          return;
+        }
+        if (data >= ' ' || data === '\t') { lineBuffer += data; term.write(data); }
+      });
     })();
 
-    return () => { isCancelled = true; };
+    return () => {
+      cancelled = true;
+      // Don't disconnect socket here — the socket listeners handle their own cleanup
+      // so that in-flight PTY sessions aren't killed by React StrictMode double-invoke
+    };
   }, [runTrigger]);
 
-  // If "Run Code" is pressed again while awaiting stdin, flush and execute
-  const prevRunTrigger = useRef(0);
+  // If Run Code pressed again while awaiting stdin → flush and execute
+  const prevRunTriggerRef = useRef(0);
   useEffect(() => {
-    if (runTrigger === 0) return;
-    if (runTrigger === prevRunTrigger.current) return;
-    prevRunTrigger.current = runTrigger;
+    if (runTrigger === 0 || runTrigger === prevRunTriggerRef.current) return;
+    prevRunTriggerRef.current = runTrigger;
 
     if (awaitingStdinRef.current && xtermRef.current) {
-      if (onDataDisposableRef.current) {
-        try { onDataDisposableRef.current.dispose(); } catch {}
-        onDataDisposableRef.current = null;
-      }
+      if (onDataDisposableRef.current) { try { onDataDisposableRef.current.dispose(); } catch {} onDataDisposableRef.current = null; }
       setAwaitingStdin(false);
       awaitingStdinRef.current = false;
       xtermRef.current.writeln('\r\n\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
