@@ -274,10 +274,108 @@ export default function WorkspacePage() {
     return () => { if (saveTimerRef.current) clearInterval(saveTimerRef.current); };
   }, [sessionData, activeQuestion, codes, loading, getToken]);
 
-  // Anti-cheating and integrity monitoring disabled
-  const reportIntegrity = async (_event_type?: string) => {
-    // No-op: anti-cheating is disabled
+  // ── Proctoring: 1 warning max, copy-paste allowed ──────────────────────────
+  // Tracked: tab switch / window blur, fullscreen exit, screenshot attempt.
+  // Copy-paste (Ctrl+C / Ctrl+V) is deliberately NOT blocked.
+  const warnedRef = useRef(false); // only one warning ever shown
+
+  const reportIntegrity = async (event_type: string) => {
+    if (!sessionData || loading) return;
+
+    // Only one warning per session — after that silently record but no extra modal
+    const firstOffence = !warnedRef.current;
+    warnedRef.current = true;
+
+    // Persist to DB
+    try {
+      await fetch('/api/exam/integrity', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ event_type }),
+      });
+    } catch {}
+
+    setWarningCount(prev => prev + 1);
+
+    if (!firstOffence) return; // subsequent violations: record only, no modal
+
+    if (event_type === 'fullscreen_exit') {
+      setShowFullscreenPrompt(true);
+    } else {
+      setTabSwitchReason(
+        event_type === 'screenshot_attempt'
+          ? 'A screenshot shortcut was detected'
+          : event_type === 'tab_switch'
+          ? 'You switched to another tab or window'
+          : 'Window focus was lost',
+      );
+      setShowTabSwitchModal(true);
+    }
   };
+
+  // Register proctoring event listeners once session is loaded
+  useEffect(() => {
+    if (!sessionData || loading) return;
+
+    // ── 1. Fullscreen enforcement ──────────────────────────────────────────
+    const enterFullscreen = () => {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    };
+
+    // Enter fullscreen on first load
+    enterFullscreen();
+
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        reportIntegrity('fullscreen_exit');
+      }
+    };
+
+    // ── 2. Tab / window switch ─────────────────────────────────────────────
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        reportIntegrity('tab_switch');
+      }
+    };
+
+    const onBlur = () => {
+      // blur fires when the OS window loses focus (alt-tab, etc.)
+      reportIntegrity('window_blur');
+    };
+
+    // ── 3. Screenshot key combos ───────────────────────────────────────────
+    // Block: PrtSc, Win+Shift+S (Windows Snip), Ctrl+Shift+S, Cmd+Shift+3/4/5 (macOS)
+    const onKeyDown = (e: KeyboardEvent) => {
+      const { key, code, ctrlKey, metaKey, shiftKey } = e;
+
+      const isPrintScreen = key === 'PrintScreen' || code === 'PrintScreen';
+      const isWinSnip = (metaKey || ctrlKey) && shiftKey && key === 'S'; // Win+Shift+S / Ctrl+Shift+S
+      const isMacScreenshot = metaKey && shiftKey && ['3', '4', '5'].includes(key);
+
+      if (isPrintScreen || isWinSnip || isMacScreenshot) {
+        e.preventDefault();
+        e.stopPropagation();
+        reportIntegrity('screenshot_attempt');
+      }
+    };
+
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('blur', onBlur);
+    document.addEventListener('keydown', onKeyDown, { capture: true });
+
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('keydown', onKeyDown, { capture: true });
+    };
+  }, [sessionData, loading]);
 
   const handleAutoSubmit = async () => {
     // Auto-submit all non-submitted questions
@@ -399,8 +497,8 @@ export default function WorkspacePage() {
 
 
 
-      {/* Fullscreen Required Modal Overlay (disabled) */}
-      {false && showFullscreenPrompt && (
+      {/* Fullscreen Required Modal */}
+      {showFullscreenPrompt && (
         <div style={{
           position: 'fixed',
           inset: 0,
@@ -479,7 +577,7 @@ export default function WorkspacePage() {
               marginBottom: '24px',
               maxWidth: '440px'
             }}>
-              Leaving fullscreen or switching windows is prohibited. This incident has been logged to your proctoring audit log.
+              Exiting fullscreen is not allowed during the assessment. This violation has been recorded. Further violations will be logged silently.
             </p>
 
             {/* Warning counter pill */}
@@ -508,7 +606,7 @@ export default function WorkspacePage() {
                 color: '#e8a55a',
                 fontWeight: 600
               }}>
-                {warningCount} of 3 Allowed
+                {warningCount}
               </span>
             </div>
 
@@ -548,8 +646,8 @@ export default function WorkspacePage() {
         </div>
       )}
 
-      {/* Tab Switch / Focus Loss Modal (disabled) */}
-      {false && showTabSwitchModal && (
+      {/* Tab Switch / Focus Loss Modal */}
+      {showTabSwitchModal && (
         <div style={{
           position: 'fixed',
           inset: 0,
@@ -628,7 +726,7 @@ export default function WorkspacePage() {
               marginBottom: '24px',
               maxWidth: '440px'
             }}>
-              {tabSwitchReason || 'Window focus was lost'}. Navigating away from the active assessment window is strictly monitored.
+              {tabSwitchReason || 'Window focus was lost'}. This violation has been recorded. Further violations will be logged silently.
             </p>
 
             {/* Violation counter */}
@@ -657,7 +755,7 @@ export default function WorkspacePage() {
                 color: '#e8a55a',
                 fontWeight: 600
               }}>
-                {warningCount} of 3 Allowed
+                {warningCount}
               </span>
             </div>
 
