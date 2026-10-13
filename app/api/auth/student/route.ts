@@ -129,50 +129,70 @@ export async function POST(request: NextRequest) {
 
       if (totalAvailable > 0 && k > 0) {
 
+        // ── Per-roll-number question overrides ────────────────────────────────
+        // Maps a roll number to a fixed list of 1-based question positions.
+        // These students bypass the category algorithm and always receive the
+        // exact questions at the specified positions (in order).
+        const ROLL_OVERRIDES: Record<string, number[]> = {
+          'AD1315': [3, 8, 5],
+        };
 
-        // ── Category-based assignment ─────────────────────────────────────────
-        // Questions in the test are split into 3 fixed categories by their
-        // 1-based position (order_index rank) among uniqueTestQuestions:
-        //   Category 1 → positions 1, 2, 8, 9
-        //   Category 2 → positions 3, 4
-        //   Category 3 → positions 5, 6, 7
-        // One question is picked from each category using a deterministic seed
-        // derived from the student's roll number so the result is stable on reconnect.
-
-        const rollSeed = studentRecord.roll_number
-          .split('')
-          .reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0);
-
-        const CATEGORY_POSITIONS: number[][] = [
-          [1, 2, 8, 9],  // Category 1
-          [3, 4],        // Category 2
-          [5, 6, 7],     // Category 3
-        ];
+        const overridePositions = ROLL_OVERRIDES[studentRecord.roll_number.toUpperCase()];
 
         const assigned: typeof uniqueTestQuestions = [];
         const assignedIds = new Set<string>();
 
-        for (let catIdx = 0; catIdx < CATEGORY_POSITIONS.length; catIdx++) {
-          const positions = CATEGORY_POSITIONS[catIdx];
-          const pool = positions
-            .map((pos: number) => uniqueTestQuestions[pos - 1])
-            .filter((q: typeof uniqueTestQuestions[number] | undefined): q is typeof uniqueTestQuestions[number] =>
-              q !== undefined && !assignedIds.has(q.question_id)
-            );
-          if (pool.length === 0) continue;
-          const pick = pool[Math.abs(rollSeed + catIdx * 31) % pool.length];
-          assignedIds.add(pick.question_id);
-          assigned.push(pick);
-        }
-
-        // Fallback: if a category was empty, fill remaining slots with any unassigned question
-        const kTarget = test.questions_per_student || 3;
-        if (assigned.length < kTarget) {
-          for (const q of uniqueTestQuestions) {
-            if (!assignedIds.has(q.question_id)) {
+        if (overridePositions) {
+          // Use the explicit positions for this student
+          for (const pos of overridePositions) {
+            const q = uniqueTestQuestions[pos - 1];
+            if (q && !assignedIds.has(q.question_id)) {
               assignedIds.add(q.question_id);
               assigned.push(q);
-              if (assigned.length === kTarget) break;
+            }
+          }
+        } else {
+          // ── Category-based assignment ───────────────────────────────────────
+          // Questions in the test are split into 3 fixed categories by their
+          // 1-based position (order_index rank) among uniqueTestQuestions:
+          //   Category 1 → positions 1, 2, 8, 9
+          //   Category 2 → positions 3, 4
+          //   Category 3 → positions 5, 6, 7
+          // One question is picked from each category using a deterministic seed
+          // derived from the student's roll number so the result is stable on reconnect.
+
+          const rollSeed = studentRecord.roll_number
+            .split('')
+            .reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0);
+
+          const CATEGORY_POSITIONS: number[][] = [
+            [1, 2, 8, 9],  // Category 1
+            [3, 4],        // Category 2
+            [5, 6, 7],     // Category 3
+          ];
+
+          for (let catIdx = 0; catIdx < CATEGORY_POSITIONS.length; catIdx++) {
+            const positions = CATEGORY_POSITIONS[catIdx];
+            const pool = positions
+              .map((pos: number) => uniqueTestQuestions[pos - 1])
+              .filter((q: typeof uniqueTestQuestions[number] | undefined): q is typeof uniqueTestQuestions[number] =>
+                q !== undefined && !assignedIds.has(q.question_id)
+              );
+            if (pool.length === 0) continue;
+            const pick = pool[Math.abs(rollSeed + catIdx * 31) % pool.length];
+            assignedIds.add(pick.question_id);
+            assigned.push(pick);
+          }
+
+          // Fallback: if a category was empty, fill remaining slots with any unassigned question
+          const kTarget = test.questions_per_student || 3;
+          if (assigned.length < kTarget) {
+            for (const q of uniqueTestQuestions) {
+              if (!assignedIds.has(q.question_id)) {
+                assignedIds.add(q.question_id);
+                assigned.push(q);
+                if (assigned.length === kTarget) break;
+              }
             }
           }
         }
