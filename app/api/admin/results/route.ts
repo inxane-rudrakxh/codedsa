@@ -14,7 +14,15 @@ export async function GET(request: NextRequest) {
 
   if (test_id) {
     // Results for specific test
-    const test = await prisma.test.findUnique({ where: { id: test_id } });
+    const test = await prisma.test.findUnique({
+      where: { id: test_id },
+      include: {
+        testQuestions: {
+          include: { question: true },
+          orderBy: { order_index: 'asc' }
+        }
+      }
+    });
     if (!test) return NextResponse.json({ error: 'Test not found' }, { status: 404 });
 
     // Check teacher owns this test
@@ -42,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     const results = students.map(student => {
       const session = sessions.find(s => s.student_id === student.id);
-      const questionsData: any[] = [];
+      let questionsData: any[] = [];
       let total_score = 0;
 
       if (session) {
@@ -53,7 +61,7 @@ export async function GET(request: NextRequest) {
           const sub = subs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
           const draft = session.codeDrafts?.find((d: any) => d.question_id === aq.question_id);
           const marks = sub?.marks_awarded ?? null;
-          if (marks !== null) total_score += marks;
+          if (marks !== null && marks !== undefined) total_score += marks;
           questionsData.push({
             question_id: aq.question_id,
             question_title: aq.question.title,
@@ -68,16 +76,42 @@ export async function GET(request: NextRequest) {
             ai_feedback: sub?.error_message || null,
           });
         }
+      } else if (test.testQuestions && test.testQuestions.length > 0) {
+        const qCount = test.questions_per_student || 3;
+        questionsData = test.testQuestions.slice(0, qCount).map((tq, qi) => ({
+          question_id: tq.question_id,
+          question_title: tq.question.title,
+          order_index: qi + 1,
+          submission_id: null,
+          source_code: null,
+          status: null,
+          passed_test_cases: null,
+          total_test_cases: null,
+          marks_awarded: null,
+          max_marks: tq.question.marks,
+          ai_feedback: null,
+        }));
+      }
+
+      const hasMarks = questionsData.some(q => q.marks_awarded !== null && q.marks_awarded !== undefined);
+      const isSubmitted = (session?.is_submitted || hasMarks) ? 1 : 0;
+
+      if (session && !session.is_submitted && hasMarks) {
+        prisma.examSession.update({
+          where: { id: session.id },
+          data: { is_submitted: true, status: 'COMPLETED' }
+        }).catch(() => {});
       }
 
       return {
+        student_id: student.id,
         roll_no: student.roll_number,
         name: student.user.full_name,
         division: student.division?.name || '',
         branch: student.branch?.name || 'AI&DS',
         session_id: session?.id || null,
-        status: session?.status || null,
-        is_submitted: session?.is_submitted ? 1 : 0,
+        status: isSubmitted ? 'SUBMITTED' : (session?.status || null),
+        is_submitted: isSubmitted,
         start_time: session?.start_time || null,
         end_time: session?.end_time || null,
         integrity_warnings: session?.integrity_warnings || 0,
@@ -111,11 +145,14 @@ export async function POST(request: NextRequest) {
   const { action } = body;
 
   if (action === 'update_marks') {
-    const { submission_id, session_id, question_id, marks_awarded } = body;
+    const { submission_id, session_id, question_id, marks_awarded, student_id, test_id } = body;
     if (marks_awarded === undefined) {
       return NextResponse.json({ error: 'Missing marks_awarded' }, { status: 400 });
     }
     
+    const parsedMarks = parseFloat(marks_awarded) || 0;
+    let targetSessionId = session_id;
+
     if (submission_id) {
       const submission = await prisma.submission.findUnique({
         where: { id: submission_id },
@@ -125,9 +162,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
 
+      targetSessionId = submission.session_id;
+
       await prisma.submission.update({
         where: { id: submission_id },
-        data: { marks_awarded: parseFloat(marks_awarded) }
+        data: {
+          marks_awarded: parsedMarks,
+          status: 'MANUALLY_GRADED'
+        }
       });
     } else if (session_id && question_id) {
       const session = await prisma.examSession.findUnique({
@@ -138,26 +180,124 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
 
-      // Find draft
-      const draft = await prisma.codeDraft.findUnique({
-        where: { session_id_question_id: { session_id, question_id } }
+      targetSessionId = session_id;
+
+      // Check if submission already exists for this session & question
+      const existingSub = await prisma.submission.findFirst({
+        where: { session_id, question_id },
+        orderBy: { created_at: 'desc' }
       });
-      await prisma.submission.create({
-        data: {
-          session_id,
-          question_id,
-          language_id: draft?.language_id || 1,
-          source_code: draft?.source_code || '',
-          status: 'MANUALLY_GRADED',
-          marks_awarded: parseFloat(marks_awarded),
-          total_test_cases: 0,
-          passed_test_cases: 0
+
+      if (existingSub) {
+        await prisma.submission.update({
+          where: { id: existingSub.id },
+          data: {
+            marks_awarded: parsedMarks,
+            status: 'MANUALLY_GRADED'
+          }
+        });
+      } else {
+        // Find draft if any
+        const draft = await prisma.codeDraft.findUnique({
+          where: { session_id_question_id: { session_id, question_id } }
+        });
+        await prisma.submission.create({
+          data: {
+            session_id,
+            question_id,
+            language_id: draft?.language_id || 1,
+            source_code: draft?.source_code || '',
+            status: 'MANUALLY_GRADED',
+            marks_awarded: parsedMarks,
+            total_test_cases: 0,
+            passed_test_cases: 0
+          }
+        });
+      }
+    } else if (student_id && test_id && question_id) {
+      const test = await prisma.test.findUnique({ where: { id: test_id } });
+      if (!test || (payload.role !== 'ADMIN' && test.teacher_id !== payload.user_id)) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      }
+
+      // Check or create ExamSession for this student
+      let session = await prisma.examSession.findFirst({
+        where: { student_id, test_id }
+      });
+
+      if (!session) {
+        session = await prisma.examSession.create({
+          data: {
+            test_id,
+            student_id,
+            status: 'COMPLETED',
+            is_submitted: true,
+            end_time: new Date()
+          }
+        });
+
+        // Assign questions
+        const testQuestions = await prisma.testQuestion.findMany({
+          where: { test_id },
+          orderBy: { order_index: 'asc' },
+          take: test.questions_per_student || 3
+        });
+        if (testQuestions.length > 0) {
+          await prisma.assignedQuestion.createMany({
+            data: testQuestions.map((tq, idx) => ({
+              session_id: session!.id,
+              question_id: tq.question_id,
+              order_index: idx + 1
+            }))
+          });
         }
+      }
+
+      targetSessionId = session.id;
+
+      const existingSub = await prisma.submission.findFirst({
+        where: { session_id: session.id, question_id },
+        orderBy: { created_at: 'desc' }
       });
+
+      if (existingSub) {
+        await prisma.submission.update({
+          where: { id: existingSub.id },
+          data: {
+            marks_awarded: parsedMarks,
+            status: 'MANUALLY_GRADED'
+          }
+        });
+      } else {
+        await prisma.submission.create({
+          data: {
+            session_id: session.id,
+            question_id,
+            language_id: 1,
+            source_code: '',
+            status: 'MANUALLY_GRADED',
+            marks_awarded: parsedMarks,
+            total_test_cases: 0,
+            passed_test_cases: 0
+          }
+        });
+      }
     } else {
       return NextResponse.json({ error: 'Missing identifiers' }, { status: 400 });
     }
     
+    // Automatically change paper status to Submitted!
+    if (targetSessionId) {
+      await prisma.examSession.update({
+        where: { id: targetSessionId },
+        data: {
+          is_submitted: true,
+          status: 'COMPLETED',
+          end_time: new Date()
+        }
+      });
+    }
+
     return NextResponse.json({ success: true });
   }
 
@@ -198,19 +338,23 @@ export async function POST(request: NextRequest) {
           const subs = session.submissions.filter(s => s.question_id === aq.question_id);
           const sub = subs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
           const marks = sub?.marks_awarded ?? null;
-          if (marks !== null) total_score += marks;
+          if (marks !== null && marks !== undefined) total_score += marks;
           qScores[`Q${qi + 1}`] = marks;
         }
       }
+
+      const hasMarks = Object.values(qScores).some(m => m !== null && m !== undefined);
+      const isSubmitted = Boolean(session?.is_submitted || hasMarks || total_score > 0);
 
       return {
         roll_no: student.roll_number,
         name: student.user.full_name,
         division: student.division?.name || '',
-        status: session?.is_submitted ? 'SUBMITTED' : (session ? 'IN_PROGRESS' : 'NOT_STARTED'),
+        status: isSubmitted ? 'SUBMITTED' : (session ? 'IN_PROGRESS' : 'ABSENT'),
         ...qScores,
-        total: session?.is_submitted ? total_score : null,
+        total: isSubmitted ? total_score : 0,
         out_of: test.total_marks,
+        percentage: isSubmitted && test.total_marks > 0 ? `${((total_score / test.total_marks) * 100).toFixed(1)}%` : '0.0%',
       };
     });
 

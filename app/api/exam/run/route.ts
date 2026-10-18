@@ -33,10 +33,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Custom input exceeds maximum limit of 16KB' }, { status: 400 });
   }
 
-  // Verify session is active
+  // Verify session exists
   const session = await prisma.examSession.findUnique({ where: { id: payload.session_id } });
-  if (!session || session.status === 'EXPIRED' || session.is_submitted) {
-    return NextResponse.json({ error: 'Exam session is not active' }, { status: 403 });
+  if (!session) {
+    return NextResponse.json({ error: 'Exam session not found' }, { status: 403 });
   }
 
   let memoryLimit = 256000;

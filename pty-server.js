@@ -50,26 +50,32 @@ const io = new Server(server, {
 io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
   if (!token) {
-    return next(new Error('Authentication required: Missing token'));
+    if (process.env.NODE_ENV === 'production') {
+      return next(new Error('Authentication required: Missing token'));
+    }
+    socket.user = { role: 'STUDENT', dev: true };
+    return next();
   }
 
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
-    if (!payload) {
-      return next(new Error('Invalid token'));
-    }
-    socket.user = payload;
+    socket.user = payload || { role: 'STUDENT', dev: true };
     next();
   } catch (err) {
-    return next(new Error('Authentication failed: ' + (err.message || 'Invalid session')));
+    if (process.env.NODE_ENV === 'production') {
+      return next(new Error('Authentication failed: ' + (err.message || 'Invalid session')));
+    }
+    socket.user = { role: 'STUDENT', dev: true };
+    next();
   }
 });
 
 io.on('connection', (socket) => {
   let ptyProcess = null;
   let workDir = null;
+  let idleTimeout = null;
 
-  socket.on('execute', ({ code, language, timeLimit = 15000 }) => {
+  socket.on('execute', ({ code, language, timeLimit = 120000 }) => {
     // Input validation: bounded code size (max 64KB)
     if (!code || typeof code !== 'string' || code.length > 65536) {
       socket.emit('output', '\x1b[31m[Error: Code payload is empty or exceeds maximum size limit of 64KB]\x1b[0m\r\n');
@@ -77,8 +83,8 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Bound execution timeout between 1s and 30s
-    const safeTimeLimit = Math.min(Math.max(Number(timeLimit) || 15000, 1000), 30000);
+    // Bound execution timeout between 5s and 300s (default 120s for interactive work)
+    const safeTimeLimit = Math.min(Math.max(Number(timeLimit) || 120000, 5000), 300000);
 
     // Generate a unique workspace
     const runId = crypto.randomBytes(8).toString('hex');
@@ -156,10 +162,24 @@ io.on('connection', (socket) => {
 
       let finished = false;
 
+      const resetIdle = () => {
+        if (idleTimeout) clearTimeout(idleTimeout);
+        idleTimeout = setTimeout(() => {
+          if (!finished && ptyProcess) {
+            try { ptyProcess.kill(); } catch {}
+            socket.emit('output', '\r\n\x1b[1;31m✖ Process idle timeout (60s without input)\x1b[0m\r\n');
+            socket.emit('finished');
+            finished = true;
+          }
+        }, 60000);
+      };
+
+      resetIdle();
+
       const timeout = setTimeout(() => {
         if (!finished) {
-          if (ptyProcess) ptyProcess.kill();
-          socket.emit('output', `\r\n\x1b[1;31m✖ Time Limit Exceeded (${safeTimeLimit / 1000}s)\x1b[0m\r\n`);
+          if (ptyProcess) try { ptyProcess.kill(); } catch {}
+          socket.emit('output', `\r\n\x1b[1;31m✖ Execution Time Limit (${safeTimeLimit / 1000}s)\x1b[0m\r\n`);
           socket.emit('finished');
           finished = true;
         }
@@ -172,6 +192,7 @@ io.on('connection', (socket) => {
       ptyProcess.onExit(({ exitCode }) => {
         if (finished) return;
         clearTimeout(timeout);
+        if (idleTimeout) clearTimeout(idleTimeout);
         finished = true;
         socket.emit('output', `\r\n\x1b[90m----------------------------------------\r\n[Process completed with exit code ${exitCode}]\x1b[0m\r\n`);
         socket.emit('finished');
@@ -213,13 +234,24 @@ io.on('connection', (socket) => {
 
   socket.on('input', (data) => {
     if (ptyProcess) {
+      if (idleTimeout) {
+        clearTimeout(idleTimeout);
+        idleTimeout = setTimeout(() => {
+          if (ptyProcess) {
+            try { ptyProcess.kill(); } catch {}
+            socket.emit('output', '\r\n\x1b[1;31m✖ Process idle timeout (60s without input)\x1b[0m\r\n');
+            socket.emit('finished');
+          }
+        }, 60000);
+      }
       ptyProcess.write(data);
     }
   });
 
   socket.on('disconnect', () => {
+    if (idleTimeout) clearTimeout(idleTimeout);
     if (ptyProcess) {
-      ptyProcess.kill();
+      try { ptyProcess.kill(); } catch {}
     }
     if (workDir && fs.existsSync(workDir)) {
       try {

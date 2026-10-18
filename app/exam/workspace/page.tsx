@@ -1539,7 +1539,9 @@ function ConsolePanel({
       });
       const data = await res.json();
 
-      if (!data.success && data.compile_error) {
+      if (!res.ok || data.error) {
+        term.writeln(`\x1b[1;31m✖ Engine Error: ${data.error || res.statusText || 'Execution failed'}\x1b[0m\r\n`);
+      } else if (!data.success && data.compile_error) {
         term.writeln(`\x1b[1;31m✖ Compilation Error\x1b[0m\r\n`);
         term.write(`\x1b[31m${data.compile_error.replace(/\r?\n/g, '\r\n')}\x1b[0m\r\n`);
       } else if (data.timed_out) {
@@ -1570,9 +1572,79 @@ function ConsolePanel({
     }
   };
 
+  const triggerExecuteWithStdin = () => {
+    if (onDataDisposableRef.current) {
+      try { onDataDisposableRef.current.dispose(); } catch {}
+      onDataDisposableRef.current = null;
+    }
+    setAwaitingStdin(false);
+    awaitingStdinRef.current = false;
+    const term = xtermRef.current;
+    if (term) {
+      term.writeln('\r\n\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
+      runViaHttp(term, stdinBufferRef.current);
+    } else {
+      setRunning(false);
+    }
+  };
+
+  const setupStdinCollection = (term: any) => {
+    setAwaitingStdin(true);
+    awaitingStdinRef.current = true;
+    stdinBufferRef.current = '';
+
+    term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
+    term.writeln('  \x1b[1;33mSTDIN INPUT\x1b[0m \x1b[38;5;240m— Program requires input. Type below and press \x1b[0m\x1b[1;32mEnter\x1b[0m\x1b[38;5;240m.\x1b[0m');
+    term.writeln('  \x1b[38;5;240mWhen ready, click \x1b[0m\x1b[1;32m[▶ Execute with Input]\x1b[0m\x1b[38;5;240m or press \x1b[0m\x1b[1;32mCtrl+Enter\x1b[0m\x1b[38;5;240m.\x1b[0m');
+    term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m\r\n');
+
+    let lineBuffer = '';
+
+    if (onDataDisposableRef.current) {
+      try { onDataDisposableRef.current.dispose(); } catch {}
+      onDataDisposableRef.current = null;
+    }
+
+    onDataDisposableRef.current = term.onData((data: string) => {
+      if (!awaitingStdinRef.current) return;
+
+      if (data === '\x04') {
+        if (lineBuffer.trim()) {
+          stdinBufferRef.current += lineBuffer + '\n';
+          lineBuffer = '';
+        }
+        triggerExecuteWithStdin();
+        return;
+      }
+      if (data === '\r' || data === '\n') {
+        term.write('\r\n');
+        stdinBufferRef.current += lineBuffer + '\n';
+        lineBuffer = '';
+        return;
+      }
+      if (data === '\u007F' || data === '\b') {
+        if (lineBuffer.length > 0) {
+          lineBuffer = lineBuffer.slice(0, -1);
+          term.write('\b \b');
+        }
+        return;
+      }
+      if (data >= ' ' || data === '\t') {
+        lineBuffer += data;
+        term.write(data);
+      }
+    });
+  };
+
   // ── Main run effect ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (runTrigger === 0 || !code) return;
+
+    // If Run Code is clicked again while awaiting stdin, flush and execute!
+    if (awaitingStdinRef.current && xtermRef.current) {
+      triggerExecuteWithStdin();
+      return;
+    }
 
     // Tear down any existing socket/listeners
     if (socketRef.current) {
@@ -1584,7 +1656,7 @@ function ConsolePanel({
       onDataDisposableRef.current = null;
     }
 
-    // Reset awaiting-stdin state from any previous run
+    // Reset awaiting-stdin state
     setAwaitingStdin(false);
     awaitingStdinRef.current = false;
     stdinBufferRef.current = '';
@@ -1594,7 +1666,7 @@ function ConsolePanel({
     (async () => {
       const term = await ensureTerminal();
       if (!term) { setRunning(false); return; }
-      if (cancelled) return; // effect was torn down while terminal was loading
+      if (cancelled) return;
 
       term.clear();
       setTimeout(() => fitAddonRef.current?.fit(), 30);
@@ -1611,11 +1683,26 @@ function ConsolePanel({
         let connected = false;
         let fell = false;
 
+        const fallback = () => {
+          if (!fell) {
+            fell = true;
+            try { socketRef.current?.disconnect(); } catch {}
+            if (!cancelled) {
+              const needsStdin = /\bcin\b|\bscanf\b|\bgets\b|\binput\s*\(|\bgetline\b|\bread\s*\(/.test(code);
+              if (!needsStdin) {
+                runViaHttp(term, '');
+              } else {
+                setupStdinCollection(term);
+              }
+            }
+          }
+        };
+
         let socketModule: any;
         try {
           socketModule = await import('socket.io-client');
         } catch {
-          runViaHttp(term, '');
+          fallback();
           return;
         }
         if (cancelled) return;
@@ -1623,7 +1710,8 @@ function ConsolePanel({
         const host = window.location.hostname || 'localhost';
         const sessionToken =
           (typeof window !== 'undefined' ? localStorage.getItem('session_token') : null) || '';
-        const socket = socketModule.io(`http://${host}:4000`, {
+        const ioFunc = socketModule.io || socketModule.default || socketModule;
+        const socket = ioFunc(`http://${host}:4000`, {
           timeout: 2500,
           reconnection: false,
           auth: { token: sessionToken },
@@ -1631,27 +1719,19 @@ function ConsolePanel({
         socketRef.current = socket;
 
         const connTimer = setTimeout(() => {
-          if (!connected && !fell) {
-            fell = true;
-            try { socket.disconnect(); } catch {}
-            if (!cancelled) runViaHttp(term, '');
-          }
+          if (!connected) fallback();
         }, 2000);
 
         socket.on('connect_error', () => {
-          if (!fell) {
-            clearTimeout(connTimer);
-            fell = true;
-            try { socket.disconnect(); } catch {}
-            if (!cancelled) runViaHttp(term, '');
-          }
+          clearTimeout(connTimer);
+          fallback();
         });
 
         socket.on('connect', () => {
           if (cancelled) { try { socket.disconnect(); } catch {} return; }
           connected = true;
           clearTimeout(connTimer);
-          socket.emit('execute', { code, language });
+          socket.emit('execute', { code, language, timeLimit: 120000 });
         });
 
         socket.on('output', (chunk: string) => {
@@ -1669,8 +1749,8 @@ function ConsolePanel({
           if (socket.connected) socket.emit('input', data);
         });
 
-        // Safety timeout
-        setTimeout(() => { if (!cancelled) setRunning(false); }, 31000);
+        // Safety timeout (130s)
+        setTimeout(() => { if (!cancelled) setRunning(false); }, 130000);
         return;
       }
 
@@ -1680,66 +1760,14 @@ function ConsolePanel({
 
       if (!needsStdin) {
         runViaHttp(term, '');
-        return;
+      } else {
+        setupStdinCollection(term);
       }
-
-      // Collect stdin interactively before running
-      setAwaitingStdin(true);
-      awaitingStdinRef.current = true;
-
-      term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
-      term.writeln('  \x1b[1;33mSTDIN\x1b[0m \x1b[38;5;240m— Type your input. Press \x1b[0m\x1b[1;32mEnter\x1b[0m\x1b[38;5;240m after each value.\x1b[0m');
-      term.writeln('  \x1b[38;5;240mWhen done, press \x1b[0m\x1b[1;32mCtrl+D\x1b[0m\x1b[38;5;240m (or Run Code again) to execute.\x1b[0m');
-      term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m\r\n');
-
-      let lineBuffer = '';
-
-      onDataDisposableRef.current = term.onData((data: string) => {
-        if (!awaitingStdinRef.current) return;
-
-        if (data === '\x04') {
-          if (lineBuffer.trim()) { stdinBufferRef.current += lineBuffer + '\n'; lineBuffer = ''; }
-          if (onDataDisposableRef.current) { try { onDataDisposableRef.current.dispose(); } catch {} onDataDisposableRef.current = null; }
-          setAwaitingStdin(false);
-          awaitingStdinRef.current = false;
-          term.writeln('\r\n\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
-          runViaHttp(term, stdinBufferRef.current);
-          return;
-        }
-        if (data === '\r' || data === '\n') {
-          term.write('\r\n');
-          stdinBufferRef.current += lineBuffer + '\n';
-          lineBuffer = '';
-          return;
-        }
-        if (data === '\u007F' || data === '\b') {
-          if (lineBuffer.length > 0) { lineBuffer = lineBuffer.slice(0, -1); term.write('\b \b'); }
-          return;
-        }
-        if (data >= ' ' || data === '\t') { lineBuffer += data; term.write(data); }
-      });
     })();
 
     return () => {
       cancelled = true;
-      // Don't disconnect socket here — the socket listeners handle their own cleanup
-      // so that in-flight PTY sessions aren't killed by React StrictMode double-invoke
     };
-  }, [runTrigger]);
-
-  // If Run Code pressed again while awaiting stdin → flush and execute
-  const prevRunTriggerRef = useRef(0);
-  useEffect(() => {
-    if (runTrigger === 0 || runTrigger === prevRunTriggerRef.current) return;
-    prevRunTriggerRef.current = runTrigger;
-
-    if (awaitingStdinRef.current && xtermRef.current) {
-      if (onDataDisposableRef.current) { try { onDataDisposableRef.current.dispose(); } catch {} onDataDisposableRef.current = null; }
-      setAwaitingStdin(false);
-      awaitingStdinRef.current = false;
-      xtermRef.current.writeln('\r\n\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
-      runViaHttp(xtermRef.current, stdinBufferRef.current);
-    }
   }, [runTrigger]);
 
   const handleClear = (e: React.MouseEvent) => {
@@ -1824,17 +1852,28 @@ function ConsolePanel({
           )}
 
           {awaitingStdin && (
-            <span style={{
-              fontSize: '10px',
-              fontFamily: 'Söhne Mono, monospace',
-              color: '#d29922',
-              background: 'rgba(210, 153, 34, 0.1)',
-              padding: '2px 8px',
-              borderRadius: '3px',
-              border: '1px solid rgba(210, 153, 34, 0.3)',
-            }}>
-              ⌨ Awaiting input · Ctrl+D to run
-            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerExecuteWithStdin();
+              }}
+              style={{
+                fontSize: '11px',
+                fontFamily: 'Söhne Mono, monospace',
+                color: '#ffffff',
+                background: '#238636',
+                padding: '2px 10px',
+                borderRadius: '3px',
+                border: '1px solid #2ea043',
+                cursor: 'pointer',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <span>▶</span> Execute with Input
+            </button>
           )}
         </div>
 

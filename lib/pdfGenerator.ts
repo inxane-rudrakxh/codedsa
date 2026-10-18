@@ -110,9 +110,12 @@ export function generateCollegeResultsPDF(
 
   // Summary Statistics
   const totalStudents = results.length;
-  const submittedCount = results.filter(r => Boolean(r.is_submitted)).length;
+  const isStudentSubmitted = (r: PDFStudentResult) =>
+    Boolean(r.is_submitted) || r.total_score > 0 || Boolean(r.questions?.some(q => q.marks_awarded !== null && q.marks_awarded !== undefined));
+
+  const submittedCount = results.filter(isStudentSubmitted).length;
   const absentCount = totalStudents - submittedCount;
-  const submittedScores = results.filter(r => Boolean(r.is_submitted)).map(r => r.total_score);
+  const submittedScores = results.filter(isStudentSubmitted).map(r => r.total_score);
   const avgScore = submittedCount > 0
     ? (submittedScores.reduce((a, b) => a + b, 0) / submittedCount).toFixed(1)
     : '0.0';
@@ -138,11 +141,13 @@ export function generateCollegeResultsPDF(
   // Prepare table data
   const head = [['Sr.', 'Roll No', 'Student Name', 'Div', ...qCols, 'Total', '%', 'Status']];
   const body = sorted.map((st, idx) => {
-    const isSubmitted = Boolean(st.is_submitted);
+    const isSubmitted = isStudentSubmitted(st);
     const qMarks = qCols.map((_, qi) => {
-      if (!isSubmitted) return '—';
       const q = st.questions?.[qi];
-      return q && q.marks_awarded !== null && q.marks_awarded !== undefined ? `${q.marks_awarded}` : '0';
+      if (q && q.marks_awarded !== null && q.marks_awarded !== undefined) {
+        return `${q.marks_awarded}`;
+      }
+      return isSubmitted ? '0' : '—';
     });
 
     const totalText = isSubmitted ? `${st.total_score}/${maxMarks}` : '0/' + maxMarks;

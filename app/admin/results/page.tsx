@@ -27,6 +27,7 @@ interface QuestionResult {
 }
 
 interface ResultRow {
+  student_id?: string;
   roll_no: string;
   name: string;
   division: string;
@@ -53,7 +54,7 @@ export default function ResultsPage() {
   const [divFilter, setDivFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedCode, setSelectedCode] = useState<{
-    name: string; roll: string; q: QuestionResult; editMarks: number; session_id: string;
+    name: string; roll: string; q: QuestionResult; editMarks: number; session_id: string; student_id?: string;
   } | null>(null);
   const [reportData, setReportData] = useState<any[] | null>(null);
   const [sessionToReset, setSessionToReset] = useState<string | null>(null);
@@ -95,6 +96,8 @@ export default function ResultsPage() {
         action: 'update_marks', 
         submission_id: selectedCode.q.submission_id, 
         session_id: selectedCode.session_id,
+        student_id: selectedCode.student_id,
+        test_id: selectedTestId,
         question_id: selectedCode.q.question_id,
         marks_awarded: selectedCode.editMarks 
       }),
@@ -148,7 +151,7 @@ export default function ResultsPage() {
       name: r.name,
       division: r.division,
       branch: r.branch,
-      is_submitted: r.is_submitted,
+      is_submitted: Boolean(r.is_submitted || r.total_score > 0 || r.questions?.some(q => q.marks_awarded !== null && q.marks_awarded !== undefined)),
       total_score: r.total_score,
       max_total: r.max_total || selectedTest?.total_marks || 30,
       questions: r.questions.map(q => ({
@@ -171,43 +174,72 @@ export default function ResultsPage() {
     );
   };
 
-  const exportCSV = () => {
-    if (reportData && reportData.length > 0) {
-      const keys = Object.keys(reportData[0] || {});
-      const rows = [keys.join(','), ...reportData.map(r => keys.map(k => `"${r[k] ?? ''}"`).join(','))];
-      const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${selectedTest?.title || 'results'}_marks.csv`;
-      a.click();
+  const exportExcel = () => {
+    const listToExport = filtered.length > 0 ? filtered : results;
+    if (listToExport.length === 0) {
+      alert('No results available to export. Please select a test with results.');
       return;
     }
 
-    const listToExport = filtered.length > 0 ? filtered : results;
-    if (listToExport.length === 0) return;
+    const maxQ = Math.max(...listToExport.map(r => r.questions?.length || 0), 3);
+    const qHeaders = Array.from({ length: Math.min(maxQ, 9) }, (_, i) => `Q${i + 1} Marks`);
 
-    const headers = ['Roll No', 'Name', 'Division', 'Branch', 'Status', 'Total Score', 'Max Marks', 'Violations'];
-    const rows = [
-      headers.join(','),
-      ...listToExport.map(r => [
-        `"${r.roll_no}"`,
-        `"${r.name}"`,
-        `"${r.division}"`,
-        `"${r.branch}"`,
-        `"${r.is_submitted ? 'SUBMITTED' : 'ABSENT'}"`,
-        r.total_score,
-        r.max_total || selectedTest?.total_marks || 30,
-        r.integrity_warnings,
-      ].join(','))
+    const headers = [
+      'Sr No',
+      'Roll No',
+      'Student Name',
+      'Division',
+      'Branch',
+      ...qHeaders,
+      'Total Score',
+      'Max Marks',
+      'Percentage (%)',
+      'Status',
+      'Integrity Warnings'
     ];
 
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const maxMarks = selectedTest?.total_marks || 30;
+
+    const rows = listToExport.map((r, idx) => {
+      const hasMarks = r.questions?.some(q => q.marks_awarded !== null && q.marks_awarded !== undefined);
+      const isSubmitted = Boolean(r.is_submitted || hasMarks || r.total_score > 0);
+
+      const qMarks = qHeaders.map((_, qi) => {
+        const q = r.questions?.[qi];
+        if (q && q.marks_awarded !== null && q.marks_awarded !== undefined) {
+          return q.marks_awarded;
+        }
+        return isSubmitted ? 0 : '—';
+      });
+
+      const total = isSubmitted ? r.total_score : 0;
+      const pct = isSubmitted && maxMarks > 0 ? `${((r.total_score / maxMarks) * 100).toFixed(1)}%` : '0.0%';
+      const status = isSubmitted ? 'SUBMITTED' : 'ABSENT';
+
+      return [
+        idx + 1,
+        `"${r.roll_no}"`,
+        `"${(r.name || '').replace(/"/g, '""')}"`,
+        `"${r.division || ''}"`,
+        `"${r.branch || 'AI&DS'}"`,
+        ...qMarks,
+        total,
+        maxMarks,
+        `"${pct}"`,
+        `"${status}"`,
+        r.integrity_warnings || 0,
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${selectedTest?.title || 'results'}_marks.csv`;
+    const testTitle = (selectedTest?.title || 'Results').replace(/[^a-zA-Z0-9_-]/g, '_');
+    a.download = `${testTitle}_Marks_Report.csv`;
     a.click();
+    URL.revokeObjectURL(url);
   };
 
   const divisions = [...new Set(results.map(r => r.division).filter(Boolean))];
@@ -215,15 +247,16 @@ export default function ResultsPage() {
   const filtered = results.filter(r => {
     const matchSearch = !search || r.name.toLowerCase().includes(search.toLowerCase()) || r.roll_no.toLowerCase().includes(search.toLowerCase());
     const matchDiv = divFilter === 'all' || r.division === divFilter;
-    const sStatus = r.is_submitted ? 'submitted' : (r.session_id ? 'active' : 'not_started');
+    const hasMarks = r.questions?.some(q => q.marks_awarded !== null && q.marks_awarded !== undefined);
+    const sStatus = (r.is_submitted || hasMarks || r.total_score > 0) ? 'submitted' : (r.session_id ? 'active' : 'not_started');
     const matchStatus = statusFilter === 'all' || sStatus === statusFilter;
     return matchSearch && matchDiv && matchStatus;
   });
 
-  const submittedCount = results.filter(r => r.is_submitted).length;
+  const submittedCount = results.filter(r => r.is_submitted || r.total_score > 0 || r.questions?.some(q => q.marks_awarded !== null)).length;
   const avgScore = submittedCount > 0
-    ? (results.filter(r => r.is_submitted).reduce((acc, r) => acc + r.total_score, 0) / submittedCount).toFixed(1)
-    : '—';
+    ? (results.filter(r => r.is_submitted || r.total_score > 0 || r.questions?.some(q => q.marks_awarded !== null)).reduce((acc, r) => acc + r.total_score, 0) / submittedCount).toFixed(1)
+    : '0';
 
   const maxQuestions = Math.max(...results.map(r => r.questions.length), 0);
   const qHeaders = Array.from({ length: maxQuestions }, (_, i) => `Q${i + 1}`);
@@ -257,14 +290,14 @@ export default function ResultsPage() {
                 background: 'var(--accent, #cc785c)',
                 boxShadow: '0 2px 8px rgba(204, 120, 92, 0.25)',
               }}
-              title="Generate printable official college result PDF for WhatsApp"
+              title="Generate printable official college result PDF"
             >
-              <span>✦</span> Export PDF (WhatsApp Report)
+              <span>✦</span> Download PDF Report
             </button>
           )}
           {selectedTestId && results.length > 0 && (
-            <button onClick={exportCSV} style={outlineBtn}>
-              Export CSV
+            <button onClick={exportExcel} style={{ ...outlineBtn, display: 'inline-flex', alignItems: 'center', gap: '6px' }} title="Download Excel (.csv) Report with all students' marks">
+              <span>📊</span> Download Excel Report
             </button>
           )}
         </div>
@@ -347,7 +380,9 @@ export default function ResultsPage() {
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={8 + qHeaders.length} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No results found.</td></tr>
                 ) : filtered.map((r, i) => {
-                  const sStatus = r.is_submitted ? 'submitted' : (r.session_id ? 'active' : 'not_started');
+                  const hasMarks = r.questions?.some(q => q.marks_awarded !== null && q.marks_awarded !== undefined);
+                  const isSubmitted = Boolean(r.is_submitted || hasMarks || r.total_score > 0);
+                  const sStatus = isSubmitted ? 'submitted' : (r.session_id ? 'active' : 'not_started');
                   return (
                     <tr key={r.roll_no} style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border-subtle)' : 'none', background: 'var(--surface-1)' }}>
                       <td style={tdStyle}><span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '12px', color: 'var(--text-primary)' }}>{r.roll_no}</span></td>
@@ -357,15 +392,16 @@ export default function ResultsPage() {
                         const q = r.questions.find(q => q.order_index === qi + 1);
                         return (
                           <td key={qi} style={tdStyle}>
-                            {q && (q.submission_id || q.status === 'DRAFT') ? (
+                            {q && (r.session_id || r.student_id) ? (
                               <button
-                                onClick={() => setSelectedCode({ name: r.name, roll: r.roll_no, q, editMarks: q.marks_awarded ?? 0, session_id: r.session_id! })}
+                                onClick={() => setSelectedCode({ name: r.name, roll: r.roll_no, q, editMarks: q.marks_awarded ?? 0, session_id: r.session_id || '', student_id: r.student_id })}
                                 style={{
                                   background: 'transparent', border: 'none', cursor: 'pointer',
                                   fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px',
                                   textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '3px',
                                   color: q.marks_awarded === null ? 'var(--text-muted)' : q.marks_awarded >= q.max_marks * 0.7 ? 'var(--success)' : q.marks_awarded >= q.max_marks * 0.4 ? 'var(--warning, #f0a500)' : 'var(--error)',
                                 }}
+                                title="Click to view code and assign marks"
                               >
                                 {q.marks_awarded !== null ? `${q.marks_awarded}/${q.max_marks}` : `?/${q.max_marks}`}
                               </button>
@@ -376,8 +412,8 @@ export default function ResultsPage() {
                         );
                       })}
                       <td style={tdStyle}>
-                        <span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', fontWeight: 600, color: r.is_submitted ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                          {r.is_submitted ? `${r.total_score}/${r.max_total}` : '—'}
+                        <span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', fontWeight: 600, color: isSubmitted ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                          {isSubmitted ? `${r.total_score}/${r.max_total}` : '—'}
                         </span>
                       </td>
                       <td style={tdStyle}><StatusPill status={sStatus} /></td>
@@ -420,7 +456,7 @@ export default function ResultsPage() {
             <div className="modal-header">
               <div>
                 <h3 style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 600 }}>
-                  {selectedCode.roll} · {selectedCode.name} — Q{selectedCode.q.order_index + 1}: {selectedCode.q.question_title}
+                  {selectedCode.roll} · {selectedCode.name} — Q{selectedCode.q.order_index}: {selectedCode.q.question_title}
                 </h3>
                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
                   {selectedCode.q.passed_test_cases}/{selectedCode.q.total_test_cases} test cases passed
