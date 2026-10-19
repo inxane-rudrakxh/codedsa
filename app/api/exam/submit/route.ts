@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
   // Check session
   const session = await prisma.examSession.findUnique({ where: { id: payload.session_id } });
-  if (!session || session.status === 'EXPIRED' || session.is_submitted) {
+  if (!session || session.status === 'EXPIRED' || session.status === 'STOPPED' || session.is_submitted) {
     return NextResponse.json({ error: 'Session not active' }, { status: 403 });
   }
 

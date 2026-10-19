@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   const elapsed = (Date.now() - startTime) / 1000; // seconds
   const remaining = Math.max(0, durationMinutes * 60 - elapsed);
 
-  if (remaining <= 0 && session.status !== 'EXPIRED' && !session.is_submitted) {
+  if (remaining <= 0 && session.status !== 'EXPIRED' && session.status !== 'STOPPED' && !session.is_submitted) {
     await prisma.examSession.update({
       where: { id: session.id },
       data: { status: 'EXPIRED', is_submitted: true }
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
     session: {
       id: session.id,
       start_time: session.start_time,
-      status: session.status === 'PENDING_APPROVAL' ? 'pending_approval' : (session.is_submitted ? 'submitted' : session.status.toLowerCase()),
+      status: session.status === 'PENDING_APPROVAL' ? 'pending_approval' : (session.status === 'STOPPED' ? 'stopped' : (session.is_submitted ? 'submitted' : session.status.toLowerCase())),
       is_submitted: session.is_submitted,
       remaining_seconds: Math.floor(remaining),
       test_title: session.test.title,

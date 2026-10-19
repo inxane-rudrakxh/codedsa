@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
 
     let displayStatus: string;
     if (session.status === 'PENDING_APPROVAL') displayStatus = 'pending_approval';
+    else if (session.status === 'STOPPED') displayStatus = 'stopped';
     else if (session.is_submitted) displayStatus = 'submitted';
     else if (remaining <= 0) displayStatus = 'expired';
     else displayStatus = 'active';

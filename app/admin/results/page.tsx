@@ -59,6 +59,17 @@ export default function ResultsPage() {
   const [reportData, setReportData] = useState<any[] | null>(null);
   const [sessionToReset, setSessionToReset] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+  const [stopModal, setStopModal] = useState<{
+    isOpen: boolean;
+    type: 'single' | 'selected' | 'all';
+    sessionId?: string;
+    studentName?: string;
+    studentRoll?: string;
+    count?: number;
+  } | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const [stopSuccessMsg, setStopSuccessMsg] = useState<string | null>(null);
 
   const getToken = () => localStorage.getItem('admin_token') || '';
 
@@ -137,6 +148,40 @@ export default function ResultsPage() {
       body: JSON.stringify({ action: 'reset_session', session_id: sessionId }),
     });
     await loadResults(selectedTestId);
+  };
+
+  const handleStopExam = async () => {
+    if (!stopModal) return;
+    setStopping(true);
+    try {
+      let body: any = {};
+      if (stopModal.type === 'single') {
+        body = { action: 'stop_session', session_id: stopModal.sessionId };
+      } else if (stopModal.type === 'selected') {
+        body = { action: 'stop_sessions', session_ids: selectedSessionIds };
+      } else if (stopModal.type === 'all') {
+        body = { action: 'stop_all', test_id: selectedTestId };
+      }
+
+      const res = await fetch('/api/admin/results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const count = stopModal.type === 'single' ? 1 : (stopModal.type === 'selected' ? selectedSessionIds.length : (activeStudents.length || 0));
+        setSelectedSessionIds([]);
+        setStopModal(null);
+        setStopSuccessMsg(`Successfully stopped exam for ${count} student${count > 1 ? 's' : ''}.`);
+        setTimeout(() => setStopSuccessMsg(null), 4000);
+        await loadResults(selectedTestId);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStopping(false);
+    }
   };
 
   const exportPDF = () => {
@@ -248,10 +293,34 @@ export default function ResultsPage() {
     const matchSearch = !search || r.name.toLowerCase().includes(search.toLowerCase()) || r.roll_no.toLowerCase().includes(search.toLowerCase());
     const matchDiv = divFilter === 'all' || r.division === divFilter;
     const hasMarks = r.questions?.some(q => q.marks_awarded !== null && q.marks_awarded !== undefined);
-    const sStatus = (r.is_submitted || hasMarks || r.total_score > 0) ? 'submitted' : (r.session_id ? 'active' : 'not_started');
+    const isSubmitted = Boolean(r.is_submitted || hasMarks || r.total_score > 0);
+    const sStatus = r.status === 'STOPPED' ? 'stopped' : (isSubmitted ? 'submitted' : (r.session_id ? 'active' : 'not_started'));
     const matchStatus = statusFilter === 'all' || sStatus === statusFilter;
     return matchSearch && matchDiv && matchStatus;
   });
+
+  const activeStudents = filtered.filter(r => {
+    const hasMarks = r.questions?.some(q => q.marks_awarded !== null && q.marks_awarded !== undefined);
+    const isSubmitted = Boolean(r.is_submitted || hasMarks || r.total_score > 0);
+    return Boolean(r.session_id && !isSubmitted && r.status !== 'STOPPED');
+  });
+
+  const toggleSelectSession = (sessionId: string) => {
+    setSelectedSessionIds(prev =>
+      prev.includes(sessionId) ? prev.filter(id => id !== sessionId) : [...prev, sessionId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    const activeIds = activeStudents.map(s => s.session_id!).filter(Boolean);
+    if (activeIds.length === 0) return;
+    const allSelected = activeIds.every(id => selectedSessionIds.includes(id));
+    if (allSelected) {
+      setSelectedSessionIds(prev => prev.filter(id => !activeIds.includes(id)));
+    } else {
+      setSelectedSessionIds(prev => Array.from(new Set([...prev, ...activeIds])));
+    }
+  };
 
   const submittedCount = results.filter(r => r.is_submitted || r.total_score > 0 || r.questions?.some(q => q.marks_awarded !== null)).length;
   const avgScore = submittedCount > 0
@@ -348,27 +417,148 @@ export default function ResultsPage() {
             ))}
           </div>
 
-          {/* Filters */}
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-            <input type="text" placeholder="Search by name or roll..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...filterInput, flex: 1, maxWidth: '260px' }} />
-            <select value={divFilter} onChange={e => setDivFilter(e.target.value)} style={filterInput}>
-              <option value="all">All Divisions</option>
-              {divisions.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={filterInput}>
-              <option value="all">All Status</option>
-              <option value="submitted">Submitted</option>
-              <option value="active">Active</option>
-              <option value="not_started">Not Started</option>
-            </select>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>{filtered.length} students</span>
+          {/* Success banner */}
+          {stopSuccessMsg && (
+            <div style={{
+              padding: '10px 16px',
+              background: 'rgba(78, 154, 110, 0.12)',
+              border: '1px solid rgba(78, 154, 110, 0.3)',
+              borderRadius: '4px',
+              color: 'var(--success, #4e9a6e)',
+              fontSize: '13px',
+              fontWeight: 500,
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span>✓</span> {stopSuccessMsg}
+            </div>
+          )}
+
+          {/* Filters & Actions Bar */}
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
+              <input type="text" placeholder="Search by name or roll..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...filterInput, flex: 1, maxWidth: '260px' }} />
+              <select value={divFilter} onChange={e => setDivFilter(e.target.value)} style={filterInput}>
+                <option value="all">All Divisions</option>
+                {divisions.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={filterInput}>
+                <option value="all">All Status</option>
+                <option value="active">Active ({results.filter(r => Boolean(r.session_id && !r.is_submitted && r.status !== 'STOPPED')).length})</option>
+                <option value="submitted">Submitted</option>
+                <option value="stopped">Stopped</option>
+                <option value="not_started">Not Started</option>
+              </select>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>{filtered.length} students</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {activeStudents.length > 0 && (
+                <button
+                  onClick={() => setStopModal({
+                    isOpen: true,
+                    type: 'all',
+                    count: activeStudents.length
+                  })}
+                  style={{
+                    ...outlineBtn,
+                    borderColor: 'rgba(229, 83, 75, 0.4)',
+                    color: 'var(--error, #e5534b)',
+                    background: 'rgba(229, 83, 75, 0.05)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title="Stop exams for all currently active students"
+                >
+                  <span>⏹</span> Stop All Active ({activeStudents.length})
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Multi-Select Action Bar (appears when 1 or more selected) */}
+          {selectedSessionIds.length > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 16px',
+              background: 'rgba(229, 83, 75, 0.08)',
+              border: '1px solid rgba(229, 83, 75, 0.25)',
+              borderRadius: '4px',
+              marginBottom: '16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--error, #e5534b)' }}>
+                  {selectedSessionIds.length} student{selectedSessionIds.length > 1 ? 's' : ''} selected
+                </span>
+                <button
+                  onClick={() => setSelectedSessionIds([])}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  Deselect All
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setStopModal({
+                    isOpen: true,
+                    type: 'selected',
+                    count: selectedSessionIds.length
+                  })}
+                  style={{
+                    padding: '6px 14px',
+                    background: 'var(--error, #e5534b)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '3px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 6px rgba(229, 83, 75, 0.25)'
+                  }}
+                >
+                  <span>⏹</span> Stop Selected Exam{selectedSessionIds.length > 1 ? 's' : ''} ({selectedSessionIds.length})
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Table */}
           <div style={{ border: '1px solid var(--border)', borderRadius: '4px', overflow: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '750px' }}>
               <thead>
                 <tr style={{ background: 'var(--surface-2)' }}>
+                  <th style={{ ...thStyle, width: '40px', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={activeStudents.length > 0 && activeStudents.every(s => selectedSessionIds.includes(s.session_id!))}
+                      onChange={toggleSelectAll}
+                      disabled={activeStudents.length === 0}
+                      style={{
+                        cursor: activeStudents.length > 0 ? 'pointer' : 'default',
+                        accentColor: 'var(--error, #e5534b)',
+                        width: '14px',
+                        height: '14px'
+                      }}
+                      title={activeStudents.length > 0 ? "Select/deselect all active students" : "No active students to select"}
+                    />
+                  </th>
                   {['Roll', 'Name', 'Div', ...qHeaders, 'Total', 'Status', 'Warnings', 'Actions'].map(h => (
                     <th key={h} style={thStyle}>{h}</th>
                   ))}
@@ -376,15 +566,38 @@ export default function ResultsPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8 + qHeaders.length} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading results...</td></tr>
+                  <tr><td colSpan={9 + qHeaders.length} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading results...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={8 + qHeaders.length} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No results found.</td></tr>
+                  <tr><td colSpan={9 + qHeaders.length} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No results found.</td></tr>
                 ) : filtered.map((r, i) => {
                   const hasMarks = r.questions?.some(q => q.marks_awarded !== null && q.marks_awarded !== undefined);
                   const isSubmitted = Boolean(r.is_submitted || hasMarks || r.total_score > 0);
-                  const sStatus = isSubmitted ? 'submitted' : (r.session_id ? 'active' : 'not_started');
+                  const sStatus = r.status === 'STOPPED' ? 'stopped' : (isSubmitted ? 'submitted' : (r.session_id ? 'active' : 'not_started'));
+                  const isActive = sStatus === 'active' && Boolean(r.session_id);
+
                   return (
-                    <tr key={r.roll_no} style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border-subtle)' : 'none', background: 'var(--surface-1)' }}>
+                    <tr key={r.roll_no} style={{
+                      borderBottom: i < filtered.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                      background: selectedSessionIds.includes(r.session_id || '') ? 'rgba(229, 83, 75, 0.04)' : 'var(--surface-1)'
+                    }}>
+                      <td style={{ ...tdStyle, textAlign: 'center', width: '40px' }}>
+                        {isActive ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedSessionIds.includes(r.session_id!)}
+                            onChange={() => toggleSelectSession(r.session_id!)}
+                            style={{
+                              cursor: 'pointer',
+                              accentColor: 'var(--error, #e5534b)',
+                              width: '14px',
+                              height: '14px'
+                            }}
+                            title={`Select ${r.name}`}
+                          />
+                        ) : (
+                          <span style={{ color: 'var(--border)', fontSize: '12px' }}>—</span>
+                        )}
+                      </td>
                       <td style={tdStyle}><span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '12px', color: 'var(--text-primary)' }}>{r.roll_no}</span></td>
                       <td style={tdStyle}><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.name}</span></td>
                       <td style={tdStyle}><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.division}</span></td>
@@ -425,20 +638,60 @@ export default function ResultsPage() {
                         )}
                       </td>
                       <td style={tdStyle}>
-                        {r.session_id ? (
-                          <button
-                            onClick={() => setSessionToReset(r.session_id!)}
-                            style={{
-                              background: 'transparent', border: '1px solid var(--error-dim)', borderRadius: '3px',
-                              color: 'var(--error)', fontSize: '10px', padding: '4px 8px', cursor: 'pointer',
-                              fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase'
-                            }}
-                          >
-                            Reset
-                          </button>
-                        ) : (
-                          <span style={{ color: 'var(--text-muted)' }}>—</span>
-                        )}
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          {isActive && (
+                            <button
+                              onClick={() => setStopModal({
+                                isOpen: true,
+                                type: 'single',
+                                sessionId: r.session_id!,
+                                studentName: r.name,
+                                studentRoll: r.roll_no,
+                              })}
+                              style={{
+                                background: 'rgba(229, 83, 75, 0.1)',
+                                border: '1px solid rgba(229, 83, 75, 0.35)',
+                                borderRadius: '3px',
+                                color: 'var(--error, #e5534b)',
+                                fontSize: '10px',
+                                padding: '4px 8px',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                letterSpacing: '0.05em',
+                                textTransform: 'uppercase',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s ease'
+                              }}
+                              title={`Stop exam for ${r.name}`}
+                            >
+                              <span>⏹</span> Stop
+                            </button>
+                          )}
+                          {r.session_id ? (
+                            <button
+                              onClick={() => setSessionToReset(r.session_id!)}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid var(--border)',
+                                borderRadius: '3px',
+                                color: 'var(--text-muted)',
+                                fontSize: '10px',
+                                padding: '4px 6px',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                letterSpacing: '0.05em',
+                                textTransform: 'uppercase'
+                              }}
+                              title="Reset session and delete submission records"
+                            >
+                              Reset
+                            </button>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>—</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -532,6 +785,86 @@ export default function ResultsPage() {
           </div>
         </div>
       )}
+
+      {/* Stop Exam Confirmation Modal */}
+      {stopModal?.isOpen && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal-content animate-fade-up" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '18px', color: 'var(--error, #e5534b)' }}>⏹</span>
+                <h3 style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600 }}>
+                  {stopModal.type === 'single'
+                    ? `Stop Exam for ${stopModal.studentName}?`
+                    : stopModal.type === 'selected'
+                    ? `Stop Exam for ${stopModal.count} Selected Student${stopModal.count! > 1 ? 's' : ''}?`
+                    : `Stop Exam for All ${stopModal.count} Active Student${stopModal.count! > 1 ? 's' : ''}?`}
+                </h3>
+              </div>
+              <button
+                onClick={() => setStopModal(null)}
+                disabled={stopping}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '20px', cursor: 'pointer' }}
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '12px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                {stopModal.type === 'single' ? (
+                  <>
+                    Are you sure you want to stop the exam session for <strong>{stopModal.studentName}</strong> (Roll No: <span style={{ fontFamily: 'monospace' }}>{stopModal.studentRoll}</span>)?
+                  </>
+                ) : stopModal.type === 'selected' ? (
+                  <>
+                    Are you sure you want to stop the exam session for all <strong>{stopModal.count}</strong> selected students?
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to stop the exam for <strong>all {stopModal.count} currently active</strong> students in this test?
+                  </>
+                )}
+              </p>
+              <div style={{
+                background: 'rgba(229, 83, 75, 0.08)',
+                border: '1px solid rgba(229, 83, 75, 0.25)',
+                borderRadius: '6px',
+                padding: '12px 14px',
+                fontSize: '12px',
+                color: 'var(--error, #e5534b)',
+                lineHeight: 1.4
+              }}>
+                <strong>Important:</strong> The student&apos;s active exam will be ended immediately. Their current code drafts will be safely retained and submitted for evaluation.
+              </div>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <button
+                onClick={() => setStopModal(null)}
+                disabled={stopping}
+                style={{ ...outlineBtn, padding: '8px 16px' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStopExam}
+                disabled={stopping}
+                style={{
+                  ...primaryBtn,
+                  background: 'var(--error, #e5534b)',
+                  color: '#ffffff',
+                  opacity: stopping ? 0.7 : 1,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 16px'
+                }}
+              >
+                <span>⏹</span> {stopping ? 'Stopping...' : 'Confirm & Stop Exam'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -539,6 +872,7 @@ export default function ResultsPage() {
 function StatusPill({ status }: { status: string }) {
   const config: Record<string, { label: string; color: string; bg: string }> = {
     submitted: { label: 'SUBMITTED', color: 'var(--success)', bg: 'var(--success-dim)' },
+    stopped: { label: 'STOPPED', color: 'var(--error, #e5534b)', bg: 'rgba(229, 83, 75, 0.15)' },
     active: { label: 'ACTIVE', color: 'var(--accent)', bg: 'var(--accent-dim)' },
     not_started: { label: 'NOT STARTED', color: 'var(--text-muted)', bg: 'var(--surface-2)' },
   };

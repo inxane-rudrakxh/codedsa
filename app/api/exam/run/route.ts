@@ -35,8 +35,8 @@ export async function POST(request: NextRequest) {
 
   // Verify session exists
   const session = await prisma.examSession.findUnique({ where: { id: payload.session_id } });
-  if (!session) {
-    return NextResponse.json({ error: 'Exam session not found' }, { status: 403 });
+  if (!session || session.status === 'EXPIRED' || session.status === 'STOPPED' || session.is_submitted) {
+    return NextResponse.json({ error: 'Exam session is not active' }, { status: 403 });
   }
 
   let memoryLimit = 256000;

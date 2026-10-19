@@ -25,8 +25,8 @@ export async function POST(request: NextRequest) {
 
   // Check session is active
   const session = await prisma.examSession.findUnique({ where: { id: payload.session_id } });
-  if (session?.status === 'EXPIRED') {
-    return NextResponse.json({ error: 'Exam session is not active' }, { status: 403 });
+  if (!session || session.status === 'EXPIRED' || session.status === 'STOPPED' || session.is_submitted) {
+    return NextResponse.json({ error: 'Exam session is not active', stopped: true }, { status: 403 });
   }
 
   // Check question not already submitted

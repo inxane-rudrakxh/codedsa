@@ -268,9 +268,17 @@ export default function WorkspacePage() {
         },
         body: JSON.stringify({ question_id: question.id, code }),
       })
-        .then(r => r.json())
-        .then(data => {
-          if (data.success) setSavedAt(new Date());
+        .then(async r => {
+          if (r.status === 403) {
+            setShowFinalScreen(true);
+            return;
+          }
+          const data = await r.json();
+          if (data?.stopped) {
+            setShowFinalScreen(true);
+          } else if (data?.success) {
+            setSavedAt(new Date());
+          }
         })
         .catch(() => {});
     };
@@ -278,6 +286,28 @@ export default function WorkspacePage() {
     saveTimerRef.current = setInterval(autoSave, 5000);
     return () => { if (saveTimerRef.current) clearInterval(saveTimerRef.current); };
   }, [sessionData, activeQuestion, codes, loading, getToken]);
+
+  // Periodic poll to detect instructor stopping the exam in real-time
+  useEffect(() => {
+    if (!sessionData || loading || showFinalScreen) return;
+
+    const interval = setInterval(() => {
+      const token = getToken();
+      if (!token) return;
+      fetch('/api/exam/session', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data?.session?.is_submitted || data?.session?.status === 'stopped' || data?.session?.status === 'expired') {
+            setShowFinalScreen(true);
+          }
+        })
+        .catch(() => {});
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [sessionData, loading, showFinalScreen, getToken]);
 
   // ── Proctoring: 3 warnings → auto-submit ─────────────────────────────────
 
@@ -524,6 +554,7 @@ export default function WorkspacePage() {
         submissions={sessionData.submissions}
         submitScores={submitScores}
         totalScore={totalScore}
+        isStopped={sessionData.session.status === 'stopped'}
       />
     );
   }
@@ -2100,12 +2131,14 @@ function FinalScreen({
   submissions,
   submitScores,
   totalScore,
+  isStopped,
 }: {
   student: { roll_no: string; name: string; division: string };
   questions: Question[];
   submissions: Record<number, Submission>;
   submitScores: Record<number, number>;
   totalScore: number;
+  isStopped?: boolean;
 }) {
   return (
     <div style={{
@@ -2127,13 +2160,13 @@ function FinalScreen({
             fontWeight: 600,
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
-            color: '#4e9a6e',
-            background: 'rgba(78, 154, 110, 0.12)',
-            border: '1px solid rgba(78, 154, 110, 0.3)',
+            color: isStopped ? 'var(--error, #e5534b)' : '#4e9a6e',
+            background: isStopped ? 'rgba(229, 83, 75, 0.12)' : 'rgba(78, 154, 110, 0.12)',
+            border: isStopped ? '1px solid rgba(229, 83, 75, 0.3)' : '1px solid rgba(78, 154, 110, 0.3)',
             padding: '4px 12px',
             borderRadius: '999px',
           }}>
-            ✓ Submitted Successfully
+            {isStopped ? '⏹ Exam Concluded by Faculty' : '✓ Submitted Successfully'}
           </span>
         </div>
 

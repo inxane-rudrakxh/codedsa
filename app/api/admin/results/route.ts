@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
         division: student.division?.name || '',
         branch: student.branch?.name || 'AI&DS',
         session_id: session?.id || null,
-        status: isSubmitted ? 'SUBMITTED' : (session?.status || null),
+        status: session?.status === 'STOPPED' ? 'STOPPED' : (isSubmitted ? 'SUBMITTED' : (session?.status || null)),
         is_submitted: isSubmitted,
         start_time: session?.start_time || null,
         end_time: session?.end_time || null,
@@ -350,7 +350,7 @@ export async function POST(request: NextRequest) {
         roll_no: student.roll_number,
         name: student.user.full_name,
         division: student.division?.name || '',
-        status: isSubmitted ? 'SUBMITTED' : (session ? 'IN_PROGRESS' : 'ABSENT'),
+        status: session?.status === 'STOPPED' ? 'STOPPED' : (isSubmitted ? 'SUBMITTED' : (session ? 'IN_PROGRESS' : 'ABSENT')),
         ...qScores,
         total: isSubmitted ? total_score : 0,
         out_of: test.total_marks,
@@ -367,6 +367,77 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, report_id: report.id, data: reportRows });
+  }
+
+  if (action === 'stop_session' || action === 'stop_sessions') {
+    const sessionIds: string[] = Array.isArray(body.session_ids)
+      ? body.session_ids
+      : (body.session_id ? [body.session_id] : []);
+
+    if (sessionIds.length === 0) {
+      return NextResponse.json({ error: 'Missing session_id or session_ids' }, { status: 400 });
+    }
+
+    try {
+      const sessions = await prisma.examSession.findMany({
+        where: { id: { in: sessionIds } },
+        include: { test: true }
+      });
+
+      if (sessions.length === 0) {
+        return NextResponse.json({ error: 'No matching sessions found' }, { status: 404 });
+      }
+
+      for (const s of sessions) {
+        if (payload.role !== 'ADMIN' && s.test.teacher_id !== payload.user_id) {
+          return NextResponse.json({ error: 'Access denied for one or more sessions' }, { status: 403 });
+        }
+      }
+
+      await prisma.examSession.updateMany({
+        where: { id: { in: sessionIds } },
+        data: {
+          status: 'STOPPED',
+          is_submitted: true,
+          end_time: new Date()
+        }
+      });
+
+      return NextResponse.json({ success: true, count: sessionIds.length });
+    } catch (err: any) {
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    }
+  }
+
+  if (action === 'stop_all') {
+    const { test_id } = body;
+    if (!test_id) return NextResponse.json({ error: 'Missing test_id' }, { status: 400 });
+
+    try {
+      const test = await prisma.test.findUnique({ where: { id: test_id } });
+      if (!test) return NextResponse.json({ error: 'Test not found' }, { status: 404 });
+
+      if (payload.role !== 'ADMIN' && test.teacher_id !== payload.user_id) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      }
+
+      const res = await prisma.examSession.updateMany({
+        where: {
+          test_id,
+          is_submitted: false,
+          status: { notIn: ['STOPPED', 'COMPLETED', 'EXPIRED'] }
+        },
+        data: {
+          status: 'STOPPED',
+          is_submitted: true,
+          end_time: new Date()
+        }
+      });
+
+      return NextResponse.json({ success: true, count: res.count });
+    } catch (err: any) {
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    }
   }
 
   if (action === 'reset_session') {
