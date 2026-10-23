@@ -49,39 +49,90 @@ export default function AdminDashboard() {
             Good morning, Admin.
           </h1>
           <p style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>
-            Manage your coding assessments and monitor active tests.
+            Manage your coding assessments, quizzes, and live student access requests.
           </p>
         </div>
-        <button
-          onClick={() => router.push('/admin/tests/create')}
-          style={{
-            background: 'var(--accent)',
-            color: '#fff',
-            border: 'none',
-            padding: '12px 24px',
-            borderRadius: '6px',
-            fontSize: '14px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}
-        >
-          <span style={{ fontSize: '16px' }}>+</span> CREATE TEST
-        </button>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => router.push('/admin/tests/create')}
+            style={{
+              background: 'var(--surface-2)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border)',
+              padding: '12px 18px',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <span>💻</span> + CREATE CODING TEST
+          </button>
+
+          <button
+            onClick={() => router.push('/admin/quizzes/create')}
+            style={{
+              background: 'var(--accent)',
+              color: '#fff',
+              border: 'none',
+              padding: '12px 20px',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 4px rgba(204, 120, 92, 0.25)',
+            }}
+          >
+            <span>📝</span> + CREATE QUIZ TEST
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', marginBottom: '48px' }}>
-        <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px' }}>
+        <div 
+          onClick={() => router.push('/admin/tests')}
+          style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px', cursor: 'pointer' }}
+        >
           <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>ACTIVE TESTS</p>
           <p style={{ fontSize: '32px', fontWeight: 600, color: 'var(--text-primary)' }}>{activeTestsCount}</p>
         </div>
-        <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px' }}>
-          <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>PENDING REQUESTS</p>
-          <p style={{ fontSize: '32px', fontWeight: 600, color: 'var(--text-primary)' }}>{pendingRequests}</p>
+        
+        <div 
+          onClick={() => router.push('/admin/requests')}
+          style={{
+            background: pendingRequests > 0 ? 'var(--warning-dim)' : 'var(--surface-1)',
+            border: `1.5px solid ${pendingRequests > 0 ? 'var(--warning)' : 'var(--border)'}`,
+            borderRadius: '8px',
+            padding: '24px',
+            cursor: 'pointer',
+            transition: 'transform 0.1s ease',
+          }}
+          title="Click to view and approve access requests"
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <p style={{ fontSize: '12px', fontWeight: 600, color: pendingRequests > 0 ? 'var(--warning)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              ACCESS REQUESTS
+            </p>
+            {pendingRequests > 0 && (
+              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--warning)', background: 'rgba(232, 165, 90, 0.2)', padding: '2px 6px', borderRadius: '4px' }}>
+                LIVE ACTION
+              </span>
+            )}
+          </div>
+          <p style={{ fontSize: '32px', fontWeight: 700, color: pendingRequests > 0 ? 'var(--warning)' : 'var(--text-primary)' }}>
+            {pendingRequests}
+          </p>
+          <span style={{ fontSize: '12px', color: 'var(--accent)', fontWeight: 600, display: 'inline-block', marginTop: '4px' }}>
+            Review Access Requests →
+          </span>
         </div>
+
         <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px' }}>
           <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>PENDING REVIEWS</p>
           <p style={{ fontSize: '32px', fontWeight: 600, color: 'var(--text-primary)' }}>{pendingReviews}</p>
@@ -101,13 +152,24 @@ export default function AdminDashboard() {
               const waitingCount = testSessions.filter((s: any) => s.status === 'pending_approval').length;
               const total = testSessions.length;
 
+              const isQuiz = t.test_type === 'QUIZ' || t.title?.toLowerCase().includes('quiz') || t.title?.toLowerCase().includes('graphics');
+
               return (
                 <div key={t.id} style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ marginBottom: '24px' }}>
-                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>{t.title}</h3>
-                    <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', padding: '4px 8px', borderRadius: '3px', background: 'var(--success-dim)', color: 'var(--success)', textTransform: 'uppercase' }}>
-                      LIVE
-                    </span>
+                  <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>{t.title}</h3>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', padding: '3px 7px', borderRadius: '3px', background: 'var(--success-dim)', color: 'var(--success)', textTransform: 'uppercase' }}>
+                          LIVE
+                        </span>
+                        {isQuiz && (
+                          <span style={{ fontSize: '10px', fontWeight: 600, padding: '3px 7px', borderRadius: '3px', background: 'var(--accent-dim)', color: 'var(--accent)', textTransform: 'uppercase' }}>
+                            QUIZ
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
@@ -124,17 +186,25 @@ export default function AdminDashboard() {
                       <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Submitted</p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '20px', fontWeight: 600, color: 'var(--warning)' }}>{waitingCount}</p>
-                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Waiting</p>
+                      <p style={{ fontSize: '20px', fontWeight: 700, color: waitingCount > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>{waitingCount}</p>
+                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Waiting Approval</p>
                     </div>
                   </div>
 
-                  <div style={{ marginTop: 'auto' }}>
+                  <div style={{ marginTop: 'auto', display: 'flex', gap: '8px' }}>
+                    {waitingCount > 0 && (
+                      <button 
+                        onClick={() => router.push(`/admin/tests/${t.id}/requests`)}
+                        style={{ flex: 1, padding: '10px', background: 'var(--warning)', color: '#000', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        APPROVE ({waitingCount})
+                      </button>
+                    )}
                     <button 
-                      onClick={() => router.push(`/admin/tests`)}
-                      style={{ width: '100%', padding: '10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                      onClick={() => router.push(isQuiz ? `/admin/quizzes` : `/admin/tests/${t.id}`)}
+                      style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
                     >
-                      OPEN TEST
+                      OPEN {isQuiz ? 'QUIZ' : 'TEST'}
                     </button>
                   </div>
                 </div>

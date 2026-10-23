@@ -1,0 +1,69 @@
+Q1. Which of the following is the smallest addressable element of a digital image?
+A) Frame buffer
+B) Pixel
+C) Resolution
+D) Aspect ratio
+Answer - B) Pixel
+
+Q2. Bresenham’s line drawing algorithm mainly uses:
+A) Floating-point calculations
+B) Trigonometric calculations
+C) Integer calculations
+D) Logarithmic calculations
+Answer - C) Integer calculations
+
+Q3. Which device is mainly used to display computer graphics visually?
+A) Scanner
+B) Keyboard
+C) Monitor
+D) Mouse
+Answer - C) Monitor
+
+Q4. In the DDA line drawing algorithm, if dx = 8 and dy = 5, the number of steps is:
+A) 5
+B) 8
+C) 13
+D) 3
+Answer - B) 8
+
+Q5. Which of the following is an application of computer graphics?
+A) Computer-Aided Design (CAD)
+B) Animation
+C) Video games
+D) All of the above
+Answer - D) All of the above
+
+Q6. The ratio of the width of an image to its height is called:
+A) Resolution
+B) Pixel
+C) Aspect ratio
+D) Frame buffer
+Answer - C) Aspect ratio
+
+Q7. Which of the following is an input device used in computer graphics?
+A) Plotter
+B) Monitor
+C) Mouse
+D) Projector
+Answer - C) Mouse
+
+Q8. The process of converting graphical objects into pixels on the screen is known as:
+A) Transformation
+B) Scan conversion
+C) Animation
+D) Scaling
+Answer - B) Scan conversion
+
+Q9. Which property of a circle is used by Bresenham’s circle drawing algorithm to reduce calculations?
+A) 2-way symmetry
+B) 4-way symmetry
+C) 8-way symmetry
+D) No symmetry
+Answer - C) 8-way symmetry
+
+Q10. A frame buffer is mainly used to:
+A) Store pixel values of an image
+B) Enter text into a computer
+C) Draw only circles
+D) Control the keyboard
+Answer - A) Store pixel values of an image

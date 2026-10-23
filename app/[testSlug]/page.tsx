@@ -13,6 +13,8 @@ export default function StudentTestPage() {
   const [testError, setTestError] = useState('');
 
   const [rollNo, setRollNo] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [needName, setNeedName] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'input' | 'waiting' | 'rejected'>('input');
@@ -43,24 +45,48 @@ export default function StudentTestPage() {
       setError('Please enter your Roll Number.');
       return;
     }
+    if (needName && !fullName.trim()) {
+      setError('Please enter your Full Name.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/auth/student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roll_no: rollNo.trim().toUpperCase(), action: 'request_access', test_id: testSlug }),
+        body: JSON.stringify({ 
+          roll_no: rollNo.trim().toUpperCase(), 
+          name: fullName.trim(),
+          action: 'request_access', 
+          test_id: testSlug 
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.need_name) {
+          setNeedName(true);
+          setError('Please provide your name to register for this assessment.');
+          return;
+        }
         if (data.error?.includes('rejected')) {
-           setStep('rejected');
-           return;
+          setStep('rejected');
+          return;
         }
         setError(data.error || 'Request failed.');
         return;
       }
       
+      if (data.status === 'ACTIVE' && data.session_token) {
+        localStorage.setItem('session_token', data.session_token);
+        if (data.test_type === 'QUIZ' || testData?.test_type === 'QUIZ') {
+          router.push('/quiz/workspace');
+        } else {
+          router.push('/exam/instructions');
+        }
+        return;
+      }
+
       if (data.status === 'ACTIVE') {
         checkStatus();
       } else if (data.status === 'REJECTED') {
@@ -93,7 +119,11 @@ export default function StudentTestPage() {
       if (data.status === 'ACTIVE' && data.session_token) {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         localStorage.setItem('session_token', data.session_token);
-        router.push('/exam/instructions');
+        if (data.test_type === 'QUIZ' || testData?.test_type === 'QUIZ') {
+          router.push('/quiz/workspace');
+        } else {
+          router.push('/exam/instructions');
+        }
       } else if (data.status === 'REJECTED') {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         setStep('rejected');
@@ -195,7 +225,7 @@ export default function StudentTestPage() {
                 fontWeight: 400
               }}
             >
-              Online Coding Assessment
+              {testData.test_type === 'QUIZ' ? 'Objective Quiz Assessment (MCQ · Fill in Blank · Odd One Out)' : 'Online Coding Assessment'}
             </p>
           </div>
 
@@ -216,17 +246,23 @@ export default function StudentTestPage() {
              </div>
              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Questions</span>
-               <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{testData.question_count}</span>
+               <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{testData.question_count} Questions</span>
              </div>
              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Total Marks</span>
-               <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{testData.total_marks}</span>
+               <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{testData.total_marks} Marks</span>
              </div>
+             {testData.test_type === 'QUIZ' && (
+               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                 <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Format</span>
+                 <span style={{ color: 'var(--accent)', fontWeight: 500 }}>Mobile & Desktop Friendly</span>
+               </div>
+             )}
           </div>
 
           {step === 'input' && (
             <div className="animate-fade-up">
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '8px' }}>
                   Roll Number
                 </label>
@@ -235,6 +271,7 @@ export default function StudentTestPage() {
                   value={rollNo}
                   onChange={(e) => setRollNo(e.target.value.toUpperCase())}
                   onKeyDown={handleKeyDown}
+                  placeholder="e.g. AD1315"
                   style={{
                     width: '100%',
                     padding: '14px 16px',
@@ -250,6 +287,31 @@ export default function StudentTestPage() {
                   autoFocus
                 />
               </div>
+
+              {needName && (
+                <div style={{ marginBottom: '20px' }} className="animate-fade-up">
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Enter your full name"
+                    style={{
+                      width: '100%',
+                      padding: '14px 16px',
+                      background: 'var(--surface-1)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      color: 'var(--text-primary)',
+                      fontSize: '16px',
+                      transition: 'border-color 0.2s ease',
+                    }}
+                  />
+                </div>
+              )}
 
               {error && (
                 <p style={{ fontSize: '13px', color: 'var(--error)', marginBottom: '16px' }}>
@@ -274,7 +336,7 @@ export default function StudentTestPage() {
                   fontFamily: 'Söhne, ui-sans-serif, system-ui, sans-serif',
                 }}
               >
-                {loading ? 'Requesting...' : 'Request Access'}
+                {loading ? 'Connecting...' : testData?.test_type === 'QUIZ' ? 'Start Quiz Assessment' : 'Request Access'}
               </button>
             </div>
           )}

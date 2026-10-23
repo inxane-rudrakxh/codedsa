@@ -9,7 +9,12 @@ export async function GET(request: NextRequest) {
   const scope = teacherScope(payload);
 
   const tests = await prisma.test.findMany({
-    where: scope ? { teacher_id: scope } : {},
+    where: scope ? {
+      OR: [
+        { teacher_id: scope },
+        { teacher_id: null },
+      ]
+    } : {},
     include: {
       subject: true,
       teacher: { include: { user: true } },

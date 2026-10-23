@@ -89,12 +89,15 @@ model Test {
   questions_per_student Int       @default(3)
   target_division       String?
   allowed_languages     String[]  @default(["cpp", "c", "python", "java"])
+  test_type             String    @default("CODING") // "CODING" or "QUIZ"
+  auto_approve          Boolean   @default(false)
   start_time            DateTime?
   end_time              DateTime?
   created_at            DateTime  @default(now())
   updated_at            DateTime  @updatedAt
   
   testQuestions         TestQuestion[]
+  quizQuestions         QuizQuestion[]
   examSessions          ExamSession[]
   marksReports          MarksReport[]
 }
@@ -155,6 +158,39 @@ model TestCase {
   submissionResults SubmissionResult[]
 }
 
+model QuizQuestion {
+  id                String       @id @default(auto()) @map("_id") @db.ObjectId
+  test_id           String       @db.ObjectId
+  test              Test         @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  type              String       @default("MCQ") // "MCQ" | "FILL_BLANK" | "ODD_ONE_OUT"
+  question_text     String
+  options           String[]     @default([])
+  correct_answer    String
+  alternate_answers String[]     @default([])
+  explanation       String?
+  marks             Float        @default(1.0)
+  order_index       Int          @default(0)
+  created_at        DateTime     @default(now())
+  updated_at        DateTime     @updatedAt
+
+  quizAnswers       QuizAnswer[]
+}
+
+model QuizAnswer {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  session_id      String
+  session         ExamSession   @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  question_id     String        @db.ObjectId
+  question        QuizQuestion  @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  selected_answer String?
+  is_correct      Boolean       @default(false)
+  marks_awarded   Float         @default(0)
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+
+  @@unique([session_id, question_id])
+}
+
 model ExamSession {
   id                 String    @id @default(uuid()) @map("_id")
   test_id            String    @db.ObjectId
@@ -173,6 +209,7 @@ model ExamSession {
   assignedQuestions  AssignedQuestion[]
   codeDrafts         CodeDraft[]
   submissions        Submission[]
+  quizAnswers        QuizAnswer[]
 }
 
 model AssignedQuestion {

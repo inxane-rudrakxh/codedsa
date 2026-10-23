@@ -9,7 +9,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       where: { unique_id: slug },
       include: {
         subject: true,
-        testQuestions: true
+        testQuestions: true,
+        quizQuestions: {
+          select: { id: true, type: true }
+        }
       }
     });
 
@@ -34,6 +37,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Assessment Closed' }, { status: 403 });
     }
 
+    const isQuiz = test.test_type === 'QUIZ';
+    const questionCount = isQuiz
+      ? (test.quizQuestions?.length || test.questions_per_student)
+      : test.questions_per_student;
+
     return NextResponse.json({
       test: {
         id: test.id,
@@ -42,7 +50,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         duration_minutes: test.duration_minutes,
         total_marks: test.total_marks,
         subject: test.subject.name,
-        question_count: test.questions_per_student,
+        question_count: questionCount,
+        test_type: test.test_type || 'CODING',
+        auto_approve: test.auto_approve ?? false,
       }
     });
   } catch (error) {

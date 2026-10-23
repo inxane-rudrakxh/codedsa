@@ -10,7 +10,12 @@ export async function GET(request: NextRequest) {
 
   // Get tests visible to this user
   const tests = await prisma.test.findMany({
-    where: scope ? { teacher_id: scope } : {},
+    where: scope ? {
+      OR: [
+        { teacher_id: scope },
+        { teacher_id: null },
+      ]
+    } : {},
     include: {
       subject: true,
       _count: { select: { examSessions: true } }
@@ -28,7 +33,7 @@ export async function GET(request: NextRequest) {
   const sessions = await prisma.examSession.findMany({
     where: testIds.length > 0 ? { test_id: { in: testIds } } : { id: 'no-match' },
     include: {
-      student: { include: { user: true, division: true } },
+      student: { include: { user: true, division: true, branch: true } },
       test: { include: { subject: true } },
       _count: { select: { submissions: true } }
     },
@@ -62,6 +67,7 @@ export async function GET(request: NextRequest) {
       roll_no: session.student.roll_number,
       name: session.student.user.full_name,
       division: session.student.division?.name || '',
+      branch: session.student.branch?.name || '',
       test_title: session.test.title,
       subject: session.test.subject.name,
       status: displayStatus,
@@ -89,6 +95,7 @@ export async function GET(request: NextRequest) {
       status: t.status,
       marks_published: t.marks_published,
       session_count: t._count.examSessions,
+      test_type: t.test_type || 'CODING',
     })),
     role: payload.role,
   });

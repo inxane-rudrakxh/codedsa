@@ -1527,10 +1527,7 @@ function ConsolePanel({
     });
     ro.observe(el);
 
-    // Welcome banner
-    term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
-    term.writeln('  \x1b[1;32mCODE//ZEAL\x1b[0m \x1b[38;5;240mInteractive Terminal  ·  Run Code or press Ctrl+Enter\x1b[0m');
-    term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m\r\n');
+    // No welcome banner — clean slate like VS Code terminal
 
     return term;
   };
@@ -1545,18 +1542,42 @@ function ConsolePanel({
   }, [open]);
 
   // ── HTTP fallback execution (production / Vercel) ───────────────────────────
-  // Uses a two-phase approach:
-  //   Phase 1: if the program reads from stdin, let the user type their input first.
-  //   Phase 2: send everything to /api/exam/run with the captured stdin.
+  // Two-phase approach:
+  //   Phase 1 (needs stdin): collect lines silently with just a cursor — no banners.
+  //   Phase 2: send to /api/exam/run, then replay output interleaved with typed inputs.
   const stdinBufferRef = useRef<string>('');
-  const [awaitingStdin, setAwaitingStdin] = useState(false);
-  const awaitingStdinRef = useRef(false);  // mirror for use inside callbacks
+  const stdinLinesRef = useRef<string[]>([]);  // each line the user typed, in order
+  const awaitingStdinRef = useRef(false);
 
-  const runViaHttp = async (termInstance: any, stdinInput: string) => {
+  // Interleave raw output with the user's typed inputs so the terminal looks
+  // like a real interactive session: prompt → user input → next prompt → …
+  const replayInterleaved = (term: any, rawOutput: string, inputLines: string[]) => {
+    // Normalise line endings
+    const outputLines = rawOutput.replace(/\r\n/g, '\n').split('\n');
+    let inputIdx = 0;
+
+    for (let i = 0; i < outputLines.length; i++) {
+      const line = outputLines[i];
+      // Write this output line
+      if (i < outputLines.length - 1 || line !== '') {
+        term.write(line + '\r\n');
+      }
+      // After a prompt-like line (ends with ':' or '? '), echo the next input
+      const isPrompt = /[:?]\s*$/.test(line.trimEnd());
+      if (isPrompt && inputIdx < inputLines.length) {
+        term.write('\x1b[97m' + inputLines[inputIdx] + '\x1b[0m\r\n');
+        inputIdx++;
+      }
+    }
+    // Echo any remaining input lines that weren't paired with a prompt
+    while (inputIdx < inputLines.length) {
+      term.write('\x1b[97m' + inputLines[inputIdx] + '\x1b[0m\r\n');
+      inputIdx++;
+    }
+  };
+
+  const runViaHttp = async (termInstance: any, stdinInput: string, inputLines: string[]) => {
     const term = termInstance;
-    const displayLang = (language || 'cpp').toUpperCase();
-
-    term.writeln(`\x1b[1;33m▶ Compiling & running (${displayLang})...\x1b[0m\r\n`);
 
     try {
       const token = getToken ? getToken() : '';
@@ -1571,35 +1592,27 @@ function ConsolePanel({
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        term.writeln(`\x1b[1;31m✖ Engine Error: ${data.error || res.statusText || 'Execution failed'}\x1b[0m\r\n`);
+        term.writeln(`\x1b[1;31m✖ ${data.error || res.statusText || 'Execution failed'}\x1b[0m`);
       } else if (!data.success && data.compile_error) {
-        term.writeln(`\x1b[1;31m✖ Compilation Error\x1b[0m\r\n`);
+        term.writeln(`\x1b[1;31m✖ Compilation Error\x1b[0m`);
         term.write(`\x1b[31m${data.compile_error.replace(/\r?\n/g, '\r\n')}\x1b[0m\r\n`);
       } else if (data.timed_out) {
-        term.writeln(`\x1b[1;31m✖ Time Limit Exceeded\x1b[0m\r\n`);
+        term.writeln(`\x1b[1;31m✖ Time Limit Exceeded\x1b[0m`);
       } else {
-        // Write program output — normalize newlines for xterm
-        // Also inject \r\n after colon-terminated lines (cin prompts) so
-        // programs that use cout without endl still display line-by-line
-        let out = (data.output || '').replace(/\r?\n/g, '\r\n');
-        // Insert \r\n after every "prompt" segment ending with ':' or ': '
-        // that is immediately followed by more text (no newline between them)
-        out = out.replace(/(:[  ]?)(?=[^\r\n])/g, '$1\r\n');
-        term.write(out);
-        // Ensure we end on a fresh line
-        if (out && !out.endsWith('\r\n')) term.write('\r\n');
+        const rawOut = (data.output || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        replayInterleaved(term, rawOut, inputLines);
         if (data.stderr) {
           term.write(`\x1b[31m${data.stderr.replace(/\r?\n/g, '\r\n')}\x1b[0m\r\n`);
         }
       }
-      term.writeln(`\r\n\x1b[38;5;240m[Exited · ${data.execution_time || 0}ms]\x1b[0m\r\n`);
+      term.write(`\x1b[38;5;240m\r\n[Exited · ${data.execution_time || 0}ms]\x1b[0m\r\n`);
     } catch (err: any) {
-      term.writeln(`\x1b[1;31m✖ Engine Error: ${err.message || 'Unknown'}\x1b[0m\r\n`);
+      term.writeln(`\x1b[1;31m✖ Error: ${err.message || 'Unknown'}\x1b[0m`);
     } finally {
       setRunning(false);
-      setAwaitingStdin(false);
       awaitingStdinRef.current = false;
       stdinBufferRef.current = '';
+      stdinLinesRef.current = [];
     }
   };
 
@@ -1608,26 +1621,21 @@ function ConsolePanel({
       try { onDataDisposableRef.current.dispose(); } catch {}
       onDataDisposableRef.current = null;
     }
-    setAwaitingStdin(false);
     awaitingStdinRef.current = false;
     const term = xtermRef.current;
     if (term) {
-      term.writeln('\r\n\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
-      runViaHttp(term, stdinBufferRef.current);
+      runViaHttp(term, stdinBufferRef.current, [...stdinLinesRef.current]);
     } else {
       setRunning(false);
     }
   };
 
+  // Silent stdin collection — no banners, just a blinking cursor waiting for input.
+  // The user types lines, each is echoed locally; Ctrl+D or Enter on empty line finishes.
   const setupStdinCollection = (term: any) => {
-    setAwaitingStdin(true);
     awaitingStdinRef.current = true;
     stdinBufferRef.current = '';
-
-    term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m');
-    term.writeln('  \x1b[1;33mSTDIN INPUT\x1b[0m \x1b[38;5;240m— Program requires input. Type below and press \x1b[0m\x1b[1;32mEnter\x1b[0m\x1b[38;5;240m.\x1b[0m');
-    term.writeln('  \x1b[38;5;240mWhen ready, click \x1b[0m\x1b[1;32m[▶ Execute with Input]\x1b[0m\x1b[38;5;240m or press \x1b[0m\x1b[1;32mCtrl+Enter\x1b[0m\x1b[38;5;240m.\x1b[0m');
-    term.writeln('\x1b[38;5;240m─────────────────────────────────────────────────────────────\x1b[0m\r\n');
+    stdinLinesRef.current = [];
 
     let lineBuffer = '';
 
@@ -1639,17 +1647,22 @@ function ConsolePanel({
     onDataDisposableRef.current = term.onData((data: string) => {
       if (!awaitingStdinRef.current) return;
 
+      // Ctrl+D — treat as EOF, execute now
       if (data === '\x04') {
         if (lineBuffer.trim()) {
+          stdinLinesRef.current.push(lineBuffer);
           stdinBufferRef.current += lineBuffer + '\n';
           lineBuffer = '';
         }
+        term.write('\r\n');
         triggerExecuteWithStdin();
         return;
       }
       if (data === '\r' || data === '\n') {
-        term.write('\r\n');
+        // Echo the newline, save the line
+        stdinLinesRef.current.push(lineBuffer);
         stdinBufferRef.current += lineBuffer + '\n';
+        term.write('\r\n');
         lineBuffer = '';
         return;
       }
@@ -1671,7 +1684,7 @@ function ConsolePanel({
   useEffect(() => {
     if (runTrigger === 0 || !code) return;
 
-    // If Run Code is clicked again while awaiting stdin, flush and execute!
+    // If Run Code is clicked again while awaiting stdin, flush and execute
     if (awaitingStdinRef.current && xtermRef.current) {
       triggerExecuteWithStdin();
       return;
@@ -1687,10 +1700,9 @@ function ConsolePanel({
       onDataDisposableRef.current = null;
     }
 
-    // Reset awaiting-stdin state
-    setAwaitingStdin(false);
     awaitingStdinRef.current = false;
     stdinBufferRef.current = '';
+    stdinLinesRef.current = [];
 
     let cancelled = false;
 
@@ -1709,7 +1721,7 @@ function ConsolePanel({
           window.location.hostname === '127.0.0.1' ||
           window.location.hostname === '0.0.0.0');
 
-      // ── PTY path (local dev) ──────────────────────────────────────────────
+      // ── PTY path (local dev) — truly interactive, no changes needed ───────
       if (isLocal) {
         let connected = false;
         let fell = false;
@@ -1721,7 +1733,7 @@ function ConsolePanel({
             if (!cancelled) {
               const needsStdin = /\bcin\b|\bscanf\b|\bgets\b|\binput\s*\(|\bgetline\b|\bread\s*\(/.test(code);
               if (!needsStdin) {
-                runViaHttp(term, '');
+                runViaHttp(term, '', []);
               } else {
                 setupStdinCollection(term);
               }
@@ -1780,18 +1792,20 @@ function ConsolePanel({
           if (socket.connected) socket.emit('input', data);
         });
 
-        // Safety timeout (130s)
         setTimeout(() => { if (!cancelled) setRunning(false); }, 130000);
         return;
       }
 
-      // ── HTTP path (production) ────────────────────────────────────────────
+      // ── HTTP path (production) ─────────────────────────────────────────────
+      // Detect whether the code reads from stdin at all
       const needsStdin =
         /\bcin\b|\bscanf\b|\bgets\b|\binput\s*\(|\bgetline\b|\bread\s*\(/.test(code);
 
       if (!needsStdin) {
-        runViaHttp(term, '');
+        runViaHttp(term, '', []);
       } else {
+        // No banner — just place a cursor so the user can type their inputs.
+        // The program's prompts will be interleaved after execution.
         setupStdinCollection(term);
       }
     })();
@@ -1816,10 +1830,9 @@ function ConsolePanel({
       try { onDataDisposableRef.current.dispose(); } catch {}
       onDataDisposableRef.current = null;
     }
-    setAwaitingStdin(false);
     awaitingStdinRef.current = false;
     setRunning(false);
-    xtermRef.current?.writeln('\r\n\x1b[31m[Process terminated]\x1b[0m\r\n');
+    xtermRef.current?.write('\r\n\x1b[38;5;240m[Terminated]\x1b[0m\r\n');
   };
 
   return (
@@ -1867,7 +1880,7 @@ function ConsolePanel({
             <span style={{ fontSize: '9px' }}>▶</span> TERMINAL
           </span>
 
-          {running && !awaitingStdin && (
+          {running && (
             <span style={{
               fontSize: '10px',
               fontFamily: 'Söhne Mono, monospace',
@@ -1876,35 +1889,20 @@ function ConsolePanel({
               padding: '2px 8px',
               borderRadius: '3px',
               border: '1px solid rgba(63, 185, 80, 0.3)',
-              animation: 'none',
             }}>
               ● Running
             </span>
           )}
 
-          {awaitingStdin && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                triggerExecuteWithStdin();
-              }}
-              style={{
-                fontSize: '11px',
-                fontFamily: 'Söhne Mono, monospace',
-                color: '#ffffff',
-                background: '#238636',
-                padding: '2px 10px',
-                borderRadius: '3px',
-                border: '1px solid #2ea043',
-                cursor: 'pointer',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-              }}
-            >
-              <span>▶</span> Execute with Input
-            </button>
+          {awaitingStdinRef.current && (
+            <span style={{
+              fontSize: '10px',
+              fontFamily: 'Söhne Mono, monospace',
+              color: '#8b949e',
+              padding: '2px 8px',
+            }}>
+              waiting for input…
+            </span>
           )}
         </div>
 
@@ -1927,7 +1925,7 @@ function ConsolePanel({
               >
                 Clear
               </button>
-              {(running || awaitingStdin) && (
+              {running && (
                 <button
                   onClick={handleKill}
                   style={{

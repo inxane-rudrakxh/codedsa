@@ -145,7 +145,6 @@ io.on('connection', (socket) => {
     fs.writeFileSync(sourceFile, code);
 
     const executeRun = () => {
-      socket.emit('output', `\x1b[1;32m✔ Build successful\x1b[0m\r\n\x1b[1;36m$\x1b[0m \x1b[90m${runLabel}\x1b[0m\r\n\r\n`);
       try {
         ptyProcess = pty.spawn(runCmd, runArgs, {
           name: 'xterm-256color',
@@ -194,13 +193,12 @@ io.on('connection', (socket) => {
         clearTimeout(timeout);
         if (idleTimeout) clearTimeout(idleTimeout);
         finished = true;
-        socket.emit('output', `\r\n\x1b[90m----------------------------------------\r\n[Process completed with exit code ${exitCode}]\x1b[0m\r\n`);
+        socket.emit('output', `\r\n\x1b[38;5;240m[Exited · ${exitCode}]\x1b[0m\r\n`);
         socket.emit('finished');
       });
     };
 
     if (compileCmd) {
-      socket.emit('output', `\x1b[1;33m● Compiling ${lang.toUpperCase()} source...\x1b[0m\r\n`);
       exec(compileCmd, { cwd: workDir, env: safeEnv }, (error, stdout, stderr) => {
         if (error) {
           // If C compilation failed, attempt fallback to g++

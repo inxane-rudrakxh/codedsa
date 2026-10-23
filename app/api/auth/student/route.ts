@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Lookup student
-  const studentRecord = await prisma.student.findUnique({
+  let studentRecord = await prisma.student.findUnique({
     where: { roll_number: roll_no.trim().toUpperCase() },
     include: {
       user: true,
@@ -36,7 +36,48 @@ export async function POST(request: NextRequest) {
   });
 
   if (!studentRecord) {
-    return NextResponse.json({ error: 'Roll number not found.' }, { status: 404 });
+    if (body.name && body.name.trim()) {
+      // Auto-register student on the fly (especially helpful for mobile links)
+      let defaultBranch = await prisma.branch.findFirst();
+      if (!defaultBranch) {
+        defaultBranch = await prisma.branch.create({
+          data: { code: 'GEN', name: 'General' }
+        });
+      }
+      let defaultDivision = await prisma.division.findFirst();
+      if (!defaultDivision) {
+        defaultDivision = await prisma.division.create({
+          data: { name: 'A' }
+        });
+      }
+
+      const newUser = await prisma.user.create({
+        data: {
+          full_name: body.name.trim(),
+          role: 'STUDENT',
+          status: 'ACTIVE'
+        }
+      });
+
+      studentRecord = await prisma.student.create({
+        data: {
+          id: newUser.id,
+          roll_number: roll_no.trim().toUpperCase(),
+          branch_id: defaultBranch.id,
+          division_id: defaultDivision.id
+        },
+        include: {
+          user: true,
+          branch: true,
+          division: true
+        }
+      });
+    } else {
+      return NextResponse.json({ 
+        error: 'Roll number not found. Please enter your name to proceed.', 
+        need_name: true 
+      }, { status: 404 });
+    }
   }
 
   if (!studentRecord.user || studentRecord.user.status !== 'ACTIVE') {
@@ -63,7 +104,7 @@ export async function POST(request: NextRequest) {
     let sessionId: string;
     if (existingSession) {
       if (existingSession.is_submitted || existingSession.status === 'EXPIRED') {
-        return NextResponse.json({ error: 'You have already completed the exam.' }, { status: 403 });
+        return NextResponse.json({ error: 'You have already completed the assessment.' }, { status: 403 });
       }
 
       sessionId = existingSession.id;
@@ -77,7 +118,7 @@ export async function POST(request: NextRequest) {
           where: { id: sessionId },
           data: { status: 'EXPIRED', is_submitted: true }
         });
-        return NextResponse.json({ error: 'Your exam time has expired.' }, { status: 403 });
+        return NextResponse.json({ error: 'Your assessment time has expired.' }, { status: 403 });
       }
       
       // If session exists and is rejected
@@ -85,30 +126,66 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Your access request was rejected. Please contact your teacher.' }, { status: 403 });
       }
 
+      if (existingSession.status === 'ACTIVE') {
+        const token = await createStudentSessionToken(studentRecord.id, studentRecord.roll_number, existingSession.id);
+        return NextResponse.json({
+          success: true,
+          status: 'ACTIVE',
+          session_token: token,
+          test_type: test.test_type || 'CODING',
+          student: studentPayload
+        });
+      }
+
       // If it exists, just return the current status
       return NextResponse.json({
         success: true,
-        status: existingSession.status
+        status: existingSession.status,
+        test_type: test.test_type || 'CODING'
       });
     } else {
       // Validate target division
       if (test.target_division && test.target_division.trim() !== '' && test.target_division !== studentRecord.division?.name) {
-         return NextResponse.json({ error: 'This test is not assigned to your division.' }, { status: 403 });
+         return NextResponse.json({ error: 'This assessment is not assigned to your division.' }, { status: 403 });
       }
 
       sessionId = generateSessionId();
+
+      const isAutoApprove = Boolean(test.auto_approve);
+      const initialStatus = isAutoApprove ? 'ACTIVE' : 'PENDING_APPROVAL';
 
       await prisma.examSession.create({
         data: {
           id: sessionId,
           test_id: test.id,
           student_id: studentRecord.id,
-          status: 'PENDING_APPROVAL',
-          is_submitted: false
+          status: initialStatus,
+          is_submitted: false,
+          start_time: new Date()
         }
       });
 
-      // Assign questions deterministically without duplicates
+      if (test.test_type === 'QUIZ') {
+        // Quiz test: questions are in QuizQuestion table
+        if (isAutoApprove) {
+          const token = await createStudentSessionToken(studentRecord.id, studentRecord.roll_number, sessionId);
+          return NextResponse.json({
+            success: true,
+            status: 'ACTIVE',
+            session_token: token,
+            test_type: 'QUIZ',
+            student: studentPayload
+          });
+        }
+
+        return NextResponse.json({
+          success: true,
+          status: 'PENDING_APPROVAL',
+          test_type: 'QUIZ'
+        });
+      }
+
+      // Assign questions deterministically without duplicates for coding test
       const testQuestions = await prisma.testQuestion.findMany({
         where: { test_id: test.id },
         orderBy: { order_index: 'asc' }
@@ -238,7 +315,7 @@ export async function POST(request: NextRequest) {
 
     if (existingSession.status === 'ACTIVE') {
       const token = await createStudentSessionToken(studentRecord.id, studentRecord.roll_number, existingSession.id);
-      return NextResponse.json({ status: 'ACTIVE', session_token: token, student: studentPayload });
+      return NextResponse.json({ status: 'ACTIVE', session_token: token, student: studentPayload, test_type: test.test_type || 'CODING' });
     }
 
     return NextResponse.json({ status: existingSession.status });
