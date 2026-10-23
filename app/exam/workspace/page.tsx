@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { AlertTriangle, ShieldAlert, Check, Info, Terminal, CheckCircle, Square, Sparkles } from 'lucide-react';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -337,7 +338,7 @@ export default function WorkspacePage() {
 
     // Auto-submit on 3rd violation
     if (newCount >= 3) {
-      setTabSwitchReason('⚠ 3 violations detected. Your exam has been auto-submitted.');
+      setTabSwitchReason('3 violations detected. Your exam has been auto-submitted.');
       setShowTabSwitchModal(true);
       setTimeout(() => handleAutoSubmit(), 2500);
       return;
@@ -622,7 +623,7 @@ export default function WorkspacePage() {
               marginBottom: '20px',
               fontFamily: 'StyreneB, Inter, sans-serif'
             }}>
-              <span>✦</span> Security & Integrity Lock
+              <ShieldAlert size={14} /> Security & Integrity Lock
             </div>
 
             {/* Editorial Serif Headline */}
@@ -771,7 +772,7 @@ export default function WorkspacePage() {
               marginBottom: '20px',
               fontFamily: 'StyreneB, Inter, sans-serif'
             }}>
-              <span>✦</span> Assessment Focus Notice
+              <AlertTriangle size={14} /> Assessment Focus Notice
             </div>
 
             {/* Editorial Serif Headline */}
@@ -1029,8 +1030,8 @@ export default function WorkspacePage() {
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       {isSubmitted ? (
-                        <span style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600, letterSpacing: '0.08em' }}>
-                          ✓ SUBMITTED · {submitScores[currentQuestion.id] ?? 0}/10
+                        <span style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600, letterSpacing: '0.08em', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <Check size={12} strokeWidth={2.5} /> SUBMITTED · {submitScores[currentQuestion.id] ?? 0}/10
                         </span>
                       ) : demoActive ? (
                         <>
@@ -1317,8 +1318,10 @@ function StatusBadge({ submitted, active }: { submitted: boolean; active: boolea
         fontWeight: 600,
         letterSpacing: '0.08em',
         color: 'var(--success)',
+        display: 'inline-flex',
+        alignItems: 'center',
         fontFamily: 'Söhne Mono, ui-monospace, monospace',
-      }}>✓</span>
+      }}><Check size={10} strokeWidth={2.5} /></span>
     );
   }
   return (
@@ -1407,8 +1410,8 @@ function QuestionPanel({ question, index }: { question: Question; index: number 
       )}
 
       <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: '3px', border: '1px solid var(--border)' }}>
-        <p style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          💡 <strong style={{ color: 'var(--text-secondary)' }}>Note:</strong> You can use a hardcoded array or take input from the user.
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Info size={13} style={{ flexShrink: 0 }} /> <span><strong style={{ color: 'var(--text-secondary)' }}>Note:</strong> You can use a hardcoded array or take input from the user.</span>
         </p>
       </div>
     </div>
@@ -1582,12 +1585,12 @@ function ConsolePanel({
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        term.writeln(`\x1b[1;31m✖ ${data.error || res.statusText || 'Execution failed'}\x1b[0m`);
+        term.writeln(`\x1b[1;31m[Error] ${data.error || res.statusText || 'Execution failed'}\x1b[0m`);
       } else if (!data.success && data.compile_error) {
-        term.writeln(`\x1b[1;31m✖ Compilation Error\x1b[0m`);
+        term.writeln(`\x1b[1;31m[Error] Compilation Error\x1b[0m`);
         term.write(`\x1b[31m${data.compile_error.replace(/\r?\n/g, '\r\n')}\x1b[0m\r\n`);
       } else if (data.timed_out) {
-        term.writeln(`\x1b[1;31m✖ Time Limit Exceeded\x1b[0m`);
+        term.writeln(`\x1b[1;31m[Error] Time Limit Exceeded\x1b[0m`);
       } else {
         const rawOut = (data.output || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         replayInterleaved(term, rawOut, inputLines);
@@ -1597,7 +1600,7 @@ function ConsolePanel({
       }
       term.write(`\x1b[38;5;240m\r\n[Exited · ${data.execution_time || 0}ms]\x1b[0m\r\n`);
     } catch (err: any) {
-      term.writeln(`\x1b[1;31m✖ Error: ${err.message || 'Unknown'}\x1b[0m`);
+      term.writeln(`\x1b[1;31m[Error] ${err.message || 'Unknown'}\x1b[0m`);
     } finally {
       setRunning(false);
       awaitingStdinRef.current = false;
@@ -1867,7 +1870,7 @@ function ConsolePanel({
             alignItems: 'center',
             gap: '5px',
           }}>
-            <span style={{ fontSize: '9px' }}>▶</span> TERMINAL
+            <Terminal size={12} /> TERMINAL
           </span>
 
           {running && (
@@ -2022,7 +2025,7 @@ function Modal({
               marginBottom: '10px',
               fontFamily: 'StyreneB, Inter, sans-serif'
             }}>
-              <span>✦</span> Submission Confirm
+              <CheckCircle size={14} /> Submission Confirm
             </div>
             <h3 style={{
               fontFamily: 'Copernicus, "Tiempos Headline", "Georgia", "Iowan Old Style", serif',
@@ -2154,7 +2157,17 @@ function FinalScreen({
             padding: '4px 12px',
             borderRadius: '999px',
           }}>
-            {isStopped ? '⏹ Exam Concluded by Faculty' : '✓ Submitted Successfully'}
+            {isStopped ? (
+              <>
+                <Square size={12} fill="currentColor" />
+                Exam Concluded by Faculty
+              </>
+            ) : (
+              <>
+                <Check size={13} strokeWidth={2.5} />
+                Submitted Successfully
+              </>
+            )}
           </span>
         </div>
 
@@ -2183,7 +2196,7 @@ function FinalScreen({
           boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ color: 'var(--accent, #cc785c)', fontSize: '15px' }}>✦</span>
+            <Sparkles size={16} style={{ color: 'var(--accent, #cc785c)' }} />
             <h2 style={{
               fontSize: '15px',
               fontWeight: 600,
@@ -2244,8 +2257,15 @@ function FinalScreen({
                   background: hasSubmission ? 'rgba(78, 154, 110, 0.12)' : 'rgba(150, 150, 150, 0.08)',
                   color: hasSubmission ? '#4e9a6e' : 'var(--text-muted)',
                   border: `1px solid ${hasSubmission ? 'rgba(78, 154, 110, 0.3)' : 'var(--border)'}`,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
                 }}>
-                  {hasSubmission ? '✓ Submitted' : '— Not Attempted'}
+                  {hasSubmission ? (
+                    <>
+                      <Check size={12} strokeWidth={2.5} /> Submitted
+                    </>
+                  ) : '— Not Attempted'}
                 </span>
               </div>
             );
@@ -2271,8 +2291,8 @@ function FinalScreen({
             </p>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              ✓ Safe to close this tab
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Check size={12} strokeWidth={2} /> Safe to close this tab
             </span>
           </div>
         </div>

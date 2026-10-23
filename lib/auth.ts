@@ -5,7 +5,7 @@ import crypto from 'crypto';
 const JWT_SECRET_STRING = process.env.JWT_SECRET || 'codedsa-production-fallback-secret-2026-secure';
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
-  console.warn('⚠️ [Auth Warning]: JWT_SECRET is not set in environment variables. Using secure fallback. Please configure JWT_SECRET in your production settings.');
+  console.warn('[Auth Warning]: JWT_SECRET is not set in environment variables. Using secure fallback. Please configure JWT_SECRET in your production settings.');
 }
 
 const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_STRING);

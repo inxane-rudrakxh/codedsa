@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { X } from 'lucide-react';
 
 export default function StudentTestPage() {
   const router = useRouter();
@@ -374,8 +375,8 @@ export default function StudentTestPage() {
                   borderRadius: '8px'
                 }}
               >
-                <div style={{ width: '48px', height: '48px', background: 'var(--error-dim)', color: 'var(--error)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '24px' }}>
-                  ✕
+                <div style={{ width: '48px', height: '48px', background: 'var(--error-dim)', color: 'var(--error)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                  <X size={24} strokeWidth={2.5} />
                 </div>
                 <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--error)', marginBottom: '8px' }}>
                   ACCESS DENIED

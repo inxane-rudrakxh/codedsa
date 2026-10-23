@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Code } from 'lucide-react';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -69,7 +70,7 @@ export default function AdminDashboard() {
               gap: '6px',
             }}
           >
-            <span>💻</span> + CREATE CODING TEST
+            <Code size={15} /> + CREATE CODING TEST
           </button>
 
         </div>

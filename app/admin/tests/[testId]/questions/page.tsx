@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { Sparkles, Check } from 'lucide-react';
 
 export default function TestQuestionsPage() {
   const params = useParams();
@@ -178,7 +179,9 @@ export default function TestQuestionsPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => setIsGeneratingAI(true)} style={outlineBtn}>✦ Generate with AI</button>
+          <button onClick={() => setIsGeneratingAI(true)} style={{ ...outlineBtn, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <Sparkles size={14} /> Generate with AI
+          </button>
           <button onClick={() => setIsCreating(true)} style={primaryBtn}>Create New Question</button>
         </div>
       </div>
@@ -324,7 +327,11 @@ export default function TestQuestionsPage() {
               onNewTCChange={(val: any) => setNewTC(p => ({ ...p, ...val }))}
               actionSlot={
                 assignedIds.has(q.id)
-                  ? <span style={{ fontSize: '10px', color: 'var(--success)', fontWeight: 600 }}>✓ ASSIGNED</span>
+                  ? (
+                    <span style={{ fontSize: '10px', color: 'var(--success)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      <Check size={11} strokeWidth={2.5} /> ASSIGNED
+                    </span>
+                  )
                   : <button onClick={() => handleAssign(q.id)} style={smallBtn}>Assign to Test</button>
               }
             />

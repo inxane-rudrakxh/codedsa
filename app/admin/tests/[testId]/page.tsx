@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import { HelpCircle, Clock, BarChart3 } from 'lucide-react';
 
 export default function TestDetailPage() {
   const router = useRouter();
@@ -67,9 +68,9 @@ export default function TestDetailPage() {
   if (!test) return null;
 
   const sections = [
-    { href: `/admin/tests/${testId}/questions`, label: 'Questions', desc: `${test.testQuestions?.length || 0} assigned`, icon: '❓' },
-    { href: `/admin/tests/${testId}/requests`, label: 'Requests', desc: 'Pending approvals', icon: '⏳' },
-    { href: `/admin/tests/${testId}/results`, label: 'Results', desc: 'Student submissions', icon: '📊' },
+    { href: `/admin/tests/${testId}/questions`, label: 'Questions', desc: `${test.testQuestions?.length || 0} assigned`, icon: HelpCircle },
+    { href: `/admin/tests/${testId}/requests`, label: 'Requests', desc: 'Pending approvals', icon: Clock },
+    { href: `/admin/tests/${testId}/results`, label: 'Results', desc: 'Student submissions', icon: BarChart3 },
   ];
 
   return (
@@ -220,7 +221,9 @@ export default function TestDetailPage() {
               onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent)'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'; }}
             >
-              <div style={{ fontSize: '24px', marginBottom: '12px' }}>{s.icon}</div>
+              <div style={{ marginBottom: '12px', color: 'var(--text-primary)' }}>
+                <s.icon size={26} strokeWidth={1.75} />
+              </div>
               <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</p>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{s.desc}</p>
             </div>

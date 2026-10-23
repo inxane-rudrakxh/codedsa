@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { generateCollegeResultsPDF } from '@/lib/pdfGenerator';
+import { FileText, FileSpreadsheet, Check, Square, AlertTriangle } from 'lucide-react';
 
 interface QuestionResult {
   question_id: string;
@@ -323,7 +324,11 @@ export default function TestResultsPage() {
           {test && (
             <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
               {test.title} · {test.total_marks} marks
-              {test.marks_published && <span style={{ marginLeft: '8px', color: 'var(--success)', fontWeight: 600, fontSize: '11px' }}>✓ PUBLISHED</span>}
+              {test.marks_published && (
+                <span style={{ marginLeft: '8px', color: 'var(--success)', fontWeight: 600, fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                  <Check size={11} strokeWidth={2.5} /> PUBLISHED
+                </span>
+              )}
             </p>
           )}
         </div>
@@ -338,12 +343,12 @@ export default function TestResultsPage() {
           </button>
           {results.length > 0 && (
             <button onClick={exportPDF} style={{ ...primaryBtn, display: 'inline-flex', alignItems: 'center', gap: '6px' }} title="Generate printable official college result PDF">
-              <span>✦</span> Download PDF Report
+              <FileText size={14} /> Download PDF Report
             </button>
           )}
           {results.length > 0 && (
             <button onClick={exportExcel} style={{ ...outlineBtn, display: 'inline-flex', alignItems: 'center', gap: '6px' }} title="Download Excel (.csv) Report with all students' marks">
-              <span>📊</span> Download Excel Report
+              <FileSpreadsheet size={14} /> Download Excel Report
             </button>
           )}
         </div>
@@ -379,7 +384,7 @@ export default function TestResultsPage() {
           alignItems: 'center',
           gap: '8px'
         }}>
-          <span>✓</span> {stopSuccessMsg}
+          <Check size={14} strokeWidth={2.5} /> {stopSuccessMsg}
         </div>
       )}
 
@@ -420,7 +425,7 @@ export default function TestResultsPage() {
               }}
               title="Stop exams for all currently active students"
             >
-              <span>⏹</span> Stop All Active ({activeStudents.length})
+              <Square size={13} fill="currentColor" /> Stop All Active ({activeStudents.length})
             </button>
           )}
         </div>
@@ -480,7 +485,7 @@ export default function TestResultsPage() {
                 boxShadow: '0 2px 6px rgba(229, 83, 75, 0.25)'
               }}
             >
-              <span>⏹</span> Stop Selected Exam{selectedSessionIds.length > 1 ? 's' : ''} ({selectedSessionIds.length})
+              <Square size={13} fill="currentColor" /> Stop Selected Exam{selectedSessionIds.length > 1 ? 's' : ''} ({selectedSessionIds.length})
             </button>
           </div>
         </div>
@@ -579,7 +584,11 @@ export default function TestResultsPage() {
                   <td style={tdStyle}><StatusPill status={sStatus} /></td>
                   <td style={tdStyle}>
                     {r.integrity_warnings > 0
-                      ? <span style={{ fontSize: '11px', color: 'var(--error)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>⚠ {r.integrity_warnings}</span>
+                      ? (
+                        <span style={{ fontSize: '11px', color: 'var(--error)', fontFamily: 'Söhne Mono, ui-monospace, monospace', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          <AlertTriangle size={12} /> {r.integrity_warnings}
+                        </span>
+                      )
                       : <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>—</span>
                     }
                   </td>
@@ -612,7 +621,7 @@ export default function TestResultsPage() {
                           }}
                           title={`Stop exam for ${r.name}`}
                         >
-                          <span>⏹</span> Stop
+                          <Square size={10} fill="currentColor" /> Stop
                         </button>
                       )}
                       {r.session_id ? (
@@ -710,7 +719,7 @@ export default function TestResultsPage() {
           <div className="modal-content animate-fade-up" style={{ maxWidth: '480px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '18px', color: 'var(--error, #e5534b)' }}>⏹</span>
+                <Square size={18} color="var(--error, #e5534b)" fill="var(--error, #e5534b)" />
                 <h3 style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600 }}>
                   {stopModal.type === 'single'
                     ? `Stop Exam for ${stopModal.studentName}?`
@@ -777,7 +786,7 @@ export default function TestResultsPage() {
                   padding: '8px 16px'
                 }}
               >
-                <span>⏹</span> {stopping ? 'Stopping...' : 'Confirm & Stop Exam'}
+                <Square size={13} fill="currentColor" /> {stopping ? 'Stopping...' : 'Confirm & Stop Exam'}
               </button>
             </div>
           </div>

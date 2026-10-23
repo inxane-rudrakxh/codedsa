@@ -166,7 +166,7 @@ io.on('connection', (socket) => {
         idleTimeout = setTimeout(() => {
           if (!finished && ptyProcess) {
             try { ptyProcess.kill(); } catch {}
-            socket.emit('output', '\r\n\x1b[1;31m✖ Process idle timeout (60s without input)\x1b[0m\r\n');
+            socket.emit('output', '\r\n\x1b[1;31m[Error] Process idle timeout (60s without input)\x1b[0m\r\n');
             socket.emit('finished');
             finished = true;
           }
@@ -178,7 +178,7 @@ io.on('connection', (socket) => {
       const timeout = setTimeout(() => {
         if (!finished) {
           if (ptyProcess) try { ptyProcess.kill(); } catch {}
-          socket.emit('output', `\r\n\x1b[1;31m✖ Execution Time Limit (${safeTimeLimit / 1000}s)\x1b[0m\r\n`);
+          socket.emit('output', `\r\n\x1b[1;31m[Error] Execution Time Limit (${safeTimeLimit / 1000}s)\x1b[0m\r\n`);
           socket.emit('finished');
           finished = true;
         }
@@ -212,14 +212,14 @@ io.on('connection', (socket) => {
                 executeRun();
               } else {
                 const errStr = (stderr || error.message || '').replace(/\n/g, '\r\n');
-                socket.emit('output', `\r\n\x1b[1;31m✖ Compilation Error:\x1b[0m\r\n\x1b[31m${errStr}\x1b[0m\r\n`);
+                socket.emit('output', `\r\n\x1b[1;31m[Error] Compilation Error:\x1b[0m\r\n\x1b[31m${errStr}\x1b[0m\r\n`);
                 socket.emit('finished');
               }
             });
             return;
           }
           const errStr = (stderr || error.message || '').replace(/\n/g, '\r\n');
-          socket.emit('output', `\r\n\x1b[1;31m✖ Compilation Error:\x1b[0m\r\n\x1b[31m${errStr}\x1b[0m\r\n`);
+          socket.emit('output', `\r\n\x1b[1;31m[Error] Compilation Error:\x1b[0m\r\n\x1b[31m${errStr}\x1b[0m\r\n`);
           socket.emit('finished');
           return;
         }
@@ -237,7 +237,7 @@ io.on('connection', (socket) => {
         idleTimeout = setTimeout(() => {
           if (ptyProcess) {
             try { ptyProcess.kill(); } catch {}
-            socket.emit('output', '\r\n\x1b[1;31m✖ Process idle timeout (60s without input)\x1b[0m\r\n');
+            socket.emit('output', '\r\n\x1b[1;31m[Error] Process idle timeout (60s without input)\x1b[0m\r\n');
             socket.emit('finished');
           }
         }, 60000);

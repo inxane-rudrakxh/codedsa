@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Check } from 'lucide-react';
 
 interface Settings {
   exam_duration_minutes: string;
@@ -193,8 +194,8 @@ export default function SettingsPage() {
             {saving ? 'Saving...' : 'Save Settings'}
           </button>
           {saved && (
-            <span style={{ fontSize: '12px', color: 'var(--success)', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>
-              ✓ Settings saved
+            <span style={{ fontSize: '12px', color: 'var(--success)', fontFamily: 'Söhne Mono, ui-monospace, monospace', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Check size={13} strokeWidth={2.5} /> Settings saved
             </span>
           )}
         </div>

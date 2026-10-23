@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { Square } from 'lucide-react';
 
 interface RequestRow {
   session_id: string;
@@ -204,7 +205,7 @@ export default function TestRequestsPage() {
               }}
               title="Stop exam for all active students"
             >
-              <span>⏹</span> Stop All Active ({activeSessionsList.length})
+              <Square size={13} fill="currentColor" /> Stop All Active ({activeSessionsList.length})
             </button>
           )}
         </div>
@@ -262,7 +263,7 @@ export default function TestRequestsPage() {
               gap: '6px'
             }}
           >
-            <span>⏹</span> Stop Selected Exam{selectedSessionIds.length > 1 ? 's' : ''} ({selectedSessionIds.length})
+            <Square size={13} fill="currentColor" /> Stop Selected Exam{selectedSessionIds.length > 1 ? 's' : ''} ({selectedSessionIds.length})
           </button>
         </div>
       )}
@@ -395,7 +396,7 @@ export default function TestRequestsPage() {
                               gap: '4px'
                             }}
                           >
-                            <span>⏹</span> STOP EXAM
+                            <Square size={10} fill="currentColor" /> STOP EXAM
                           </button>
                         </div>
                       ) : (
@@ -416,7 +417,7 @@ export default function TestRequestsPage() {
           <div className="modal-content animate-fade-up" style={{ maxWidth: '480px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '18px', color: 'var(--error, #e5534b)' }}>⏹</span>
+                <Square size={18} color="var(--error, #e5534b)" fill="var(--error, #e5534b)" />
                 <h3 style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600 }}>
                   {stopModal.type === 'single'
                     ? `Stop Exam for ${stopModal.studentName}?`
@@ -487,7 +488,7 @@ export default function TestRequestsPage() {
                   padding: '8px 16px'
                 }}
               >
-                <span>⏹</span> {stopping ? 'Stopping...' : 'Confirm & Stop Exam'}
+                <Square size={13} fill="currentColor" /> {stopping ? 'Stopping...' : 'Confirm & Stop Exam'}
               </button>
             </div>
           </div>

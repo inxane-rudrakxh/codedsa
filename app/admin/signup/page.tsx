@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { CheckCircle2 } from 'lucide-react';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -160,7 +161,7 @@ export default function SignupPage() {
             textAlign: 'center',
             marginBottom: '20px'
           }}>
-            <div style={{ fontSize: '32px', marginBottom: '10px' }}>✓</div>
+            <CheckCircle2 size={36} color="#5db872" style={{ margin: '0 auto 10px' }} />
             <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#5db872', marginBottom: '8px' }}>
               Registration Successful!
             </h3>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 
 interface Question {
   id: number;
@@ -148,8 +149,8 @@ export default function QuestionsPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => setIsGeneratingAI(true)} style={{ ...outlineBtn, color: 'var(--text-primary)' }}>
-            ✦ Generate with AI
+          <button onClick={() => setIsGeneratingAI(true)} style={{ ...outlineBtn, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <Sparkles size={14} /> Generate with AI
           </button>
           <button onClick={() => setIsCreating(true)} style={primaryBtn}>
             Create New Question

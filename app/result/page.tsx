@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Check, Sparkles } from 'lucide-react';
 
 interface ResultData {
   student: { roll_no: string; name: string; division: string; branch: string };
@@ -108,7 +109,7 @@ export default function ResultPage() {
               padding: '4px 12px',
               borderRadius: '999px',
             }}>
-              ✓ Submitted Successfully
+              <Check size={13} strokeWidth={2.5} /> Submitted Successfully
             </span>
           </div>
 
@@ -142,7 +143,7 @@ export default function ResultPage() {
             boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <span style={{ color: 'var(--accent, #cc785c)', fontSize: '15px' }}>✦</span>
+              <Sparkles size={16} style={{ color: 'var(--accent, #cc785c)' }} />
               <h2 style={{
                 fontSize: '15px',
                 fontWeight: 600,
@@ -210,8 +211,15 @@ export default function ResultPage() {
                     background: hasSubmission ? 'rgba(78, 154, 110, 0.12)' : 'rgba(150, 150, 150, 0.08)',
                     color: hasSubmission ? '#4e9a6e' : 'var(--text-muted)',
                     border: `1px solid ${hasSubmission ? 'rgba(78, 154, 110, 0.3)' : 'var(--border)'}`,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
                   }}>
-                    {hasSubmission ? '✓ Submitted' : '— Not Attempted'}
+                    {hasSubmission ? (
+                      <>
+                        <Check size={12} strokeWidth={2.5} /> Submitted
+                      </>
+                    ) : '— Not Attempted'}
                   </span>
                 </div>
               );
@@ -242,8 +250,8 @@ export default function ResultPage() {
               )}
             </div>
             <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                ✓ Safe to close this tab
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <Check size={12} strokeWidth={2} /> Safe to close this tab
               </span>
             </div>
           </div>

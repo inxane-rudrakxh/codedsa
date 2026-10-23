@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { CheckCircle2, Sparkles, Check } from 'lucide-react';
 
 export default function CreateTestWizard() {
   const router = useRouter();
@@ -178,7 +179,7 @@ export default function CreateTestWizard() {
                 <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>Add Questions</h2>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
                   <div style={{ padding: '24px', background: 'var(--success-dim)', border: '1px solid var(--success)', borderRadius: '8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>❖</div>
+                    <CheckCircle2 size={36} color="var(--success)" style={{ margin: '0 auto 8px' }} />
                     <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--success)' }}>9 QUESTIONS AUTOMATICALLY SELECTED</div>
                     <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginTop: '8px' }}>The 9 pre-seeded coding problems have been automatically attached to this assessment. <br/>When students start the test, they will receive 3 random questions out of these 9.</div>
                   </div>
@@ -195,7 +196,7 @@ export default function CreateTestWizard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', background: 'var(--surface-2)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h2 style={{ fontSize: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>✦</span> GENERATE WITH AI
+                    <Sparkles size={16} /> GENERATE WITH AI
                   </h2>
                   <button onClick={() => handleChange('questionMode', 'menu')} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
                     Cancel
@@ -247,7 +248,7 @@ export default function CreateTestWizard() {
                     alert('AI Generation initiated. (Backend generation will be connected in next phase)');
                     setStep(3);
                   }} style={{ padding: '12px 24px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 8px rgba(204, 120, 92, 0.3)' }}>
-                    <span>✦</span> GENERATE QUESTIONS
+                    <Sparkles size={16} /> GENERATE QUESTIONS
                   </button>
                 </div>
               </div>
@@ -340,8 +341,8 @@ export default function CreateTestWizard() {
       {/* STEP 5: SUCCESS */}
       {step === 5 && createdTest && (
         <div style={{ maxWidth: '600px', margin: '40px auto 0', textAlign: 'center' }}>
-          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--success-dim)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', margin: '0 auto 24px' }}>
-            ✓
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--success-dim)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+            <Check size={32} strokeWidth={2.5} />
           </div>
           <h1 style={{ fontSize: '28px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
             TEST CREATED SUCCESSFULLY
