@@ -175,19 +175,34 @@ export default function WorkspacePage() {
         }
         setSessionData(data);
         setTimeRemaining(data.session.remaining_seconds);
-        setWarningCount(data.session.integrity_warnings);
-        warningCountRef.current = data.session.integrity_warnings;
+        const warnings = Number(data.session.integrity_warnings) || 0;
+        setWarningCount(warnings);
+        warningCountRef.current = warnings;
+
+        // Auto-submit if session already exceeded 3 violations
+        if (warnings >= 3) {
+          setTabSwitchReason('3 violations detected. Your exam has been auto-submitted.');
+          setShowTabSwitchModal(true);
+          setTimeout(() => handleAutoSubmit(), 2500);
+          return;
+        }
         
         const allowedLangs = data.session.allowed_languages || ['cpp', 'c', 'python', 'java'];
         const initialLang = allowedLangs.includes('cpp') ? 'cpp' : (allowedLangs[0] || 'cpp');
         setLanguage(initialLang);
 
-        // Initialize codes from saves
+        // Initialize codes from local drafts or server saves
         const initialCodes: Record<number, string> = {};
         data.questions.forEach(q => {
-          initialCodes[q.id] = data.saves[q.id] || STARTER_CODES[initialLang] || STARTER_CODES.cpp;
+          const localDraft = typeof window !== 'undefined' ? localStorage.getItem(`code_draft_${data.session.id}_${q.id}`) : null;
+          initialCodes[q.id] = localDraft || data.saves[q.id] || STARTER_CODES[initialLang] || STARTER_CODES.cpp;
         });
         setCodes(initialCodes);
+
+        // If re-entering in windowed mode, immediately prompt for fullscreen
+        if (typeof document !== 'undefined' && !document.fullscreenElement) {
+          setShowFullscreenPrompt(true);
+        }
 
         // Restore submission scores
         const scores: Record<string, number> = {};
@@ -378,9 +393,13 @@ export default function WorkspacePage() {
       if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
         document.documentElement.requestFullscreen().then(() => {
           lockKeyboard();
-        }).catch(() => {});
+        }).catch(() => {
+          setShowFullscreenPrompt(true);
+        });
       } else if (document.fullscreenElement) {
         lockKeyboard();
+      } else {
+        setShowFullscreenPrompt(true);
       }
     };
     enterFullscreen();
@@ -1176,7 +1195,13 @@ export default function WorkspacePage() {
                           }
                         }
                         if (demoActive) { setDemoCode(val || ''); return; }
-                        setCodes(prev => ({ ...prev, [currentQuestion.id]: val || '' }));
+                        setCodes(prev => {
+                          const next = { ...prev, [currentQuestion.id]: val || '' };
+                          if (typeof window !== 'undefined' && sessionData?.session?.id) {
+                            localStorage.setItem(`code_draft_${sessionData.session.id}_${currentQuestion.id}`, val || '');
+                          }
+                          return next;
+                        });
                       }}
                       options={{
                         readOnly: isSubmitted,
@@ -1253,6 +1278,7 @@ export default function WorkspacePage() {
                     language={language}
                     getToken={getToken}
                     questionId={currentQuestion?.id}
+                    exampleInput={sessionData?.testCases?.[currentQuestion?.id]?.[0]?.input || ''}
                     onRunCode={handleRunCode}
                   />
                 </div>
@@ -1780,12 +1806,8 @@ function ConsolePanel({
             fell = true;
             try { socketRef.current?.disconnect(); } catch {}
             if (!cancelled) {
-              const needsStdin = /\bcin\b|\bscanf\b|\bgets\b|\binput\s*\(|\bgetline\b|\bread\s*\(/.test(code);
-              if (!needsStdin) {
-                runViaHttp(term, '', []);
-              } else {
-                setupStdinCollection(term);
-              }
+              const sampleIn = exampleInput || '';
+              runViaHttp(term, sampleIn, sampleIn ? sampleIn.split('\n') : []);
             }
           }
         };
@@ -1845,18 +1867,9 @@ function ConsolePanel({
         return;
       }
 
-      // ── HTTP path (production) ─────────────────────────────────────────────
-      // Detect whether the code reads from stdin at all
-      const needsStdin =
-        /\bcin\b|\bscanf\b|\bgets\b|\binput\s*\(|\bgetline\b|\bread\s*\(/.test(code);
-
-      if (!needsStdin) {
-        runViaHttp(term, '', []);
-      } else {
-        // No banner — just place a cursor so the user can type their inputs.
-        // The program's prompts will be interleaved after execution.
-        setupStdinCollection(term);
-      }
+      // ── HTTP path (production / remote execution) ─────────────────────────
+      const sampleIn = exampleInput || '';
+      runViaHttp(term, sampleIn, sampleIn ? sampleIn.split('\n') : []);
     })();
 
     return () => {

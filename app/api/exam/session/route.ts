@@ -103,6 +103,7 @@ export async function GET(request: NextRequest) {
       test_instructions: session.test.instructions || '',
       marks_published: session.test.marks_published,
       allowed_languages: session.test.allowed_languages,
+      integrity_warnings: session.integrity_warnings || 0,
     },
     student: {
       roll_no: session.student.roll_number,

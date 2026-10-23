@@ -94,7 +94,11 @@ export default function StudentTestPage() {
       
       if (data.status === 'ACTIVE' && data.session_token) {
         localStorage.setItem('session_token', data.session_token);
-        router.push('/exam/instructions');
+        if (data.already_started) {
+          router.push('/exam/workspace');
+        } else {
+          router.push('/exam/instructions');
+        }
         return;
       }
 

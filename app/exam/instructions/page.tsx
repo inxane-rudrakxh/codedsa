@@ -33,8 +33,9 @@ export default function InstructionsPage() {
           if (data.session.test_title) setTestTitle(data.session.test_title);
           if (data.session.test_instructions) setTestInstructions(data.session.test_instructions);
           
-          if (data.submissions && Object.keys(data.submissions).length > 0) {
-            // Still allow going to workspace if they already started
+          if (data.session.status === 'active' && ((data.saves && Object.keys(data.saves).length > 0) || (data.submissions && Object.keys(data.submissions).length > 0))) {
+            router.replace('/exam/workspace');
+            return;
           }
         })
         .catch(() => router.push('/'));

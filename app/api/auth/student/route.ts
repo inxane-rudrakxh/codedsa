@@ -133,7 +133,8 @@ export async function POST(request: NextRequest) {
           status: 'ACTIVE',
           session_token: token,
           test_type: test.test_type || 'CODING',
-          student: studentPayload
+          student: studentPayload,
+          already_started: true,
         });
       }
 
