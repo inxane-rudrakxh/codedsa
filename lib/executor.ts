@@ -27,8 +27,8 @@ const PISTON_URL = process.env.PISTON_API_URL || 'http://localhost:2000/api/v2';
 // Piston uses 'gcc' for both C and C++ — file extension (.c vs .cpp) selects the compiler.
 // Run: curl http://localhost:2000/api/v2/runtimes  to see installed runtimes.
 const PISTON_LANG_MAP: Record<string, { language: string; version: string; filename: string }> = {
-  cpp:    { language: 'gcc', version: '10.2.0', filename: 'main.cpp' },
-  c:      { language: 'gcc', version: '10.2.0', filename: 'main.c'   },
+  cpp:    { language: 'c++',    version: '10.2.0', filename: 'main.cpp' },
+  c:      { language: 'c',      version: '10.2.0', filename: 'main.c'   },
   python: { language: 'python', version: '3.10.0', filename: 'main.py' },
   java:   { language: 'java',   version: '15.0.2', filename: 'Main.java' },
 };
@@ -39,9 +39,13 @@ async function getPistonLangMeta(lang: string): Promise<{ language: string; vers
   try {
     const res = await fetch(`${base}/runtimes`, { signal: AbortSignal.timeout(3000) });
     if (res.ok) {
-      const runtimes: Array<{ language: string; version: string }> = await res.json();
-      // Find the installed runtime matching our target language
-      const matches = runtimes.filter(r => r.language.toLowerCase() === defaults.language.toLowerCase());
+      const runtimes: Array<{ language: string; version: string; aliases?: string[] }> = await res.json();
+      const target = defaults.language.toLowerCase();
+      // Find the installed runtime matching our target language or aliases
+      const matches = runtimes.filter(r =>
+        r.language.toLowerCase() === target ||
+        r.aliases?.some(a => a.toLowerCase() === target || a.toLowerCase() === lang.toLowerCase())
+      );
       if (matches.length > 0) {
         // Pick the highest installed version
         matches.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
@@ -78,8 +82,8 @@ async function runPistonCode(
         version,
         files: [{ name: filename, content: code }],
         stdin: input || '',
-        run_timeout: Math.round(timeLimitSec * 1000),
-        compile_timeout: 15000
+        run_timeout: Math.min(Math.max(Math.round(timeLimitSec * 1000), 1000), 10000),
+        compile_timeout: 10000
       }),
       signal: controller.signal
     });
