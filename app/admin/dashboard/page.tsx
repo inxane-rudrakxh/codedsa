@@ -49,7 +49,7 @@ export default function AdminDashboard() {
             Good morning, Admin.
           </h1>
           <p style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>
-            Manage your coding assessments, quizzes, and live student access requests.
+            Manage your coding assessments and live student access requests.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -72,25 +72,6 @@ export default function AdminDashboard() {
             <span>💻</span> + CREATE CODING TEST
           </button>
 
-          <button
-            onClick={() => router.push('/admin/quizzes/create')}
-            style={{
-              background: 'var(--accent)',
-              color: '#fff',
-              border: 'none',
-              padding: '12px 20px',
-              borderRadius: '6px',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              boxShadow: '0 2px 4px rgba(204, 120, 92, 0.25)',
-            }}
-          >
-            <span>📝</span> + CREATE QUIZ TEST
-          </button>
         </div>
       </div>
 
@@ -152,7 +133,6 @@ export default function AdminDashboard() {
               const waitingCount = testSessions.filter((s: any) => s.status === 'pending_approval').length;
               const total = testSessions.length;
 
-              const isQuiz = t.test_type === 'QUIZ' || t.title?.toLowerCase().includes('quiz') || t.title?.toLowerCase().includes('graphics');
 
               return (
                 <div key={t.id} style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px', display: 'flex', flexDirection: 'column' }}>
@@ -163,11 +143,6 @@ export default function AdminDashboard() {
                         <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', padding: '3px 7px', borderRadius: '3px', background: 'var(--success-dim)', color: 'var(--success)', textTransform: 'uppercase' }}>
                           LIVE
                         </span>
-                        {isQuiz && (
-                          <span style={{ fontSize: '10px', fontWeight: 600, padding: '3px 7px', borderRadius: '3px', background: 'var(--accent-dim)', color: 'var(--accent)', textTransform: 'uppercase' }}>
-                            QUIZ
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -201,10 +176,10 @@ export default function AdminDashboard() {
                       </button>
                     )}
                     <button 
-                      onClick={() => router.push(isQuiz ? `/admin/quizzes` : `/admin/tests/${t.id}`)}
+                      onClick={() => router.push(`/admin/tests/${t.id}`)}
                       style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
                     >
-                      OPEN {isQuiz ? 'QUIZ' : 'TEST'}
+                      OPEN TEST
                     </button>
                   </div>
                 </div>

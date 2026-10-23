@@ -310,11 +310,14 @@ export default function WorkspacePage() {
   }, [sessionData, loading, showFinalScreen, getToken]);
 
   // ── Proctoring: 3 warnings → auto-submit ─────────────────────────────────
+  // Only two events count as warnings:
+  //   1. fullscreen_exit — leaving fullscreen
+  //   2. tab_switch      — switching tab or app
+  // External paste is silently blocked. Screenshots/F11 are silently suppressed.
 
-  const reportIntegrity = async (event_type: string) => {
+  const reportIntegrity = async (event_type: 'fullscreen_exit' | 'tab_switch') => {
     if (!sessionData || loading) return;
 
-    // Increment ref immediately (state update is async)
     warningCountRef.current += 1;
     const newCount = warningCountRef.current;
 
@@ -343,17 +346,8 @@ export default function WorkspacePage() {
     if (event_type === 'fullscreen_exit') {
       setShowFullscreenPrompt(true);
     } else {
-      setTabSwitchReason(
-        event_type === 'external_paste'
-          ? '⚠ Pasting from outside the exam is not allowed'
-          : event_type === 'screenshot_attempt'
-          ? 'A screenshot shortcut was detected'
-          : event_type === 'tab_switch'
-          ? 'You switched to another tab or window'
-          : event_type === 'f11_key'
-          ? 'Fullscreen toggle detected'
-          : 'Window focus was lost',
-      );
+      // tab_switch
+      setTabSwitchReason('You switched to another tab or application.');
       setShowTabSwitchModal(true);
     }
   };
@@ -391,7 +385,7 @@ export default function WorkspacePage() {
       }
     };
 
-    // ── 3. Screenshot & F11 key combos ────────────────────────────────────
+    // ── 3. Block screenshot & F11 keys silently (no warning count) ──────────
     const onKeyDown = (e: KeyboardEvent) => {
       const { key, code, ctrlKey, metaKey, shiftKey } = e;
 
@@ -400,20 +394,19 @@ export default function WorkspacePage() {
       const isMacShot     = metaKey && shiftKey && ['3', '4', '5'].includes(key);
       const isF11         = key === 'F11' || code === 'F11';
 
+      // Silently suppress — these don't count as violations
       if (isPrintScreen || isWinSnip || isMacShot) {
         e.preventDefault();
         e.stopPropagation();
-        reportIntegrity('screenshot_attempt');
         return;
       }
 
       if (isF11) {
-        // Block F11 completely — never let the browser toggle fullscreen via key
+        // Block F11 — if fullscreen was already lost, the fullscreenchange
+        // listener will fire and count it as a warning automatically.
         e.preventDefault();
         e.stopPropagation();
-        // If we somehow lost fullscreen, record it and re-enter
         if (!document.fullscreenElement) {
-          reportIntegrity('f11_key');
           setTimeout(enterFullscreen, 200);
         }
       }
@@ -1163,11 +1156,11 @@ export default function WorkspacePage() {
                             }
                           }
 
-                          // Intercept Ctrl+V / Cmd+V — block external paste
+                          // Intercept Ctrl+V / Cmd+V — block external paste SILENTLY
+                          // Internal copy-paste (text copied within the editor) is freely allowed.
+                          // External paste is dropped with no warning count — just blocked.
                           const isPaste = (ke.ctrlKey || ke.metaKey) && ke.keyCode === monaco.KeyCode.KeyV;
                           if (isPaste && !isSubmitted) {
-                            // Read clipboard via async API, then decide.
-                            // We suppress the default paste here and re-apply only if internal.
                             ke.preventDefault();
                             ke.stopPropagation();
 
@@ -1179,15 +1172,12 @@ export default function WorkspacePage() {
                               );
 
                               if (isInternal) {
-                                // Allowed — insert at cursor position
+                                // Internal — allow paste
                                 editor.trigger('keyboard', 'type', { text });
-                              } else {
-                                // External paste — warn and block
-                                reportIntegrity('external_paste');
                               }
+                              // External — silently drop (no warning, no modal)
                             }).catch(() => {
-                              // Clipboard API denied — block silently (can't verify)
-                              reportIntegrity('external_paste');
+                              // Clipboard API denied — silently block
                             });
                           }
                         });

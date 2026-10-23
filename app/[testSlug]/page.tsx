@@ -79,11 +79,7 @@ export default function StudentTestPage() {
       
       if (data.status === 'ACTIVE' && data.session_token) {
         localStorage.setItem('session_token', data.session_token);
-        if (data.test_type === 'QUIZ' || testData?.test_type === 'QUIZ') {
-          router.push('/quiz/workspace');
-        } else {
-          router.push('/exam/instructions');
-        }
+        router.push('/exam/instructions');
         return;
       }
 
@@ -119,11 +115,7 @@ export default function StudentTestPage() {
       if (data.status === 'ACTIVE' && data.session_token) {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         localStorage.setItem('session_token', data.session_token);
-        if (data.test_type === 'QUIZ' || testData?.test_type === 'QUIZ') {
-          router.push('/quiz/workspace');
-        } else {
-          router.push('/exam/instructions');
-        }
+        router.push('/exam/instructions');
       } else if (data.status === 'REJECTED') {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         setStep('rejected');
@@ -225,7 +217,7 @@ export default function StudentTestPage() {
                 fontWeight: 400
               }}
             >
-              {testData.test_type === 'QUIZ' ? 'Objective Quiz Assessment (MCQ · Fill in Blank · Odd One Out)' : 'Online Coding Assessment'}
+              Online Coding Assessment
             </p>
           </div>
 
@@ -252,12 +244,7 @@ export default function StudentTestPage() {
                <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Total Marks</span>
                <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{testData.total_marks} Marks</span>
              </div>
-             {testData.test_type === 'QUIZ' && (
-               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                 <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Format</span>
-                 <span style={{ color: 'var(--accent)', fontWeight: 500 }}>Mobile & Desktop Friendly</span>
-               </div>
-             )}
+
           </div>
 
           {step === 'input' && (
@@ -336,7 +323,7 @@ export default function StudentTestPage() {
                   fontFamily: 'Söhne, ui-sans-serif, system-ui, sans-serif',
                 }}
               >
-                {loading ? 'Connecting...' : testData?.test_type === 'QUIZ' ? 'Start Quiz Assessment' : 'Request Access'}
+                {loading ? 'Connecting...' : 'Request Access'}
               </button>
             </div>
           )}
