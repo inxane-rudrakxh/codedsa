@@ -357,10 +357,30 @@ export default function WorkspacePage() {
   useEffect(() => {
     if (!sessionData || loading) return;
 
-    // ── 1. Fullscreen ──────────────────────────────────────────────────────
+    // ── 1. Fullscreen & Keyboard Lock ─────────────────────────────────────
+    const lockKeyboard = async () => {
+      try {
+        if (typeof navigator !== 'undefined' && 'keyboard' in navigator && (navigator as any).keyboard?.lock) {
+          await (navigator as any).keyboard.lock([
+            'AltLeft',
+            'AltRight',
+            'Tab',
+            'Escape',
+            'MetaLeft',
+            'MetaRight',
+            'ContextMenu'
+          ]);
+        }
+      } catch {}
+    };
+
     const enterFullscreen = () => {
       if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
+        document.documentElement.requestFullscreen().then(() => {
+          lockKeyboard();
+        }).catch(() => {});
+      } else if (document.fullscreenElement) {
+        lockKeyboard();
       }
     };
     enterFullscreen();
@@ -370,32 +390,77 @@ export default function WorkspacePage() {
         reportIntegrity('fullscreen_exit');
         // Re-enter fullscreen after a short delay so the modal renders first
         setTimeout(enterFullscreen, 400);
+      } else {
+        lockKeyboard();
       }
     };
 
-    // ── 2. Tab / window switch ─────────────────────────────────────────────
-    // Use visibilitychange only — avoid window blur which fires on any
-    // in-page interaction (right-click menu, DevTools, iframe focus, etc.)
-    let lastHiddenAt = 0;
+    // ── 2. Tab / window / app switch detection ─────────────────────────────
+    let lastSwitchReportAt = 0;
+    const triggerTabSwitch = () => {
+      const now = Date.now();
+      if (now - lastSwitchReportAt < 1200) return; // debounce
+      lastSwitchReportAt = now;
+      reportIntegrity('tab_switch');
+    };
+
+    // Fires whenever the browser window loses focus (Alt+Tab, app switch, clicking outside, etc.)
+    const onWindowBlur = () => {
+      triggerTabSwitch();
+    };
+
+    // Fires whenever the document is hidden/backgrounded
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        const now = Date.now();
-        if (now - lastHiddenAt < 1500) return; // debounce — same tab re-hidden fast
-        lastHiddenAt = now;
-        reportIntegrity('tab_switch');
+        triggerTabSwitch();
       }
     };
 
-    // ── 3. Block screenshot & F11 keys silently (no warning count) ──────────
+    // ── 3. Intercept shortcut keys ─────────────────────────────────────────
     const onKeyDown = (e: KeyboardEvent) => {
-      const { key, code, ctrlKey, metaKey, shiftKey } = e;
+      const { key, code, ctrlKey, metaKey, shiftKey, altKey } = e;
 
+      // Intercept Alt+Tab or Alt combinations
+      const isAltTab = (altKey && (key === 'Tab' || code === 'Tab')) || (key === 'Tab' && altKey);
+      if (isAltTab) {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerTabSwitch();
+        return;
+      }
+
+      if (key === 'Alt') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
+      // Block copy, cut, paste shortcuts
+      const isCopy  = (ctrlKey || metaKey) && (key === 'c' || key === 'C');
+      const isCut   = (ctrlKey || metaKey) && (key === 'x' || key === 'X');
+      const isPaste = (ctrlKey || metaKey) && (key === 'v' || key === 'V');
+      if (isCopy || isCut || isPaste) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      // Block inspect / devtools shortcuts
+      const isDevTools =
+        key === 'F12' ||
+        ((ctrlKey || metaKey) && shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(key)) ||
+        ((ctrlKey || metaKey) && (key === 'U' || key === 'u'));
+      if (isDevTools) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      // Silently suppress screenshot keys — these don't count as violations
       const isPrintScreen = key === 'PrintScreen' || code === 'PrintScreen';
       const isWinSnip     = (metaKey || ctrlKey) && shiftKey && (key === 'S' || key === 's');
       const isMacShot     = metaKey && shiftKey && ['3', '4', '5'].includes(key);
       const isF11         = key === 'F11' || code === 'F11';
 
-      // Silently suppress — these don't count as violations
       if (isPrintScreen || isWinSnip || isMacShot) {
         e.preventDefault();
         e.stopPropagation();
@@ -403,8 +468,6 @@ export default function WorkspacePage() {
       }
 
       if (isF11) {
-        // Block F11 — if fullscreen was already lost, the fullscreenchange
-        // listener will fire and count it as a warning automatically.
         e.preventDefault();
         e.stopPropagation();
         if (!document.fullscreenElement) {
@@ -413,36 +476,33 @@ export default function WorkspacePage() {
       }
     };
 
-    // ── 4. Copy/cut tracking ───────────────────────────────────────────────
-    // Record everything selected+copied from this page so we can allow
-    // re-pasting it within the editor (internal clipboard).
-    const onCopy = () => {
-      const sel = window.getSelection()?.toString() || '';
-      if (sel.trim()) {
-        internalClipboardRef.current.add(sel.trim());
-        if (internalClipboardRef.current.size > 300) {
-          const first = internalClipboardRef.current.values().next().value;
-          if (first !== undefined) internalClipboardRef.current.delete(first);
-        }
-      }
+    // ── 4. Block right-click, copy, cut, and paste ────────────────────────
+    const preventClipboardAndContext = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
     };
 
-    // NOTE: External paste blocking is handled at Monaco level in onMount
-    // (not via DOM paste event) because Monaco uses a shadow textarea and
-    // the DOM paste event target doesn't reliably identify the editor area.
-
-    document.addEventListener('fullscreenchange', onFullscreenChange);
+    window.addEventListener('blur', onWindowBlur);
     document.addEventListener('visibilitychange', onVisibilityChange);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('keydown', onKeyDown, { capture: true });
-    document.addEventListener('copy', onCopy, { capture: true });
-    document.addEventListener('cut', onCopy, { capture: true });
+    window.addEventListener('contextmenu', preventClipboardAndContext, { capture: true });
+    document.addEventListener('contextmenu', preventClipboardAndContext, { capture: true });
+    document.addEventListener('copy', preventClipboardAndContext, { capture: true });
+    document.addEventListener('cut', preventClipboardAndContext, { capture: true });
+    document.addEventListener('paste', preventClipboardAndContext, { capture: true });
 
     return () => {
-      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      window.removeEventListener('blur', onWindowBlur);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
       document.removeEventListener('keydown', onKeyDown, { capture: true });
-      document.removeEventListener('copy', onCopy, { capture: true });
-      document.removeEventListener('cut', onCopy, { capture: true });
+      window.removeEventListener('contextmenu', preventClipboardAndContext, { capture: true });
+      document.removeEventListener('contextmenu', preventClipboardAndContext, { capture: true });
+      document.removeEventListener('copy', preventClipboardAndContext, { capture: true });
+      document.removeEventListener('cut', preventClipboardAndContext, { capture: true });
+      document.removeEventListener('paste', preventClipboardAndContext, { capture: true });
     };
   }, [sessionData, loading]);
 
@@ -1091,6 +1151,7 @@ export default function WorkspacePage() {
                       preventing code from bleeding across questions */}
                   <div
                     data-editor="true"
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     style={{ flex: 1, overflow: 'hidden', position: 'relative' }}
                   >
                     <MonacoEditor
@@ -1129,59 +1190,54 @@ export default function WorkspacePage() {
                         tabSize: 4,
                         wordWrap: 'on',
                         padding: { top: 16, bottom: 16 },
-                        contextmenu: true,
+                        contextmenu: false,
                         dragAndDrop: false,
-                        copyWithSyntaxHighlighting: true,
+                        copyWithSyntaxHighlighting: false,
                       }}
                       onMount={(editor, monaco) => {
-                        // Suppress the spurious onChange that Monaco fires on first mount.
-                        // Without this, switching questions causes the new question's code
-                        // to be overwritten by the initial value emitted during remount.
+                        // Suppress spurious onChange that Monaco fires on first mount.
                         editorMountingRef.current = true;
                         setTimeout(() => { editorMountingRef.current = false; }, 150);
+
+                        // Disable right-click context menu in Monaco
+                        editor.onContextMenu((e) => {
+                          e.event.preventDefault();
+                          e.event.stopPropagation();
+                        });
+
+                        // Disable Monaco clipboard commands
+                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {});
+                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {});
+                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {});
 
                         // Ctrl+Enter → Run Code
                         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
                           if (!isSubmitted) handleRunCode();
                         });
 
-                        // Track Ctrl+C / Ctrl+X — record copied text as "internal"
+                        // Intercept keydown in Monaco — block Copy, Cut, Paste shortcuts
                         editor.onKeyDown((ke) => {
-                          const isCopy = (ke.ctrlKey || ke.metaKey) && ke.keyCode === monaco.KeyCode.KeyC;
-                          const isCut  = (ke.ctrlKey || ke.metaKey) && ke.keyCode === monaco.KeyCode.KeyX;
-                          if (isCopy || isCut) {
-                            const sel = editor.getSelection();
-                            if (sel) {
-                              const text = editor.getModel()?.getValueInRange(sel) || '';
-                              if (text.trim()) internalClipboardRef.current.add(text.trim());
-                            }
-                          }
-
-                          // Intercept Ctrl+V / Cmd+V — block external paste SILENTLY
-                          // Internal copy-paste (text copied within the editor) is freely allowed.
-                          // External paste is dropped with no warning count — just blocked.
+                          const isCopy  = (ke.ctrlKey || ke.metaKey) && ke.keyCode === monaco.KeyCode.KeyC;
+                          const isCut   = (ke.ctrlKey || ke.metaKey) && ke.keyCode === monaco.KeyCode.KeyX;
                           const isPaste = (ke.ctrlKey || ke.metaKey) && ke.keyCode === monaco.KeyCode.KeyV;
-                          if (isPaste && !isSubmitted) {
+                          if (isCopy || isCut || isPaste) {
                             ke.preventDefault();
                             ke.stopPropagation();
-
-                            navigator.clipboard.readText().then(text => {
-                              if (!text.trim()) return;
-
-                              const isInternal = [...internalClipboardRef.current].some(
-                                saved => text.includes(saved) || saved.includes(text)
-                              );
-
-                              if (isInternal) {
-                                // Internal — allow paste
-                                editor.trigger('keyboard', 'type', { text });
-                              }
-                              // External — silently drop (no warning, no modal)
-                            }).catch(() => {
-                              // Clipboard API denied — silently block
-                            });
                           }
                         });
+
+                        // Prevent contextmenu, copy, cut, paste on Monaco DOM node
+                        const domNode = editor.getDomNode();
+                        if (domNode) {
+                          const blockDom = (e: Event) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          };
+                          domNode.addEventListener('contextmenu', blockDom, { capture: true });
+                          domNode.addEventListener('copy', blockDom, { capture: true });
+                          domNode.addEventListener('cut', blockDom, { capture: true });
+                          domNode.addEventListener('paste', blockDom, { capture: true });
+                        }
                       }}
                     />
                   </div>
@@ -1337,7 +1393,7 @@ function StatusBadge({ submitted, active }: { submitted: boolean; active: boolea
 
 function QuestionPanel({ question, index }: { question: Question; index: number }) {
   return (
-    <div>
+    <div style={{ userSelect: 'none' }} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}>
       <div style={{ marginBottom: '28px' }}>
         <p style={{
           fontSize: '10px',

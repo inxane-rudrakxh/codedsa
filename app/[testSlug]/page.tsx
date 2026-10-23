@@ -23,6 +23,20 @@ export default function StudentTestPage() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    const block = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+    window.addEventListener('contextmenu', block, { capture: true });
+    document.addEventListener('contextmenu', block, { capture: true });
+    return () => {
+      window.removeEventListener('contextmenu', block, { capture: true });
+      document.removeEventListener('contextmenu', block, { capture: true });
+    };
+  }, []);
+
+  useEffect(() => {
     async function loadTest() {
       try {
         const res = await fetch(`/api/public/test/${testSlug}`);
