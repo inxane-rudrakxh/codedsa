@@ -259,7 +259,6 @@ export default function StudentTestPage() {
                   value={rollNo}
                   onChange={(e) => setRollNo(e.target.value.toUpperCase())}
                   onKeyDown={handleKeyDown}
-                  placeholder="e.g. AD1315"
                   style={{
                     width: '100%',
                     padding: '14px 16px',
