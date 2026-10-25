@@ -46,8 +46,15 @@ export default function InstructionsPage() {
     return () => clearInterval(interval);
   }, [router]);
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (sessionStatus === 'active') {
+      try {
+        if (typeof document !== 'undefined' && document.documentElement.requestFullscreen && !document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (err) {
+        console.warn('Could not enter fullscreen automatically:', err);
+      }
       router.push('/exam/workspace');
     }
   };

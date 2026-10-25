@@ -549,6 +549,18 @@ export function normalizeOutput(output: string): string {
     .trim();
 }
 
+/**
+ * Compares student program output against expected test case output.
+ * 
+ * DESIGN RATIONALE / GRADING POLICY (DSA Examination Portal):
+ * Student solutions often include conversational I/O prompts (e.g. "Enter N: ",
+ * "Array elements are:", "Result = 42") that would fail strict byte-for-byte diffs.
+ * To ensure fairness in university examination environments, a 4-tier comparison is used:
+ *   1. Exact normalized match: whitespace/newlines trimmed and normalized.
+ *   2. Substring match: expected output is fully contained within the actual output.
+ *   3. Token sequence match: punctuation/casing stripped; token order must match.
+ *   4. Subsequence / numeric match: numeric answers or key tokens appear in expected order.
+ */
 export function compareOutputs(actual: string, expected: string): boolean {
   const normActual = normalizeOutput(actual);
   const normExpected = normalizeOutput(expected);

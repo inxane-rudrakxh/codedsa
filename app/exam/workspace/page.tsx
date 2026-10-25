@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { AlertTriangle, ShieldAlert, Check, Info, Terminal, CheckCircle, Square, Sparkles } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, Check, Info, Terminal, CheckCircle, Square, Sparkles, Maximize } from 'lucide-react';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -55,6 +55,8 @@ interface SessionData {
   questions: Question[];
   submissions: Record<number, Submission>;
   saves: Record<number, string>;
+  // language_id per question from CodeDraft (2=cpp,3=python,4=java,1=c)
+  saveLangs?: Record<number, number>;
   testCases: Record<number, Array<{ input: string; expected_output: string; type: string }>>;
 }
 
@@ -121,12 +123,18 @@ export default function WorkspacePage() {
   } | null>(null);
   const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submittingQid, setSubmittingQid] = useState<number | null>(null);
+  const [confirmQuestionId, setConfirmQuestionId] = useState<number | null>(null);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [showFinishExamModal, setShowFinishExamModal] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(3600);
   const [integrityWarning, setIntegrityWarning] = useState<string | null>(null);
   const [warningCount, setWarningCount] = useState(0);
   const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
+  const [isFullscreenViolation, setIsFullscreenViolation] = useState(false);
+  const hasEnteredFullscreenRef = useRef(false);
+  const proctoringArmedRef = useRef(false);
   const [showTabSwitchModal, setShowTabSwitchModal] = useState(false);
   const [tabSwitchReason, setTabSwitchReason] = useState('Tab switch or window inactive');
   const [loading, setLoading] = useState(true);
@@ -147,6 +155,22 @@ export default function WorkspacePage() {
   const internalClipboardRef = useRef<Set<string>>(new Set());
   // Tracks whether Monaco is currently mounting (to suppress spurious onChange)
   const editorMountingRef = useRef(false);
+
+  // ── Stable refs for stale-closure elimination ─────────────────────────────
+  // These are kept current on every render so event listeners and intervals
+  // can safely read the latest values without being in their dep arrays.
+  const codesRef = useRef<Record<number, string>>({});
+  const activeQuestionRef = useRef<number>(0);
+  const sessionDataRef = useRef<SessionData | null>(null);
+  const loadingRef = useRef<boolean>(true);
+  const sessionLoadedRef = useRef<boolean>(false); // proctoring registered once
+  const autoSubmitRef = useRef<(() => Promise<void>) | null>(null);
+
+  // Keep refs in sync with state on every render
+  codesRef.current = codes;
+  activeQuestionRef.current = activeQuestion;
+  sessionDataRef.current = sessionData;
+  loadingRef.current = loading;
 
   const getToken = useCallback(() => {
     if (!tokenRef.current) {
@@ -183,31 +207,61 @@ export default function WorkspacePage() {
         if (warnings >= 3) {
           setTabSwitchReason('3 violations detected. Your exam has been auto-submitted.');
           setShowTabSwitchModal(true);
-          setTimeout(() => handleAutoSubmit(), 2500);
+          // autoSubmitRef will be populated after handleAutoSubmit is defined below
+          setTimeout(() => { autoSubmitRef.current?.(); }, 2500);
           return;
         }
         
         const allowedLangs = data.session.allowed_languages || ['cpp', 'c', 'python', 'java'];
-        const initialLang = allowedLangs.includes('cpp') ? 'cpp' : (allowedLangs[0] || 'cpp');
-        setLanguage(initialLang);
+
+        // ── Language recovery ─────────────────────────────────────────────
+        // Restore the language the student was last using per-question.
+        // saveLangs maps question_id → language_id (1=c, 2=cpp, 3=python, 4=java).
+        const langIdToName: Record<number, string> = { 1: 'c', 2: 'cpp', 3: 'python', 4: 'java' };
+        // Pick an initial global language: the most recently used among saved langs,
+        // or the first allowed lang, or cpp as last resort.
+        let restoredLang = allowedLangs.includes('cpp') ? 'cpp' : (allowedLangs[0] || 'cpp');
+        if (data.saveLangs) {
+          const savedLangIds = Object.values(data.saveLangs);
+          if (savedLangIds.length > 0) {
+            const lastName = langIdToName[savedLangIds[savedLangIds.length - 1]];
+            if (lastName && allowedLangs.includes(lastName)) restoredLang = lastName;
+          }
+        }
+        setLanguage(restoredLang);
 
         // Initialize codes from local drafts or server saves
         const initialCodes: Record<number, string> = {};
         data.questions.forEach(q => {
           const localDraft = typeof window !== 'undefined' ? localStorage.getItem(`code_draft_${data.session.id}_${q.id}`) : null;
-          initialCodes[q.id] = localDraft || data.saves[q.id] || STARTER_CODES[initialLang] || STARTER_CODES.cpp;
+          // Prefer local draft (latest keystroke), then server save, then starter for the restored lang
+          initialCodes[q.id] = localDraft || data.saves[q.id] || STARTER_CODES[restoredLang] || STARTER_CODES.cpp;
         });
         setCodes(initialCodes);
 
-        // If re-entering in windowed mode, immediately prompt for fullscreen
-        if (typeof document !== 'undefined' && !document.fullscreenElement) {
-          setShowFullscreenPrompt(true);
+        // Check fullscreen status on session load
+        if (typeof document !== 'undefined') {
+          if (document.fullscreenElement) {
+            hasEnteredFullscreenRef.current = true;
+            setShowFullscreenPrompt(false);
+            setIsFullscreenViolation(false);
+            setTimeout(() => {
+              if (typeof document !== 'undefined' && document.fullscreenElement) {
+                proctoringArmedRef.current = true;
+              }
+            }, 4000);
+          } else {
+            hasEnteredFullscreenRef.current = false;
+            proctoringArmedRef.current = false;
+            setIsFullscreenViolation(false);
+            setShowFullscreenPrompt(true);
+          }
         }
 
         // Restore submission scores
         const scores: Record<string, number> = {};
         Object.entries(data.submissions).forEach(([qid, sub]) => {
-          scores[qid] = sub.score;
+          scores[qid] = (sub as any).score;
         });
         setSubmitScores(scores);
 
@@ -245,7 +299,7 @@ export default function WorkspacePage() {
     return () => clearTimeout(timer);
   }, [demoActive, demoPlaying, demoIndex, sessionData, activeQuestion]);
 
-  // Timer countdown
+  // Timer countdown — reads from autoSubmitRef so the stale closure (Bug 5) is eliminated.
   useEffect(() => {
     if (!sessionData || loading) return;
 
@@ -253,7 +307,8 @@ export default function WorkspacePage() {
       setTimeRemaining(prev => {
         if (prev <= 1) {
           clearInterval(timerRef.current!);
-          handleAutoSubmit();
+          // Use the ref so this closure always calls the latest handleAutoSubmit
+          autoSubmitRef.current?.();
           return 0;
         }
         return prev - 1;
@@ -261,20 +316,27 @@ export default function WorkspacePage() {
     }, 1000);
 
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [sessionData, loading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionData?.session.id, loading]);
 
   // Auto-save every 5 seconds
+  // Bug 4 fix: reads from stable refs so the interval is created ONCE per session
+  // and does NOT reset every time the student types a character.
   useEffect(() => {
     if (!sessionData || loading) return;
 
     const autoSave = () => {
-      const question = sessionData.questions[activeQuestion];
+      // Read latest values from refs — safe inside an interval
+      const sd = sessionDataRef.current;
+      const aq = activeQuestionRef.current;
+      if (!sd) return;
+      const question = sd.questions[aq];
       if (!question) return;
-      const code = codes[question.id];
+      const code = codesRef.current[question.id];
       if (!code) return;
 
       // Don't save if already submitted
-      if (sessionData.submissions[question.id]) return;
+      if (sd.submissions[question.id]) return;
 
       fetch('/api/exam/save', {
         method: 'POST',
@@ -282,7 +344,7 @@ export default function WorkspacePage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ question_id: question.id, code }),
+        body: JSON.stringify({ question_id: question.id, code, language }),
       })
         .then(async r => {
           if (r.status === 403) {
@@ -301,7 +363,8 @@ export default function WorkspacePage() {
 
     saveTimerRef.current = setInterval(autoSave, 5000);
     return () => { if (saveTimerRef.current) clearInterval(saveTimerRef.current); };
-  }, [sessionData, activeQuestion, codes, loading, getToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionData?.session.id, loading]);
 
   // Periodic poll to detect instructor stopping the exam in real-time
   useEffect(() => {
@@ -331,15 +394,15 @@ export default function WorkspacePage() {
   //   2. tab_switch      — switching tab or app
   // External paste is silently blocked. Screenshots/F11 are silently suppressed.
 
-  const reportIntegrity = async (event_type: 'fullscreen_exit' | 'tab_switch') => {
-    if (!sessionData || loading) return;
+  // Bug 3 & 13 fix: reads from stable refs; only increments warningCountRef AFTER server confirms.
+  const reportIntegrity = useCallback(async (event_type: 'fullscreen_exit' | 'tab_switch') => {
+    if (!sessionDataRef.current || loadingRef.current) return;
+    // CRITICAL: Never record violations if proctoring is not yet armed (e.g. initial test entry/grace period)
+    if (!proctoringArmedRef.current) return;
 
-    warningCountRef.current += 1;
-    const newCount = warningCountRef.current;
-
-    // Persist to DB
+    // Persist to DB FIRST — only count it if the server accepted it
     try {
-      await fetch('/api/exam/integrity', {
+      const res = await fetch('/api/exam/integrity', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -347,15 +410,21 @@ export default function WorkspacePage() {
         },
         body: JSON.stringify({ event_type }),
       });
-    } catch {}
+      if (!res.ok) return; // server rejected it — don't increment local count
+    } catch {
+      // Network failure — don't increment (will retry next violation)
+      return;
+    }
 
+    warningCountRef.current += 1;
+    const newCount = warningCountRef.current;
     setWarningCount(newCount);
 
     // Auto-submit on 3rd violation
     if (newCount >= 3) {
       setTabSwitchReason('3 violations detected. Your exam has been auto-submitted.');
       setShowTabSwitchModal(true);
-      setTimeout(() => handleAutoSubmit(), 2500);
+      setTimeout(() => autoSubmitRef.current?.(), 2500);
       return;
     }
 
@@ -366,11 +435,14 @@ export default function WorkspacePage() {
       setTabSwitchReason('You switched to another tab or application.');
       setShowTabSwitchModal(true);
     }
-  };
+  }, [getToken]);
 
-  // Register proctoring event listeners once the session loads
+  // Register proctoring event listeners ONCE after session loads (Bug 2 fix).
+  // sessionLoadedRef prevents re-registration on every autosave / timer re-render.
   useEffect(() => {
     if (!sessionData || loading) return;
+    if (sessionLoadedRef.current) return; // already registered
+    sessionLoadedRef.current = true;
 
     // ── 1. Fullscreen & Keyboard Lock ─────────────────────────────────────
     const lockKeyboard = async () => {
@@ -389,34 +461,55 @@ export default function WorkspacePage() {
       } catch {}
     };
 
-    const enterFullscreen = () => {
-      if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
-        document.documentElement.requestFullscreen().then(() => {
-          lockKeyboard();
-        }).catch(() => {
-          setShowFullscreenPrompt(true);
-        });
-      } else if (document.fullscreenElement) {
-        lockKeyboard();
-      } else {
-        setShowFullscreenPrompt(true);
-      }
-    };
-    enterFullscreen();
+    // Initial check on mount: if already in fullscreen (e.g. from instructions page), arm after grace period
+    if (typeof document !== 'undefined' && document.fullscreenElement) {
+      hasEnteredFullscreenRef.current = true;
+      setShowFullscreenPrompt(false);
+      setIsFullscreenViolation(false);
+      lockKeyboard();
+      setTimeout(() => {
+        if (typeof document !== 'undefined' && document.fullscreenElement) {
+          proctoringArmedRef.current = true;
+        }
+      }, 4000);
+    } else {
+      hasEnteredFullscreenRef.current = false;
+      proctoringArmedRef.current = false;
+      setIsFullscreenViolation(false);
+      setShowFullscreenPrompt(true);
+    }
 
     const onFullscreenChange = () => {
       if (!document.fullscreenElement) {
-        reportIntegrity('fullscreen_exit');
-        // Re-enter fullscreen after a short delay so the modal renders first
-        setTimeout(enterFullscreen, 400);
+        // Exited fullscreen
+        if (proctoringArmedRef.current) {
+          // Genuine violation during active exam
+          setIsFullscreenViolation(true);
+          reportIntegrity('fullscreen_exit');
+        } else {
+          // Still in entry / grace period: NOT a violation
+          setIsFullscreenViolation(false);
+        }
+        setShowFullscreenPrompt(true);
       } else {
+        // Re-entered fullscreen
+        hasEnteredFullscreenRef.current = true;
+        setShowFullscreenPrompt(false);
+        setIsFullscreenViolation(false);
         lockKeyboard();
+        // Give a 3-second settling window after entering before arming proctoring
+        setTimeout(() => {
+          if (typeof document !== 'undefined' && document.fullscreenElement) {
+            proctoringArmedRef.current = true;
+          }
+        }, 3000);
       }
     };
 
     // ── 2. Tab / window / app switch detection ─────────────────────────────
     let lastSwitchReportAt = 0;
     const triggerTabSwitch = () => {
+      if (!proctoringArmedRef.current) return;
       const now = Date.now();
       if (now - lastSwitchReportAt < 1200) return; // debounce
       lastSwitchReportAt = now;
@@ -425,11 +518,13 @@ export default function WorkspacePage() {
 
     // Fires whenever the browser window loses focus (Alt+Tab, app switch, clicking outside, etc.)
     const onWindowBlur = () => {
+      if (!proctoringArmedRef.current) return;
       triggerTabSwitch();
     };
 
     // Fires whenever the document is hidden/backgrounded
     const onVisibilityChange = () => {
+      if (!proctoringArmedRef.current) return;
       if (document.visibilityState === 'hidden') {
         triggerTabSwitch();
       }
@@ -490,7 +585,7 @@ export default function WorkspacePage() {
         e.preventDefault();
         e.stopPropagation();
         if (!document.fullscreenElement) {
-          setTimeout(enterFullscreen, 200);
+          setShowFullscreenPrompt(true);
         }
       }
     };
@@ -512,7 +607,9 @@ export default function WorkspacePage() {
     document.addEventListener('cut', preventClipboardAndContext, { capture: true });
     document.addEventListener('paste', preventClipboardAndContext, { capture: true });
 
+    // Note: cleanup on unmount only. Re-registration is guarded by sessionLoadedRef.
     return () => {
+      sessionLoadedRef.current = false;
       window.removeEventListener('blur', onWindowBlur);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
@@ -523,18 +620,25 @@ export default function WorkspacePage() {
       document.removeEventListener('cut', preventClipboardAndContext, { capture: true });
       document.removeEventListener('paste', preventClipboardAndContext, { capture: true });
     };
-  }, [sessionData, loading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionData?.session.id, loading]);
 
-  const handleAutoSubmit = async () => {
-    // Auto-submit all non-submitted questions
-    if (!sessionData) return;
-    for (const q of sessionData.questions) {
-      if (!sessionData.submissions[q.id]) {
-        await doSubmit(q.id, codes[q.id] || STARTER_CODE);
+  // Bug 1 & 5 fix: wrapped in useCallback with stable codesRef so stale closures
+  // inside timers and integrity handlers always call the latest version.
+  const handleAutoSubmit = useCallback(async () => {
+    const sd = sessionDataRef.current;
+    if (!sd) return;
+    for (const q of sd.questions) {
+      if (!sd.submissions[q.id]) {
+        await doSubmit(q.id, codesRef.current[q.id] || STARTER_CODE);
       }
     }
     router.push('/result');
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
+
+  // Keep the ref in sync so timers always call the latest handleAutoSubmit
+  autoSubmitRef.current = handleAutoSubmit;
 
   const [runTrigger, setRunTrigger] = useState(0);
 
@@ -564,16 +668,20 @@ export default function WorkspacePage() {
     return 0;
   };
 
-  const handleSubmitQuestion = async () => {
+  const handleSubmitQuestion = async (targetQid?: number) => {
     if (!sessionData) return;
-    const question = sessionData.questions[activeQuestion];
+    const qid = targetQid ?? confirmQuestionId ?? sessionData.questions[activeQuestion]?.id;
+    if (!qid) return;
+    const question = sessionData.questions.find(q => q.id === qid);
     if (!question) return;
 
     setSubmitting(true);
+    setSubmittingQid(qid);
     setShowSubmitConfirm(false);
+    setConfirmQuestionId(null);
     try {
-      const code = codes[question.id] || STARTER_CODE;
-      await doSubmit(question.id, code);
+      const code = codes[qid] || codesRef.current[qid] || STARTER_CODES[language] || STARTER_CODES.cpp;
+      const score = await doSubmit(qid, code);
       // Update local session data
       setSessionData(prev => {
         if (!prev) return prev;
@@ -581,7 +689,7 @@ export default function WorkspacePage() {
           ...prev,
           submissions: {
             ...prev.submissions,
-            [question.id]: { score: submitScores[question.id] || 0, submitted_at: new Date().toISOString() },
+            [qid]: { score: score, submitted_at: new Date().toISOString() },
           },
         };
       });
@@ -589,6 +697,7 @@ export default function WorkspacePage() {
       console.error('Submit error:', err);
     } finally {
       setSubmitting(false);
+      setSubmittingQid(null);
     }
   };
 
@@ -642,6 +751,7 @@ export default function WorkspacePage() {
         timerState={timerState}
         savedAt={savedAt}
         warningCount={warningCount}
+        onFinishExam={() => setShowFinishExamModal(true)}
       />
 
 
@@ -692,9 +802,9 @@ export default function WorkspacePage() {
               gap: '6px',
               padding: '4px 14px',
               borderRadius: '9999px',
-              background: 'rgba(204, 120, 92, 0.14)',
-              border: '1px solid rgba(204, 120, 92, 0.35)',
-              color: '#cc785c',
+              background: isFullscreenViolation ? 'rgba(204, 120, 92, 0.14)' : 'rgba(56, 189, 248, 0.14)',
+              border: `1px solid ${isFullscreenViolation ? 'rgba(204, 120, 92, 0.35)' : 'rgba(56, 189, 248, 0.35)'}`,
+              color: isFullscreenViolation ? '#cc785c' : '#38bdf8',
               fontSize: '11px',
               fontWeight: 600,
               letterSpacing: '0.06em',
@@ -702,7 +812,8 @@ export default function WorkspacePage() {
               marginBottom: '20px',
               fontFamily: 'StyreneB, Inter, sans-serif'
             }}>
-              <ShieldAlert size={14} /> Security & Integrity Lock
+              {isFullscreenViolation ? <ShieldAlert size={14} /> : <Maximize size={14} />}
+              {isFullscreenViolation ? 'Security & Integrity Lock' : 'Assessment Environment'}
             </div>
 
             {/* Editorial Serif Headline */}
@@ -715,7 +826,7 @@ export default function WorkspacePage() {
               lineHeight: 1.25,
               letterSpacing: '-0.4px'
             }}>
-              Fullscreen Mode Required
+              {isFullscreenViolation ? 'Fullscreen Mode Required' : 'Enter Fullscreen to Begin Exam'}
             </h2>
 
             <p style={{
@@ -723,47 +834,63 @@ export default function WorkspacePage() {
               fontSize: '14px',
               color: '#a09d96',
               lineHeight: 1.6,
-              marginBottom: '24px',
+              marginBottom: isFullscreenViolation ? '24px' : '28px',
               maxWidth: '440px'
             }}>
-              Exiting fullscreen is not allowed during the assessment. This violation has been recorded. Further violations will be logged silently.
+              {isFullscreenViolation
+                ? 'Exiting fullscreen is not allowed during the assessment. This violation has been recorded. Further violations will be logged silently.'
+                : 'This examination requires fullscreen mode for secure proctoring and a distraction-free coding workspace. Please click below to enter fullscreen and begin your assessment.'}
             </p>
 
-            {/* Warning counter pill */}
-            <div style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: '#252320',
-              border: '1px solid rgba(230, 223, 216, 0.10)',
-              borderRadius: '8px',
-              padding: '12px 18px',
-              marginBottom: '28px'
-            }}>
-              <span style={{
-                fontFamily: 'StyreneB, Inter, sans-serif',
-                fontSize: '12px',
-                color: '#a09d96',
-                fontWeight: 500
+            {/* Warning counter pill (only shown if an actual violation occurred) */}
+            {isFullscreenViolation && (
+              <div style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#252320',
+                border: '1px solid rgba(230, 223, 216, 0.10)',
+                borderRadius: '8px',
+                padding: '12px 18px',
+                marginBottom: '28px'
               }}>
-                Recorded Violations
-              </span>
-              <span style={{
-                fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-                fontSize: '13px',
-                color: '#e8a55a',
-                fontWeight: 600
-              }}>
-                {warningCount}
-              </span>
-            </div>
+                <span style={{
+                  fontFamily: 'StyreneB, Inter, sans-serif',
+                  fontSize: '12px',
+                  color: '#a09d96',
+                  fontWeight: 500
+                }}>
+                  Recorded Violations
+                </span>
+                <span style={{
+                  fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+                  fontSize: '13px',
+                  color: '#e8a55a',
+                  fontWeight: 600
+                }}>
+                  {warningCount}
+                </span>
+              </div>
+            )}
 
             <button
               onClick={() => {
-                if (document.documentElement.requestFullscreen) {
+                if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
                   document.documentElement.requestFullscreen().then(() => {
+                    hasEnteredFullscreenRef.current = true;
                     setShowFullscreenPrompt(false);
+                    setIsFullscreenViolation(false);
+                    setTimeout(() => {
+                      if (typeof document !== 'undefined' && document.fullscreenElement) {
+                        proctoringArmedRef.current = true;
+                      }
+                    }, 3000);
+                    try {
+                      if ('keyboard' in navigator && (navigator as any).keyboard?.lock) {
+                        (navigator as any).keyboard.lock(['Escape', 'F11', 'AltLeft', 'AltRight', 'Tab', 'MetaLeft', 'MetaRight', 'ContextMenu']).catch(() => {});
+                      }
+                    } catch {}
                   }).catch(() => {
                     setShowFullscreenPrompt(false);
                   });
@@ -789,7 +916,7 @@ export default function WorkspacePage() {
               onMouseEnter={(e) => (e.currentTarget.style.background = '#a9583e')}
               onMouseLeave={(e) => (e.currentTarget.style.background = '#cc785c')}
             >
-              Return to Fullscreen & Resume Exam
+              {isFullscreenViolation ? 'Return to Fullscreen & Resume Exam' : 'Enter Fullscreen & Begin Exam'}
             </button>
           </div>
         </div>
@@ -959,16 +1086,16 @@ export default function WorkspacePage() {
               const submitted = !!sessionData.submissions[q.id];
               const active = index === activeQuestion;
               return (
-                <button
+                <div
                   key={q.id}
                   onClick={() => setActiveQuestion(index)}
                   style={{
                     width: '100%',
-                    padding: '12px',
-                    marginBottom: '4px',
+                    padding: '10px 12px',
+                    marginBottom: '6px',
                     background: active ? 'var(--surface-2)' : 'transparent',
                     border: `1px solid ${active ? 'var(--border)' : 'transparent'}`,
-                    borderRadius: '4px',
+                    borderRadius: '6px',
                     cursor: 'pointer',
                     textAlign: 'left',
                     transition: 'all 0.15s ease',
@@ -979,9 +1106,9 @@ export default function WorkspacePage() {
                       fontFamily: 'Söhne Mono, ui-monospace, monospace',
                       fontSize: '11px',
                       color: active ? 'var(--text-primary)' : 'var(--text-muted)',
-                      fontWeight: 500,
+                      fontWeight: 600,
                     }}>
-                      {String(index + 1).padStart(2, '0')}
+                      Q{String(index + 1).padStart(2, '0')}
                     </span>
                     <StatusBadge submitted={submitted} active={active} />
                   </div>
@@ -992,10 +1119,55 @@ export default function WorkspacePage() {
                     lineHeight: 1.3,
                     textTransform: 'uppercase',
                     letterSpacing: '0.04em',
+                    marginBottom: '8px',
                   }}>
                     {q.title}
                   </p>
-                </button>
+
+                  {/* Individual Question Submit Button inside sidebar item */}
+                  {!submitted ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveQuestion(index);
+                        setConfirmQuestionId(q.id);
+                        setShowSubmitConfirm(true);
+                      }}
+                      disabled={submitting}
+                      style={{
+                        width: '100%',
+                        padding: '4px 8px',
+                        background: active ? '#ffffff' : 'rgba(255, 255, 255, 0.06)',
+                        color: active ? '#000000' : 'var(--text-secondary)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '4px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        cursor: submitting ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <CheckCircle size={11} strokeWidth={2.5} />
+                      {submitting && submittingQid === q.id ? 'Submitting...' : `Submit Q${index + 1}`}
+                    </button>
+                  ) : (
+                    <div style={{
+                      fontSize: '10px',
+                      fontFamily: 'Söhne Mono, ui-monospace, monospace',
+                      color: 'var(--success)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}>
+                      <Check size={11} strokeWidth={2.5} />
+                      <span>Submitted ({submitScores[q.id] ?? 0}/10)</span>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -1038,7 +1210,17 @@ export default function WorkspacePage() {
                   overflowY: 'auto',
                   padding: '28px 24px',
                 }}>
-                  <QuestionPanel question={currentQuestion} index={activeQuestion} />
+                  <QuestionPanel
+                    question={currentQuestion}
+                    index={activeQuestion}
+                    isSubmitted={isSubmitted}
+                    score={submitScores[currentQuestion.id]}
+                    submitting={submitting && submittingQid === currentQuestion.id}
+                    onSubmit={() => {
+                      setConfirmQuestionId(currentQuestion.id);
+                      setShowSubmitConfirm(true);
+                    }}
+                  />
                 </div>
 
                 {/* Editor Panel */}
@@ -1145,7 +1327,10 @@ export default function WorkspacePage() {
 
                           <button
                             id="submit-btn"
-                            onClick={() => setShowSubmitConfirm(true)}
+                            onClick={() => {
+                              setConfirmQuestionId(currentQuestion.id);
+                              setShowSubmitConfirm(true);
+                            }}
                             disabled={submitting}
                             style={{
                               padding: '6px 16px',
@@ -1157,9 +1342,15 @@ export default function WorkspacePage() {
                               fontWeight: 700,
                               cursor: submitting ? 'not-allowed' : 'pointer',
                               transition: 'all 0.15s ease',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
                             }}
                           >
-                            {submitting ? 'Submitting...' : 'Submit'}
+                            <CheckCircle size={13} strokeWidth={2.5} />
+                            {submitting && submittingQid === currentQuestion.id
+                              ? `Submitting Q${activeQuestion + 1}...`
+                              : `Submit Q${activeQuestion + 1}`}
                           </button>
                         </>
                       )}
@@ -1288,13 +1479,126 @@ export default function WorkspacePage() {
         </div>
       </div>
 
-      {/* Submit Confirmation Modal */}
-      {showSubmitConfirm && (
-        <Modal
-          onClose={() => setShowSubmitConfirm(false)}
-          onConfirm={handleSubmitQuestion}
-          questionTitle={currentQuestion?.title || ''}
-        />
+      {/* Individual Question Submit Confirmation Modal */}
+      {showSubmitConfirm && (() => {
+        const targetQid = confirmQuestionId ?? currentQuestion?.id;
+        const targetQ = sessionData.questions.find(q => q.id === targetQid) || currentQuestion;
+        const targetIdx = sessionData.questions.findIndex(q => q.id === targetQ?.id);
+        if (!targetQ) return null;
+        return (
+          <Modal
+            onClose={() => {
+              setShowSubmitConfirm(false);
+              setConfirmQuestionId(null);
+            }}
+            onConfirm={() => handleSubmitQuestion(targetQ.id)}
+            questionTitle={targetQ.title}
+            questionIndex={targetIdx >= 0 ? targetIdx : activeQuestion}
+            submitting={submitting}
+          />
+        );
+      })()}
+
+      {/* Finish Exam Confirmation Modal */}
+      {showFinishExamModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 999990,
+            background: 'rgba(18, 17, 15, 0.85)',
+            backdropFilter: 'blur(12px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px'
+          }}
+          onClick={() => setShowFinishExamModal(false)}
+        >
+          <div
+            className="animate-fade-up"
+            style={{
+              maxWidth: '440px',
+              width: '100%',
+              background: '#181715',
+              border: '1px solid rgba(230, 223, 216, 0.14)',
+              borderRadius: '16px',
+              padding: '32px',
+              boxShadow: '0 24px 64px -12px rgba(0, 0, 0, 0.85)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '3px',
+              background: 'linear-gradient(90deg, #cc785c 0%, #e8a55a 100%)'
+            }} />
+            <div style={{ marginBottom: '16px' }}>
+              <h3 style={{
+                fontFamily: 'Copernicus, "Tiempos Headline", "Georgia", serif',
+                fontSize: '22px',
+                fontWeight: 400,
+                color: '#faf9f5',
+                letterSpacing: '-0.3px',
+                margin: '0 0 8px 0'
+              }}>
+                Finish Entire Exam?
+              </h3>
+              <p style={{
+                fontFamily: 'StyreneB, Inter, sans-serif',
+                fontSize: '14px',
+                color: '#a09d96',
+                lineHeight: 1.6,
+                margin: 0
+              }}>
+                You have submitted {Object.keys(sessionData.submissions).length} of {sessionData.questions.length} questions. Finishing the exam will submit all your solutions and conclude your test session.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowFinishExamModal(false)}
+                style={{
+                  flex: 1,
+                  padding: '11px 16px',
+                  background: '#252320',
+                  border: '1px solid rgba(230, 223, 216, 0.12)',
+                  borderRadius: '8px',
+                  color: '#faf9f5',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  fontFamily: 'StyreneB, Inter, sans-serif'
+                }}
+              >
+                Keep Working
+              </button>
+              <button
+                onClick={() => {
+                  setShowFinishExamModal(false);
+                  handleAutoSubmit();
+                }}
+                style={{
+                  flex: 1.5,
+                  padding: '11px 16px',
+                  background: '#cc785c',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'StyreneB, Inter, sans-serif'
+                }}
+              >
+                Submit All & Finish
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1308,6 +1612,7 @@ function TopBar({
   timerState,
   savedAt,
   warningCount,
+  onFinishExam,
 }: {
   student: { roll_no: string; name: string; division: string };
   timeRemaining: number;
@@ -1315,6 +1620,7 @@ function TopBar({
   timerState: string;
   savedAt: Date | null;
   warningCount: number;
+  onFinishExam?: () => void;
 }) {
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -1387,6 +1693,34 @@ function TopBar({
         >
           {formatTime(timeRemaining)}
         </span>
+
+        {onFinishExam && (
+          <button
+            onClick={onFinishExam}
+            style={{
+              padding: '4px 10px',
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: '4px',
+              color: 'var(--text-secondary)',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              fontFamily: 'Söhne Mono, ui-monospace, monospace',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = 'var(--text-primary)';
+              e.currentTarget.style.color = 'var(--text-primary)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
+            }}
+          >
+            Finish Exam
+          </button>
+        )}
       </div>
     </header>
   );
@@ -1417,7 +1751,21 @@ function StatusBadge({ submitted, active }: { submitted: boolean; active: boolea
   );
 }
 
-function QuestionPanel({ question, index }: { question: Question; index: number }) {
+function QuestionPanel({
+  question,
+  index,
+  isSubmitted,
+  score,
+  submitting,
+  onSubmit,
+}: {
+  question: Question;
+  index: number;
+  isSubmitted?: boolean;
+  score?: number;
+  submitting?: boolean;
+  onSubmit?: () => void;
+}) {
   return (
     <div style={{ userSelect: 'none' }} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}>
       <div style={{ marginBottom: '28px' }}>
@@ -1491,10 +1839,83 @@ function QuestionPanel({ question, index }: { question: Question; index: number 
         </Section>
       )}
 
-      <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: '3px', border: '1px solid var(--border)' }}>
-        <p style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6, display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: '3px', border: '1px solid var(--border)', marginBottom: '20px' }}>
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6, display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
           <Info size={13} style={{ flexShrink: 0 }} /> <span><strong style={{ color: 'var(--text-secondary)' }}>Note:</strong> You can use a hardcoded array or take input from the user.</span>
         </p>
+      </div>
+
+      {/* Individual Question Submit Section */}
+      <div style={{
+        padding: '16px',
+        background: 'var(--surface-2)',
+        borderRadius: '6px',
+        border: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '12px',
+      }}>
+        <div>
+          <p style={{
+            fontSize: '12px',
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            marginBottom: '2px',
+          }}>
+            {isSubmitted ? `Question ${index + 1} Submitted` : `Submit Solution for Q${index + 1}`}
+          </p>
+          <p style={{
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+            margin: 0,
+          }}>
+            {isSubmitted
+              ? `Score: ${score !== undefined ? `${score}/10` : 'Recorded'}`
+              : 'Submits this question only. You can continue working on other questions.'}
+          </p>
+        </div>
+
+        {isSubmitted ? (
+          <span style={{
+            fontSize: '11px',
+            color: 'var(--success)',
+            fontWeight: 600,
+            background: 'rgba(63, 185, 80, 0.1)',
+            border: '1px solid rgba(63, 185, 80, 0.3)',
+            padding: '4px 10px',
+            borderRadius: '4px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            flexShrink: 0,
+          }}>
+            <Check size={12} strokeWidth={2.5} /> Submitted
+          </span>
+        ) : (
+          <button
+            onClick={onSubmit}
+            disabled={submitting}
+            style={{
+              padding: '6px 14px',
+              background: '#ffffff',
+              border: '1px solid var(--border)',
+              borderRadius: '4px',
+              color: '#000000',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              flexShrink: 0,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <CheckCircle size={12} strokeWidth={2.5} />
+            {submitting ? 'Submitting...' : `Submit Q${index + 1}`}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1519,8 +1940,6 @@ function ConsolePanel({
   language,
   getToken,
   questionId,
-  input,
-  setInput,
   exampleInput,
   onRunCode,
 }: {
@@ -1533,8 +1952,6 @@ function ConsolePanel({
   language: string;
   getToken?: () => string;
   questionId?: number;
-  input?: string;
-  setInput?: (val: string | ((prev: string) => string)) => void;
   exampleInput?: string;
   onRunCode?: () => void;
 }) {
@@ -1543,6 +1960,18 @@ function ConsolePanel({
   const fitAddonRef = useRef<any>(null);
   const socketRef = useRef<any>(null);
   const onDataDisposableRef = useRef<any>(null);
+
+  // Stable refs for props to eliminate stale closures on question switch (Bug 6 fix)
+  const codeRef = useRef(code);
+  codeRef.current = code;
+  const languageRef = useRef(language);
+  languageRef.current = language;
+  const questionIdRef = useRef(questionId);
+  questionIdRef.current = questionId;
+  const exampleInputRef = useRef(exampleInput);
+  exampleInputRef.current = exampleInput;
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
 
   // ── Build the xterm instance once ──────────────────────────────────────────
   const ensureTerminal = async () => {
@@ -1622,7 +2051,26 @@ function ConsolePanel({
   //   Phase 2: send to /api/exam/run, then replay output interleaved with typed inputs.
   const stdinBufferRef = useRef<string>('');
   const stdinLinesRef = useRef<string[]>([]);  // each line the user typed, in order
+
+  // Bug 8 fix: use React state alongside ref so the "waiting for input" badge re-renders
+  const [awaitingStdin, setAwaitingStdin] = useState(false);
   const awaitingStdinRef = useRef(false);
+
+  const updateAwaitingStdin = (val: boolean) => {
+    awaitingStdinRef.current = val;
+    setAwaitingStdin(val);
+  };
+
+  const codeNeedsInput = (src: string, lang: string): boolean => {
+    const norm = (lang || '').toLowerCase();
+    if (norm === 'python') {
+      return /\binput\s*\(|\bsys\.stdin\b/.test(src);
+    }
+    if (norm === 'java') {
+      return /\bScanner\b|\bBufferedReader\b|\bSystem\.in\b/.test(src);
+    }
+    return /\bcin\b|\bscanf\b|\bgetline\b|\bgetchar\b|\bgets\b|\bfgets\b|\bread\b/.test(src);
+  };
 
   // Interleave raw output with the user's typed inputs so the terminal looks
   // like a real interactive session: prompt → user input → next prompt → …
@@ -1653,16 +2101,20 @@ function ConsolePanel({
 
   const runViaHttp = async (termInstance: any, stdinInput: string, inputLines: string[]) => {
     const term = termInstance;
+    const currCode = codeRef.current;
+    const currLang = languageRef.current;
+    const currQid = questionIdRef.current;
+    const currGetToken = getTokenRef.current;
 
     try {
-      const token = getToken ? getToken() : '';
+      const token = currGetToken ? currGetToken() : '';
       const res = await fetch('/api/exam/run', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ code, language, question_id: questionId, input: stdinInput }),
+        body: JSON.stringify({ code: currCode, language: currLang, question_id: currQid, input: stdinInput }),
       });
       const data = await res.json();
 
@@ -1685,7 +2137,7 @@ function ConsolePanel({
       term.writeln(`\x1b[1;31m[Error] ${err.message || 'Unknown'}\x1b[0m`);
     } finally {
       setRunning(false);
-      awaitingStdinRef.current = false;
+      updateAwaitingStdin(false);
       stdinBufferRef.current = '';
       stdinLinesRef.current = [];
     }
@@ -1696,19 +2148,21 @@ function ConsolePanel({
       try { onDataDisposableRef.current.dispose(); } catch {}
       onDataDisposableRef.current = null;
     }
-    awaitingStdinRef.current = false;
+    updateAwaitingStdin(false);
     const term = xtermRef.current;
     if (term) {
-      runViaHttp(term, stdinBufferRef.current, [...stdinLinesRef.current]);
+      const inputToSend = stdinBufferRef.current || exampleInputRef.current || '';
+      const linesToSend = stdinLinesRef.current.length > 0 ? [...stdinLinesRef.current] : (inputToSend ? inputToSend.split('\n') : []);
+      runViaHttp(term, inputToSend, linesToSend);
     } else {
       setRunning(false);
     }
   };
 
   // Silent stdin collection — no banners, just a blinking cursor waiting for input.
-  // The user types lines, each is echoed locally; Ctrl+D or Enter on empty line finishes.
+  // The user types lines, each is echoed locally; Ctrl+D or clicking Run executes.
   const setupStdinCollection = (term: any) => {
-    awaitingStdinRef.current = true;
+    updateAwaitingStdin(true);
     stdinBufferRef.current = '';
     stdinLinesRef.current = [];
 
@@ -1722,42 +2176,47 @@ function ConsolePanel({
     onDataDisposableRef.current = term.onData((data: string) => {
       if (!awaitingStdinRef.current) return;
 
-      // Ctrl+D — treat as EOF, execute now
-      if (data === '\x04') {
-        if (lineBuffer.trim()) {
+      for (let i = 0; i < data.length; i++) {
+        const ch = data[i];
+        if (ch === '\x04') {
+          // Ctrl+D — treat as EOF, execute now
+          if (lineBuffer) {
+            stdinLinesRef.current.push(lineBuffer);
+            stdinBufferRef.current += lineBuffer + '\n';
+            lineBuffer = '';
+          }
+          term.write('\r\n');
+          triggerExecuteWithStdin();
+          return;
+        }
+        if (ch === '\r' || ch === '\n') {
+          if (ch === '\r' && data[i + 1] === '\n') {
+            i++;
+          }
           stdinLinesRef.current.push(lineBuffer);
           stdinBufferRef.current += lineBuffer + '\n';
+          term.write('\r\n');
           lineBuffer = '';
+          continue;
         }
-        term.write('\r\n');
-        triggerExecuteWithStdin();
-        return;
-      }
-      if (data === '\r' || data === '\n') {
-        // Echo the newline, save the line
-        stdinLinesRef.current.push(lineBuffer);
-        stdinBufferRef.current += lineBuffer + '\n';
-        term.write('\r\n');
-        lineBuffer = '';
-        return;
-      }
-      if (data === '\u007F' || data === '\b') {
-        if (lineBuffer.length > 0) {
-          lineBuffer = lineBuffer.slice(0, -1);
-          term.write('\b \b');
+        if (ch === '\u007F' || ch === '\b') {
+          if (lineBuffer.length > 0) {
+            lineBuffer = lineBuffer.slice(0, -1);
+            term.write('\b \b');
+          }
+          continue;
         }
-        return;
-      }
-      if (data >= ' ' || data === '\t') {
-        lineBuffer += data;
-        term.write(data);
+        if (ch >= ' ' || ch === '\t') {
+          lineBuffer += ch;
+          term.write(ch);
+        }
       }
     });
   };
 
   // ── Main run effect ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (runTrigger === 0 || !code) return;
+    if (runTrigger === 0 || !codeRef.current) return;
 
     // If Run Code is clicked again while awaiting stdin, flush and execute
     if (awaitingStdinRef.current && xtermRef.current) {
@@ -1775,7 +2234,7 @@ function ConsolePanel({
       onDataDisposableRef.current = null;
     }
 
-    awaitingStdinRef.current = false;
+    updateAwaitingStdin(false);
     stdinBufferRef.current = '';
     stdinLinesRef.current = [];
 
@@ -1789,6 +2248,14 @@ function ConsolePanel({
       term.clear();
       setTimeout(() => fitAddonRef.current?.fit(), 30);
       term.focus();
+
+      const executeHttp = () => {
+        if (codeNeedsInput(codeRef.current, languageRef.current)) {
+          setupStdinCollection(term);
+        } else {
+          runViaHttp(term, '', []);
+        }
+      };
 
       const isLocal =
         typeof window !== 'undefined' &&
@@ -1806,8 +2273,7 @@ function ConsolePanel({
             fell = true;
             try { socketRef.current?.disconnect(); } catch {}
             if (!cancelled) {
-              const sampleIn = exampleInput || '';
-              runViaHttp(term, sampleIn, sampleIn ? sampleIn.split('\n') : []);
+              executeHttp();
             }
           }
         };
@@ -1845,7 +2311,7 @@ function ConsolePanel({
           if (cancelled) { try { socket.disconnect(); } catch {} return; }
           connected = true;
           clearTimeout(connTimer);
-          socket.emit('execute', { code, language, timeLimit: 120000 });
+          socket.emit('execute', { code: codeRef.current, language: languageRef.current, timeLimit: 120000 });
         });
 
         socket.on('output', (chunk: string) => {
@@ -1868,13 +2334,13 @@ function ConsolePanel({
       }
 
       // ── HTTP path (production / remote execution) ─────────────────────────
-      const sampleIn = exampleInput || '';
-      runViaHttp(term, sampleIn, sampleIn ? sampleIn.split('\n') : []);
+      executeHttp();
     })();
 
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runTrigger]);
 
   const handleClear = (e: React.MouseEvent) => {
@@ -1892,7 +2358,7 @@ function ConsolePanel({
       try { onDataDisposableRef.current.dispose(); } catch {}
       onDataDisposableRef.current = null;
     }
-    awaitingStdinRef.current = false;
+    updateAwaitingStdin(false);
     setRunning(false);
     xtermRef.current?.write('\r\n\x1b[38;5;240m[Terminated]\x1b[0m\r\n');
   };
@@ -1956,14 +2422,17 @@ function ConsolePanel({
             </span>
           )}
 
-          {awaitingStdinRef.current && (
+          {awaitingStdin && (
             <span style={{
               fontSize: '10px',
               fontFamily: 'Söhne Mono, monospace',
-              color: '#8b949e',
+              color: '#e3b341',
+              background: 'rgba(227, 179, 65, 0.1)',
               padding: '2px 8px',
+              borderRadius: '3px',
+              border: '1px solid rgba(227, 179, 65, 0.3)',
             }}>
-              waiting for input…
+              waiting for input… (Ctrl+D to run)
             </span>
           )}
         </div>
@@ -2032,11 +2501,16 @@ function Modal({
   onClose,
   onConfirm,
   questionTitle,
+  questionIndex,
+  submitting,
 }: {
   onClose: () => void;
   onConfirm: () => void;
   questionTitle: string;
+  questionIndex?: number;
+  submitting?: boolean;
 }) {
+  const qLabel = questionIndex !== undefined ? `Question ${questionIndex + 1}` : 'this question';
   return (
     <div
       style={{
@@ -2094,7 +2568,7 @@ function Modal({
               marginBottom: '10px',
               fontFamily: 'StyreneB, Inter, sans-serif'
             }}>
-              <CheckCircle size={14} /> Submission Confirm
+              <CheckCircle size={14} /> Submit {qLabel}
             </div>
             <h3 style={{
               fontFamily: 'Copernicus, "Tiempos Headline", "Georgia", "Iowan Old Style", serif',
@@ -2104,7 +2578,7 @@ function Modal({
               letterSpacing: '-0.3px',
               margin: 0
             }}>
-              Submit Solution?
+              Submit {qLabel}?
             </h3>
           </div>
           <button
@@ -2133,7 +2607,7 @@ function Modal({
           lineHeight: 1.6,
           marginBottom: '28px'
         }}>
-          You are about to finalize and submit your solution for <strong style={{ color: '#faf9f5', fontWeight: 600 }}>{questionTitle}</strong>. Once submitted, your code is recorded and cannot be edited.
+          You are about to finalize and submit your solution for <strong style={{ color: '#faf9f5', fontWeight: 600 }}>{qLabel}: {questionTitle}</strong>. This submits only this individual question. Once submitted, your code for this question will be locked and evaluated, but you can continue solving and submitting your other questions.
         </p>
 
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -2160,6 +2634,7 @@ function Modal({
           <button
             id="confirm-submit-btn"
             onClick={onConfirm}
+            disabled={submitting}
             style={{
               flex: 1.5,
               padding: '11px 16px',
@@ -2169,7 +2644,7 @@ function Modal({
               color: '#ffffff',
               fontSize: '13px',
               fontWeight: 500,
-              cursor: 'pointer',
+              cursor: submitting ? 'not-allowed' : 'pointer',
               fontFamily: 'StyreneB, Inter, sans-serif',
               boxShadow: '0 4px 14px rgba(204, 120, 92, 0.35)',
               transition: 'background 0.15s ease'
@@ -2177,7 +2652,7 @@ function Modal({
             onMouseEnter={e => (e.currentTarget.style.background = '#a9583e')}
             onMouseLeave={e => (e.currentTarget.style.background = '#cc785c')}
           >
-            Confirm Submission
+            {submitting ? 'Submitting...' : `Confirm & Submit ${qLabel}`}
           </button>
         </div>
       </div>

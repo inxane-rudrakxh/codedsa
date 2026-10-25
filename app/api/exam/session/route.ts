@@ -65,12 +65,16 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  // Get code saves
+  // Get code saves (include language_id for recovery)
   const saveRows = await prisma.codeDraft.findMany({
     where: { session_id: session.id }
   });
   const saves: Record<string, string> = {};
-  saveRows.forEach(s => { if(s.source_code) saves[s.question_id] = s.source_code; });
+  const saveLangs: Record<string, number> = {};
+  saveRows.forEach(s => {
+    if (s.source_code) saves[s.question_id] = s.source_code;
+    if (s.language_id) saveLangs[s.question_id] = s.language_id;
+  });
 
   // Get visible test cases
   const testCases: Record<string, any[]> = {};
@@ -114,6 +118,7 @@ export async function GET(request: NextRequest) {
     questions: formattedQuestions,
     submissions,
     saves,
+    saveLangs,
     testCases,
   });
 }

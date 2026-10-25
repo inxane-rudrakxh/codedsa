@@ -10,11 +10,14 @@ export async function POST(request: NextRequest) {
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
   const body = await request.json();
-  const { question_id, code } = body;
+  const { question_id, code, language } = body;
 
   if (!question_id || code === undefined) {
     return NextResponse.json({ error: 'question_id and code are required' }, { status: 400 });
   }
+
+  const langMap: Record<string, number> = { c: 1, cpp: 2, python: 3, java: 4 };
+  const langId = langMap[(language || 'cpp').toLowerCase()] ?? 2;
 
   // Verify this question belongs to the session
   const assigned = await prisma.assignedQuestion.findUnique({
@@ -41,8 +44,8 @@ export async function POST(request: NextRequest) {
   // Upsert code save
   await prisma.codeDraft.upsert({
     where: { session_id_question_id: { session_id: payload.session_id, question_id } },
-    update: { source_code: code, updated_at: new Date() },
-    create: { session_id: payload.session_id, question_id, language_id: 1, source_code: code }
+    update: { source_code: code, language_id: langId, updated_at: new Date() },
+    create: { session_id: payload.session_id, question_id, language_id: langId, source_code: code }
   });
 
   return NextResponse.json({ success: true, saved_at: new Date().toISOString() });

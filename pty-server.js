@@ -161,16 +161,18 @@ io.on('connection', (socket) => {
 
       let finished = false;
 
+      // Reset idle timer on both input and output — long computations that
+      // produce output but need no more stdin must not be killed prematurely.
       const resetIdle = () => {
         if (idleTimeout) clearTimeout(idleTimeout);
         idleTimeout = setTimeout(() => {
           if (!finished && ptyProcess) {
             try { ptyProcess.kill(); } catch {}
-            socket.emit('output', '\r\n\x1b[1;31m[Error] Process idle timeout (60s without input)\x1b[0m\r\n');
+            socket.emit('output', '\r\n\x1b[1;31m[Error] Process idle timeout (120s without output)\x1b[0m\r\n');
             socket.emit('finished');
             finished = true;
           }
-        }, 60000);
+        }, 120000); // 2 minutes of total silence before idle-kill
       };
 
       resetIdle();
@@ -186,6 +188,8 @@ io.on('connection', (socket) => {
 
       ptyProcess.onData((data) => {
         socket.emit('output', data);
+        // Reset idle timer on output — computation is still active
+        resetIdle();
       });
 
       ptyProcess.onExit(({ exitCode }) => {
@@ -232,16 +236,16 @@ io.on('connection', (socket) => {
 
   socket.on('input', (data) => {
     if (ptyProcess) {
-      if (idleTimeout) {
-        clearTimeout(idleTimeout);
-        idleTimeout = setTimeout(() => {
-          if (ptyProcess) {
-            try { ptyProcess.kill(); } catch {}
-            socket.emit('output', '\r\n\x1b[1;31m[Error] Process idle timeout (60s without input)\x1b[0m\r\n');
-            socket.emit('finished');
-          }
-        }, 60000);
-      }
+      // resetIdle is in scope inside the execute handler's closure;
+      // re-arm via the shared idleTimeout pattern.
+      if (idleTimeout) clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(() => {
+        if (ptyProcess) {
+          try { ptyProcess.kill(); } catch {}
+          socket.emit('output', '\r\n\x1b[1;31m[Error] Process idle timeout (120s without output)\x1b[0m\r\n');
+          socket.emit('finished');
+        }
+      }, 120000);
       ptyProcess.write(data);
     }
   });
