@@ -30,10 +30,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    const targetDivision = test.target_division || test.title.match(/Div\s*-\s*([A-Za-z0-9]+)/i)?.[1]?.toUpperCase() || null;
     const students = await prisma.student.findMany({
       where: {
         user: { status: 'ACTIVE' },
-        ...(test.target_division ? { division: { name: test.target_division } } : {})
+        ...(targetDivision ? { division: { name: targetDivision } } : {})
       },
       include: { user: true, branch: true, division: true },
       orderBy: { roll_number: 'asc' }
@@ -310,10 +311,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    const targetDivision = test.target_division || test.title.match(/Div\s*-\s*([A-Za-z0-9]+)/i)?.[1]?.toUpperCase() || null;
     const students = await prisma.student.findMany({
       where: {
         user: { status: 'ACTIVE' },
-        ...(test.target_division ? { division: { name: test.target_division } } : {})
+        ...(targetDivision ? { division: { name: targetDivision } } : {})
       },
       include: { user: true, branch: true, division: true },
       orderBy: { roll_number: 'asc' }
