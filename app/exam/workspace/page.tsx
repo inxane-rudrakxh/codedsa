@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { AlertTriangle, ShieldAlert, Check, Info, Terminal, CheckCircle, Square, Sparkles, Maximize } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, Check, Info, Terminal, CheckCircle, Square, Sparkles, Maximize, Keyboard } from 'lucide-react';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -1967,6 +1967,19 @@ function ConsolePanel({
   const xtermRef = useRef<any>(null);
   const fitAddonRef = useRef<any>(null);
 
+  const [activeTab, setActiveTab] = useState<'terminal' | 'input'>('terminal');
+  const [customInputByQuestion, setCustomInputByQuestion] = useState<Record<number, string>>({});
+
+  const currentInput = (questionId ? customInputByQuestion[questionId] : undefined) ?? '';
+  const currentInputRef = useRef(currentInput);
+  currentInputRef.current = currentInput;
+
+  const updateInput = (val: string) => {
+    if (questionId) {
+      setCustomInputByQuestion(prev => ({ ...prev, [questionId]: val }));
+    }
+  };
+
   // Stable refs for props to eliminate stale closures on question switch (Bug 6 fix)
   const codeRef = useRef(code);
   codeRef.current = code;
@@ -2040,14 +2053,14 @@ function ConsolePanel({
     return term;
   };
 
-  // Keep terminal fitted when panel opens
+  // Keep terminal fitted when panel opens or switches tab
   useEffect(() => {
     ensureTerminal().then(() => {
-      if (open && fitAddonRef.current) {
+      if (open && activeTab === 'terminal' && fitAddonRef.current) {
         setTimeout(() => fitAddonRef.current?.fit(), 60);
       }
     });
-  }, [open]);
+  }, [open, activeTab]);
 
   // ── Execution via onlinecompiler.io (/api/exam/run) ──────────────────────
   const executeCode = async (term: any) => {
@@ -2055,6 +2068,14 @@ function ConsolePanel({
     const currLang = languageRef.current;
     const currQid = questionIdRef.current;
     const currGetToken = getTokenRef.current;
+    const currInput = currentInputRef.current;
+    const effectiveInput = currInput.trim() !== '' ? currInput : (exampleInputRef.current || '');
+
+    // Notify if code expects input but stdin was left empty
+    const expectsInput = /\b(cin\s*>>|scanf\s*\(|getline\s*\(\s*cin|getchar\s*\(|input\s*\(|Scanner\b|System\.in)\b/.test(currCode);
+    if (expectsInput && !effectiveInput.trim()) {
+      term.writeln(`\x1b[33m[Notice: Code expects input (cin/scanf), but stdin was empty. Enter input below or in INPUT (STDIN) tab.]\x1b[0m\r\n`);
+    }
 
     try {
       const token = currGetToken ? currGetToken() : '';
@@ -2068,7 +2089,7 @@ function ConsolePanel({
           code: currCode,
           language: currLang,
           question_id: currQid,
-          input: exampleInputRef.current || '',
+          input: effectiveInput,
         }),
       });
       const data = await res.json();
@@ -2098,6 +2119,9 @@ function ConsolePanel({
   // ── Main run effect ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (runTrigger === 0 || !codeRef.current) return;
+
+    // Switch to terminal tab when running
+    setActiveTab('terminal');
 
     let cancelled = false;
 
@@ -2132,7 +2156,7 @@ function ConsolePanel({
 
   return (
     <div style={{
-      height: open ? '320px' : '36px',
+      height: open ? '340px' : '36px',
       borderTop: '1px solid #21262d',
       background: '#0d1117',
       flexShrink: 0,
@@ -2156,61 +2180,146 @@ function ConsolePanel({
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            color: '#8b949e',
-            fontFamily: 'Söhne Mono, monospace',
-            letterSpacing: '0.04em',
-            background: '#1c2128',
-            border: '1px solid #30363d',
-            padding: '2px 10px',
-            borderRadius: '3px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '5px',
-          }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={e => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('terminal');
+              if (!open) onToggle();
+            }}
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              color: activeTab === 'terminal' ? '#58a6ff' : '#8b949e',
+              fontFamily: 'Söhne Mono, monospace',
+              letterSpacing: '0.04em',
+              background: activeTab === 'terminal' ? '#1c2128' : 'transparent',
+              border: activeTab === 'terminal' ? '1px solid #30363d' : '1px solid transparent',
+              padding: '2px 10px',
+              borderRadius: '3px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              cursor: 'pointer',
+            }}
+          >
             <Terminal size={12} /> TERMINAL
-          </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('input');
+              if (!open) onToggle();
+            }}
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              color: activeTab === 'input' ? '#58a6ff' : '#8b949e',
+              fontFamily: 'Söhne Mono, monospace',
+              letterSpacing: '0.04em',
+              background: activeTab === 'input' ? '#1c2128' : 'transparent',
+              border: activeTab === 'input' ? '1px solid #30363d' : '1px solid transparent',
+              padding: '2px 10px',
+              borderRadius: '3px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              cursor: 'pointer',
+            }}
+          >
+            <Keyboard size={12} /> INPUT (STDIN)
+            {currentInput.trim() ? (
+              <span style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: '#3fb950',
+                display: 'inline-block',
+              }} />
+            ) : null}
+          </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={e => e.stopPropagation()}>
           {open && (
             <>
-              <button
-                onClick={handleClear}
-                style={{
-                  padding: '2px 8px',
-                  background: 'transparent',
-                  border: '1px solid #30363d',
-                  borderRadius: '3px',
-                  color: '#8b949e',
-                  fontSize: '10px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontFamily: 'Söhne Mono, monospace',
-                }}
-              >
-                Clear
-              </button>
-              {running && (
-                <button
-                  onClick={handleKill}
-                  style={{
-                    padding: '2px 8px',
-                    background: 'rgba(255, 123, 114, 0.1)',
-                    border: '1px solid rgba(255, 123, 114, 0.4)',
-                    borderRadius: '3px',
-                    color: '#ff7b72',
-                    fontSize: '10px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontFamily: 'Söhne Mono, monospace',
-                  }}
-                >
-                  Kill
-                </button>
+              {activeTab === 'terminal' ? (
+                <>
+                  <button
+                    onClick={handleClear}
+                    style={{
+                      padding: '2px 8px',
+                      background: 'transparent',
+                      border: '1px solid #30363d',
+                      borderRadius: '3px',
+                      color: '#8b949e',
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontFamily: 'Söhne Mono, monospace',
+                    }}
+                  >
+                    Clear
+                  </button>
+                  {running && (
+                    <button
+                      onClick={handleKill}
+                      style={{
+                        padding: '2px 8px',
+                        background: 'rgba(255, 123, 114, 0.1)',
+                        border: '1px solid rgba(255, 123, 114, 0.4)',
+                        borderRadius: '3px',
+                        color: '#ff7b72',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        fontFamily: 'Söhne Mono, monospace',
+                      }}
+                    >
+                      Kill
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  {exampleInput && (
+                    <button
+                      onClick={() => updateInput(exampleInput)}
+                      style={{
+                        padding: '2px 8px',
+                        background: 'transparent',
+                        border: '1px solid #30363d',
+                        borderRadius: '3px',
+                        color: '#58a6ff',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        fontFamily: 'Söhne Mono, monospace',
+                      }}
+                    >
+                      Sample
+                    </button>
+                  )}
+                  {currentInput && (
+                    <button
+                      onClick={() => updateInput('')}
+                      style={{
+                        padding: '2px 8px',
+                        background: 'transparent',
+                        border: '1px solid #30363d',
+                        borderRadius: '3px',
+                        color: '#8b949e',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        fontFamily: 'Söhne Mono, monospace',
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </>
               )}
             </>
           )}
@@ -2220,17 +2329,205 @@ function ConsolePanel({
         </div>
       </div>
 
-      {/* xterm container — always mounted so the terminal instance survives */}
-      <div
-        ref={terminalRef}
-        style={{
+      {/* Terminal View */}
+      <div style={{
+        flex: 1,
+        display: open && activeTab === 'terminal' ? 'flex' : 'none',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        {/* xterm container — always in DOM */}
+        <div
+          ref={terminalRef}
+          style={{
+            flex: 1,
+            padding: '6px 8px',
+            background: '#0d1117',
+            overflow: 'hidden',
+          }}
+        />
+
+        {/* Quick inline stdin bar */}
+        <div style={{
+          height: '34px',
+          borderTop: '1px solid #21262d',
+          background: '#161b22',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 10px',
+          gap: '8px',
+          flexShrink: 0,
+        }}>
+          <span style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            color: '#58a6ff',
+            fontFamily: 'Söhne Mono, monospace',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            whiteSpace: 'nowrap',
+          }}>
+            &gt;_ stdin:
+          </span>
+          <input
+            type="text"
+            value={currentInput.includes('\n') ? `${currentInput.split('\n')[0]} ...` : currentInput}
+            onChange={(e) => updateInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !running && onRunCode) {
+                e.preventDefault();
+                onRunCode();
+              }
+            }}
+            placeholder="Type input (e.g. Alice 25)... Press Enter to run"
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: '#c9d1d9',
+              fontSize: '12px',
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+          />
+          {currentInput && (
+            <button
+              type="button"
+              onClick={() => updateInput('')}
+              title="Clear input"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#6e7681',
+                fontSize: '11px',
+                cursor: 'pointer',
+                padding: '2px 6px',
+              }}
+            >
+              ✕
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (!running && onRunCode) onRunCode();
+            }}
+            disabled={running}
+            style={{
+              padding: '2px 8px',
+              background: '#238636',
+              border: '1px solid #2ea043',
+              borderRadius: '3px',
+              color: '#fff',
+              fontSize: '10px',
+              fontWeight: 600,
+              cursor: running ? 'not-allowed' : 'pointer',
+              fontFamily: 'Söhne Mono, monospace',
+              opacity: running ? 0.6 : 1,
+            }}
+          >
+            Run
+          </button>
+        </div>
+      </div>
+
+      {/* Input (stdin) Tab View */}
+      {open && activeTab === 'input' && (
+        <div style={{
           flex: 1,
-          padding: '6px 8px',
+          display: 'flex',
+          flexDirection: 'column',
           background: '#0d1117',
+          padding: '8px 12px',
+          gap: '6px',
           overflow: 'hidden',
-          display: open ? 'block' : 'none',
-        }}
-      />
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: '#8b949e', fontFamily: 'Söhne Mono, monospace' }}>
+              Standard Input (stdin) for cin, scanf, input(), etc.
+            </span>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {exampleInput && (
+                <button
+                  type="button"
+                  onClick={() => updateInput(exampleInput)}
+                  style={{
+                    padding: '2px 8px',
+                    background: '#21262d',
+                    border: '1px solid #30363d',
+                    borderRadius: '3px',
+                    color: '#58a6ff',
+                    fontSize: '10px',
+                    fontFamily: 'Söhne Mono, monospace',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Use Sample Input
+                </button>
+              )}
+              {currentInput && (
+                <button
+                  type="button"
+                  onClick={() => updateInput('')}
+                  style={{
+                    padding: '2px 8px',
+                    background: '#21262d',
+                    border: '1px solid #30363d',
+                    borderRadius: '3px',
+                    color: '#8b949e',
+                    fontSize: '10px',
+                    fontFamily: 'Söhne Mono, monospace',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('terminal');
+                  if (onRunCode) onRunCode();
+                }}
+                disabled={running}
+                style={{
+                  padding: '2px 10px',
+                  background: '#238636',
+                  border: '1px solid #2ea043',
+                  borderRadius: '3px',
+                  color: '#fff',
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  cursor: running ? 'not-allowed' : 'pointer',
+                  fontFamily: 'Söhne Mono, monospace',
+                }}
+              >
+                Run Code
+              </button>
+            </div>
+          </div>
+          <textarea
+            value={currentInput}
+            onChange={(e) => updateInput(e.target.value)}
+            placeholder="Type standard input here (e.g.&#10;Alice&#10;25)&#10;Then click 'Run Code' or press Run Code button."
+            style={{
+              flex: 1,
+              width: '100%',
+              background: '#161b22',
+              border: '1px solid #30363d',
+              borderRadius: '4px',
+              color: '#c9d1d9',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '12px',
+              lineHeight: '1.5',
+              padding: '8px 10px',
+              resize: 'none',
+              outline: 'none',
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

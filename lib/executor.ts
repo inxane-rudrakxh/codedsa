@@ -161,13 +161,15 @@ export async function compileAndRun(
           (parseFloat(data.time || '') || parseFloat(data.total || '') || (Date.now() - startTime) / 1000) * 1000
         );
 
+        const formattedOutput = formatInteractiveOutput(data.output || '', input || '');
+
         // Check for Time Limit Exceeded (exit_code 124 or error with timeout)
         if (data.exit_code === 124 || (data.status === 'error' && !data.error && execDuration >= safeTimeLimit * 1000 * 0.9)) {
           return {
             success: false,
             timed_out: true,
             runtime_error: `Time Limit Exceeded (${safeTimeLimit}s)`,
-            output: data.output || '',
+            output: formattedOutput,
             execution_time: execDuration,
           };
         }
@@ -183,7 +185,7 @@ export async function compileAndRun(
             return {
               success: false,
               compile_error: errMsg || 'Compilation Error',
-              output: data.output || '',
+              output: formattedOutput,
               execution_time: execDuration,
             };
           }
@@ -191,7 +193,7 @@ export async function compileAndRun(
           return {
             success: false,
             runtime_error: errMsg || `Process exited with code ${data.exit_code}`,
-            output: data.output || '',
+            output: formattedOutput,
             stderr: errMsg,
             execution_time: execDuration,
           };
@@ -199,7 +201,7 @@ export async function compileAndRun(
 
         return {
           success: true,
-          output: data.output || '',
+          output: formattedOutput,
           stderr: data.error || '',
           execution_time: execDuration,
         };
@@ -224,6 +226,73 @@ export async function compileAndRun(
   } finally {
     release();
   }
+}
+
+/**
+ * Formats interactive program outputs where prompts may be concatenated without
+ * newlines (e.g. "Enter your name:Enter your age:") and interleaves provided stdin
+ * tokens next to their respective prompt lines.
+ */
+export function formatInteractiveOutput(output: string, input: string = ''): string {
+  if (!output) return output;
+  let text = output.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  const promptKeywords = 'enter|input|give|insert|type|choose|select|specify|provide|read|what|how';
+  // Separate prompts glued together without newlines (e.g. "Enter your name:Enter your age:" or "Enter your age:Hello")
+  text = text.replace(new RegExp(`(\\b(?:${promptKeywords})\\b[^:\\n\\r\\t]*[:?])\\s*(?=[A-Z])`, 'gi'), '$1\n');
+  text = text.replace(/([a-zA-Z0-9_][?:]|[>])\s*(?=[A-Z][a-zA-Z0-9_ ]*[:?>])/g, '$1\n');
+
+  if (input && input.trim()) {
+    const inputTokens = input.trim().split(/\s+/).filter(Boolean);
+    const promptWordRegex = new RegExp(`\\b(?:${promptKeywords})\\b`, 'i');
+
+    const lines = text.split('\n');
+    const promptIndices: number[] = [];
+    lines.forEach((line, idx) => {
+      const match = line.match(/^([^:\n\r\t]+[:?>])(\s*|$)/);
+      if (match && (promptWordRegex.test(match[1]) || /[:?>]\s*$/.test(line))) {
+        promptIndices.push(idx);
+      }
+    });
+
+    if (promptIndices.length > 0) {
+      let tokenIdx = 0;
+      const formatted = lines.map((line, idx) => {
+        if (!promptIndices.includes(idx)) return line;
+
+        const purePrompt = line.match(/^([^:\n\r\t]+[:?>])\s*$/);
+        const promptWithTrailing = line.match(/^([^:\n\r\t]+[:?>])\s*([A-Za-z0-9].*)$/);
+        const isPrompt = purePrompt || promptWithTrailing;
+        if (!isPrompt) return line;
+
+        const promptPart = isPrompt[1];
+        const trailingPart = promptWithTrailing ? promptWithTrailing[2] : '';
+
+        const currentPromptPos = promptIndices.indexOf(idx);
+        const isLastPrompt = currentPromptPos === promptIndices.length - 1;
+        let tokensForThisPrompt: string[] = [];
+
+        if (isLastPrompt) {
+          tokensForThisPrompt = inputTokens.slice(tokenIdx);
+          tokenIdx = inputTokens.length;
+        } else {
+          const remainingPrompts = promptIndices.length - currentPromptPos - 1;
+          const remainingTokens = inputTokens.length - tokenIdx;
+          const takeCount = Math.max(1, remainingTokens - remainingPrompts);
+          tokensForThisPrompt = inputTokens.slice(tokenIdx, tokenIdx + takeCount);
+          tokenIdx += takeCount;
+        }
+
+        const joinedTokens = tokensForThisPrompt.join(' ');
+        const lineResult = joinedTokens ? `${promptPart} ${joinedTokens}` : promptPart;
+        return trailingPart ? `${lineResult}\n${trailingPart}` : lineResult;
+      });
+
+      text = formatted.join('\n');
+    }
+  }
+
+  return text;
 }
 
 export function normalizeOutput(output: string): string {
