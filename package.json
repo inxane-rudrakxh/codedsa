@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"next dev\" \"node pty-server.js\"",
+    "dev": "next dev",
     "build": "next build",
-    "start": "concurrently \"next start\" \"node pty-server.js\"",
+    "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate"
   },

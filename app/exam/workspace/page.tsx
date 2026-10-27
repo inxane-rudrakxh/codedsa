@@ -194,7 +194,9 @@ export default function WorkspacePage() {
           router.push('/result');
           return;
         }
-        if (data.session.is_submitted) {
+        const allQuestionsDone = (data.questions || []).length > 0 &&
+          (data.questions || []).every(q => Boolean(data.submissions?.[q.id]));
+        if (data.session.is_submitted && allQuestionsDone) {
           setShowFinalScreen(true);
         }
         setSessionData(data);
@@ -378,7 +380,9 @@ export default function WorkspacePage() {
       })
         .then(r => r.json())
         .then(data => {
-          if (data?.session?.is_submitted || data?.session?.status === 'stopped' || data?.session?.status === 'expired') {
+          const allQuestionsDone = (data?.questions || []).length > 0 &&
+            (data?.questions || []).every((q: any) => Boolean(data?.submissions?.[q.id]));
+          if (data?.session?.status === 'stopped' || data?.session?.status === 'expired' || (data?.session?.is_submitted && allQuestionsDone)) {
             setShowFinalScreen(true);
           }
         })
@@ -519,7 +523,11 @@ export default function WorkspacePage() {
     // Fires whenever the browser window loses focus (Alt+Tab, app switch, clicking outside, etc.)
     const onWindowBlur = () => {
       if (!proctoringArmedRef.current) return;
-      triggerTabSwitch();
+      setTimeout(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+          triggerTabSwitch();
+        }
+      }, 200);
     };
 
     // Fires whenever the document is hidden/backgrounded
@@ -1958,8 +1966,6 @@ function ConsolePanel({
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<any>(null);
   const fitAddonRef = useRef<any>(null);
-  const socketRef = useRef<any>(null);
-  const onDataDisposableRef = useRef<any>(null);
 
   // Stable refs for props to eliminate stale closures on question switch (Bug 6 fix)
   const codeRef = useRef(code);
@@ -2031,8 +2037,6 @@ function ConsolePanel({
     });
     ro.observe(el);
 
-    // No welcome banner — clean slate like VS Code terminal
-
     return term;
   };
 
@@ -2045,62 +2049,8 @@ function ConsolePanel({
     });
   }, [open]);
 
-  // ── HTTP fallback execution (production / Vercel) ───────────────────────────
-  // Two-phase approach:
-  //   Phase 1 (needs stdin): collect lines silently with just a cursor — no banners.
-  //   Phase 2: send to /api/exam/run, then replay output interleaved with typed inputs.
-  const stdinBufferRef = useRef<string>('');
-  const stdinLinesRef = useRef<string[]>([]);  // each line the user typed, in order
-
-  // Bug 8 fix: use React state alongside ref so the "waiting for input" badge re-renders
-  const [awaitingStdin, setAwaitingStdin] = useState(false);
-  const awaitingStdinRef = useRef(false);
-
-  const updateAwaitingStdin = (val: boolean) => {
-    awaitingStdinRef.current = val;
-    setAwaitingStdin(val);
-  };
-
-  const codeNeedsInput = (src: string, lang: string): boolean => {
-    const norm = (lang || '').toLowerCase();
-    if (norm === 'python') {
-      return /\binput\s*\(|\bsys\.stdin\b/.test(src);
-    }
-    if (norm === 'java') {
-      return /\bScanner\b|\bBufferedReader\b|\bSystem\.in\b/.test(src);
-    }
-    return /\bcin\b|\bscanf\b|\bgetline\b|\bgetchar\b|\bgets\b|\bfgets\b|\bread\b/.test(src);
-  };
-
-  // Interleave raw output with the user's typed inputs so the terminal looks
-  // like a real interactive session: prompt → user input → next prompt → …
-  const replayInterleaved = (term: any, rawOutput: string, inputLines: string[]) => {
-    // Normalise line endings
-    const outputLines = rawOutput.replace(/\r\n/g, '\n').split('\n');
-    let inputIdx = 0;
-
-    for (let i = 0; i < outputLines.length; i++) {
-      const line = outputLines[i];
-      // Write this output line
-      if (i < outputLines.length - 1 || line !== '') {
-        term.write(line + '\r\n');
-      }
-      // After a prompt-like line (ends with ':' or '? '), echo the next input
-      const isPrompt = /[:?]\s*$/.test(line.trimEnd());
-      if (isPrompt && inputIdx < inputLines.length) {
-        term.write('\x1b[97m' + inputLines[inputIdx] + '\x1b[0m\r\n');
-        inputIdx++;
-      }
-    }
-    // Echo any remaining input lines that weren't paired with a prompt
-    while (inputIdx < inputLines.length) {
-      term.write('\x1b[97m' + inputLines[inputIdx] + '\x1b[0m\r\n');
-      inputIdx++;
-    }
-  };
-
-  const runViaHttp = async (termInstance: any, stdinInput: string, inputLines: string[]) => {
-    const term = termInstance;
+  // ── Execution via onlinecompiler.io (/api/exam/run) ──────────────────────
+  const executeCode = async (term: any) => {
     const currCode = codeRef.current;
     const currLang = languageRef.current;
     const currQid = questionIdRef.current;
@@ -2114,129 +2064,40 @@ function ConsolePanel({
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ code: currCode, language: currLang, question_id: currQid, input: stdinInput }),
+        body: JSON.stringify({
+          code: currCode,
+          language: currLang,
+          question_id: currQid,
+          input: exampleInputRef.current || '',
+        }),
       });
       const data = await res.json();
 
       if (!res.ok || data.error) {
         term.writeln(`\x1b[1;31m[Error] ${data.error || res.statusText || 'Execution failed'}\x1b[0m`);
       } else if (!data.success && data.compile_error) {
-        term.writeln(`\x1b[1;31m[Error] Compilation Error\x1b[0m`);
+        term.writeln(`\x1b[1;31m[Compilation Error]\x1b[0m`);
         term.write(`\x1b[31m${data.compile_error.replace(/\r?\n/g, '\r\n')}\x1b[0m\r\n`);
       } else if (data.timed_out) {
-        term.writeln(`\x1b[1;31m[Error] Time Limit Exceeded\x1b[0m`);
+        term.writeln(`\x1b[1;31m[Time Limit Exceeded]\x1b[0m\r\n`);
       } else {
         const rawOut = (data.output || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        replayInterleaved(term, rawOut, inputLines);
+        term.write(rawOut.replace(/\n/g, '\r\n'));
         if (data.stderr) {
           term.write(`\x1b[31m${data.stderr.replace(/\r?\n/g, '\r\n')}\x1b[0m\r\n`);
         }
       }
-      term.write(`\x1b[38;5;240m\r\n[Exited · ${data.execution_time || 0}ms]\x1b[0m\r\n`);
+      term.write(`\x1b[38;5;240m\r\n[Process completed]\x1b[0m\r\n`);
     } catch (err: any) {
-      term.writeln(`\x1b[1;31m[Error] ${err.message || 'Unknown'}\x1b[0m`);
+      term.writeln(`\x1b[1;31m[Error] ${err.message || 'Execution error'}\x1b[0m`);
     } finally {
       setRunning(false);
-      updateAwaitingStdin(false);
-      stdinBufferRef.current = '';
-      stdinLinesRef.current = [];
     }
-  };
-
-  const triggerExecuteWithStdin = () => {
-    if (onDataDisposableRef.current) {
-      try { onDataDisposableRef.current.dispose(); } catch {}
-      onDataDisposableRef.current = null;
-    }
-    updateAwaitingStdin(false);
-    const term = xtermRef.current;
-    if (term) {
-      const inputToSend = stdinBufferRef.current || exampleInputRef.current || '';
-      const linesToSend = stdinLinesRef.current.length > 0 ? [...stdinLinesRef.current] : (inputToSend ? inputToSend.split('\n') : []);
-      runViaHttp(term, inputToSend, linesToSend);
-    } else {
-      setRunning(false);
-    }
-  };
-
-  // Silent stdin collection — no banners, just a blinking cursor waiting for input.
-  // The user types lines, each is echoed locally; Ctrl+D or clicking Run executes.
-  const setupStdinCollection = (term: any) => {
-    updateAwaitingStdin(true);
-    stdinBufferRef.current = '';
-    stdinLinesRef.current = [];
-
-    let lineBuffer = '';
-
-    if (onDataDisposableRef.current) {
-      try { onDataDisposableRef.current.dispose(); } catch {}
-      onDataDisposableRef.current = null;
-    }
-
-    onDataDisposableRef.current = term.onData((data: string) => {
-      if (!awaitingStdinRef.current) return;
-
-      for (let i = 0; i < data.length; i++) {
-        const ch = data[i];
-        if (ch === '\x04') {
-          // Ctrl+D — treat as EOF, execute now
-          if (lineBuffer) {
-            stdinLinesRef.current.push(lineBuffer);
-            stdinBufferRef.current += lineBuffer + '\n';
-            lineBuffer = '';
-          }
-          term.write('\r\n');
-          triggerExecuteWithStdin();
-          return;
-        }
-        if (ch === '\r' || ch === '\n') {
-          if (ch === '\r' && data[i + 1] === '\n') {
-            i++;
-          }
-          stdinLinesRef.current.push(lineBuffer);
-          stdinBufferRef.current += lineBuffer + '\n';
-          term.write('\r\n');
-          lineBuffer = '';
-          continue;
-        }
-        if (ch === '\u007F' || ch === '\b') {
-          if (lineBuffer.length > 0) {
-            lineBuffer = lineBuffer.slice(0, -1);
-            term.write('\b \b');
-          }
-          continue;
-        }
-        if (ch >= ' ' || ch === '\t') {
-          lineBuffer += ch;
-          term.write(ch);
-        }
-      }
-    });
   };
 
   // ── Main run effect ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (runTrigger === 0 || !codeRef.current) return;
-
-    // If Run Code is clicked again while awaiting stdin, flush and execute
-    if (awaitingStdinRef.current && xtermRef.current) {
-      triggerExecuteWithStdin();
-      return;
-    }
-
-    // Tear down any existing socket/listeners
-    if (socketRef.current) {
-      try { socketRef.current.disconnect(); } catch {}
-      socketRef.current = null;
-    }
-    if (onDataDisposableRef.current) {
-      try { onDataDisposableRef.current.dispose(); } catch {}
-      onDataDisposableRef.current = null;
-    }
-
-    updateAwaitingStdin(false);
-    stdinBufferRef.current = '';
-    stdinLinesRef.current = [];
 
     let cancelled = false;
 
@@ -2249,92 +2110,7 @@ function ConsolePanel({
       setTimeout(() => fitAddonRef.current?.fit(), 30);
       term.focus();
 
-      const executeHttp = () => {
-        if (codeNeedsInput(codeRef.current, languageRef.current)) {
-          setupStdinCollection(term);
-        } else {
-          runViaHttp(term, '', []);
-        }
-      };
-
-      const isLocal =
-        typeof window !== 'undefined' &&
-        (window.location.hostname === 'localhost' ||
-          window.location.hostname === '127.0.0.1' ||
-          window.location.hostname === '0.0.0.0');
-
-      // ── PTY path (local dev) — truly interactive, no changes needed ───────
-      if (isLocal) {
-        let connected = false;
-        let fell = false;
-
-        const fallback = () => {
-          if (!fell) {
-            fell = true;
-            try { socketRef.current?.disconnect(); } catch {}
-            if (!cancelled) {
-              executeHttp();
-            }
-          }
-        };
-
-        let socketModule: any;
-        try {
-          socketModule = await import('socket.io-client');
-        } catch {
-          fallback();
-          return;
-        }
-        if (cancelled) return;
-
-        const host = window.location.hostname || 'localhost';
-        const sessionToken =
-          (typeof window !== 'undefined' ? localStorage.getItem('session_token') : null) || '';
-        const ioFunc = socketModule.io || socketModule.default || socketModule;
-        const socket = ioFunc(`http://${host}:4000`, {
-          timeout: 2500,
-          reconnection: false,
-          auth: { token: sessionToken },
-        });
-        socketRef.current = socket;
-
-        const connTimer = setTimeout(() => {
-          if (!connected) fallback();
-        }, 2000);
-
-        socket.on('connect_error', () => {
-          clearTimeout(connTimer);
-          fallback();
-        });
-
-        socket.on('connect', () => {
-          if (cancelled) { try { socket.disconnect(); } catch {} return; }
-          connected = true;
-          clearTimeout(connTimer);
-          socket.emit('execute', { code: codeRef.current, language: languageRef.current, timeLimit: 120000 });
-        });
-
-        socket.on('output', (chunk: string) => {
-          if (!cancelled) term.write(chunk);
-        });
-
-        socket.on('finished', () => {
-          if (!cancelled) {
-            setRunning(false);
-            try { socket.disconnect(); } catch {}
-          }
-        });
-
-        onDataDisposableRef.current = term.onData((data: string) => {
-          if (socket.connected) socket.emit('input', data);
-        });
-
-        setTimeout(() => { if (!cancelled) setRunning(false); }, 130000);
-        return;
-      }
-
-      // ── HTTP path (production / remote execution) ─────────────────────────
-      executeHttp();
+      executeCode(term);
     })();
 
     return () => {
@@ -2350,17 +2126,8 @@ function ConsolePanel({
 
   const handleKill = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (socketRef.current) {
-      try { socketRef.current.disconnect(); } catch {}
-      socketRef.current = null;
-    }
-    if (onDataDisposableRef.current) {
-      try { onDataDisposableRef.current.dispose(); } catch {}
-      onDataDisposableRef.current = null;
-    }
-    updateAwaitingStdin(false);
     setRunning(false);
-    xtermRef.current?.write('\r\n\x1b[38;5;240m[Terminated]\x1b[0m\r\n');
+    xtermRef.current?.write('\r\n\x1b[38;5;240m[Cancelled]\x1b[0m\r\n');
   };
 
   return (
@@ -2390,11 +2157,10 @@ function ConsolePanel({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* VS Code-style terminal tab */}
           <span style={{
             fontSize: '11px',
             fontWeight: 600,
-            color: '#58a6ff',
+            color: '#8b949e',
             fontFamily: 'Söhne Mono, monospace',
             letterSpacing: '0.04em',
             background: '#1c2128',
@@ -2407,34 +2173,6 @@ function ConsolePanel({
           }}>
             <Terminal size={12} /> TERMINAL
           </span>
-
-          {running && (
-            <span style={{
-              fontSize: '10px',
-              fontFamily: 'Söhne Mono, monospace',
-              color: '#3fb950',
-              background: 'rgba(63, 185, 80, 0.1)',
-              padding: '2px 8px',
-              borderRadius: '3px',
-              border: '1px solid rgba(63, 185, 80, 0.3)',
-            }}>
-              ● Running
-            </span>
-          )}
-
-          {awaitingStdin && (
-            <span style={{
-              fontSize: '10px',
-              fontFamily: 'Söhne Mono, monospace',
-              color: '#e3b341',
-              background: 'rgba(227, 179, 65, 0.1)',
-              padding: '2px 8px',
-              borderRadius: '3px',
-              border: '1px solid rgba(227, 179, 65, 0.3)',
-            }}>
-              waiting for input… (Ctrl+D to run)
-            </span>
-          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={e => e.stopPropagation()}>

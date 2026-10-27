@@ -94,10 +94,10 @@ export async function GET(request: NextRequest) {
         }));
       }
 
-      const hasMarks = questionsData.some(q => q.marks_awarded !== null && q.marks_awarded !== undefined);
-      const isSubmitted = (session?.is_submitted || hasMarks) ? 1 : 0;
+      const allQuestionsSubmitted = questionsData.length > 0 && questionsData.every(q => q.submission_id !== null && q.submission_id !== undefined);
+      const isSubmitted = (session?.is_submitted || allQuestionsSubmitted) ? 1 : 0;
 
-      if (session && !session.is_submitted && hasMarks) {
+      if (session && !session.is_submitted && allQuestionsSubmitted) {
         prisma.examSession.update({
           where: { id: session.id },
           data: { is_submitted: true, status: 'COMPLETED' }
