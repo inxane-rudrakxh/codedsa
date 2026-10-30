@@ -134,8 +134,8 @@ export default function StudentsPage() {
         />
         <select value={divFilter} onChange={e => setDivFilter(e.target.value)} style={filterInput}>
           <option value="all">All Divisions</option>
-          <option value="AIDS A">AIDS A</option>
-          <option value="AIDS B">AIDS B</option>
+          <option value="AIDS A">AIDS A (AD13 Series)</option>
+          <option value="AIDS B">AIDS B (AD14 Series)</option>
         </select>
         <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>
           {filtered.length} students
@@ -153,21 +153,30 @@ export default function StudentsPage() {
         }}>
           <p className="text-label" style={{ marginBottom: '16px' }}>Add Student</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '12px' }}>
-            {[
-              { label: 'Roll No', key: 'roll_no', placeholder: '' },
-              { label: 'Name', key: 'name', placeholder: '' },
-            ].map(({ label, key, placeholder }) => (
-              <div key={key}>
-                <p className="text-label" style={{ marginBottom: '4px' }}>{label}</p>
-                <input
-                  type="text"
-                  placeholder={placeholder}
-                  value={newStudent[key as keyof typeof newStudent]}
-                  onChange={e => setNewStudent(prev => ({ ...prev, [key]: e.target.value }))}
-                  style={filterInput}
-                />
-              </div>
-            ))}
+            <div>
+              <p className="text-label" style={{ marginBottom: '4px' }}>Roll No</p>
+              <input
+                type="text"
+                placeholder="e.g. AD1345 or AD1420"
+                value={newStudent.roll_no}
+                onChange={e => {
+                  const val = e.target.value.toUpperCase();
+                  const autoDiv = val.startsWith('AD14') ? 'AIDS B' : 'AIDS A';
+                  setNewStudent(prev => ({ ...prev, roll_no: val, division: autoDiv }));
+                }}
+                style={filterInput}
+              />
+            </div>
+            <div>
+              <p className="text-label" style={{ marginBottom: '4px' }}>Name</p>
+              <input
+                type="text"
+                placeholder="Student Full Name"
+                value={newStudent.name}
+                onChange={e => setNewStudent(prev => ({ ...prev, name: e.target.value }))}
+                style={filterInput}
+              />
+            </div>
             <div>
               <p className="text-label" style={{ marginBottom: '4px' }}>Division</p>
               <select
@@ -175,8 +184,8 @@ export default function StudentsPage() {
                 onChange={e => setNewStudent(prev => ({ ...prev, division: e.target.value }))}
                 style={filterInput}
               >
-                <option>AIDS A</option>
-                <option>AIDS B</option>
+                <option value="AIDS A">AIDS A (AD13 Series)</option>
+                <option value="AIDS B">AIDS B (AD14 Series)</option>
               </select>
             </div>
             <div>

@@ -79,7 +79,8 @@ export async function POST(request: NextRequest) {
     const randomHex = crypto.randomBytes(3).toString('hex');
     const uniqueId = `test-${slugBase}-${randomHex}`;
 
-    const isQuiz = test_type === 'QUIZ';
+    const isQuizOrPuzzle = test_type === 'QUIZ' || test_type === 'PUZZLE';
+    const finalTestType = test_type === 'PUZZLE' ? 'PUZZLE' : test_type === 'QUIZ' ? 'QUIZ' : 'CODING';
 
     const test = await prisma.test.create({
       data: {
@@ -89,19 +90,19 @@ export async function POST(request: NextRequest) {
         instructions: instructions || null,
         subject_id,
         teacher_id,
-        duration_minutes: parseInt(duration_minutes) || (isQuiz ? 30 : 60),
+        duration_minutes: parseInt(duration_minutes) || (isQuizOrPuzzle ? 30 : 60),
         total_marks: parseInt(total_marks) || 30,
-        questions_per_student: parseInt(questions_per_student) || (isQuiz ? 15 : 3),
+        questions_per_student: parseInt(questions_per_student) || (isQuizOrPuzzle ? 15 : 3),
         target_division: target_division || null,
-        allowed_languages: isQuiz ? [] : (allowed_languages || ['c', 'cpp', 'python', 'java']),
-        test_type: isQuiz ? 'QUIZ' : 'CODING',
+        allowed_languages: isQuizOrPuzzle ? [] : (allowed_languages || ['c', 'cpp', 'python', 'java']),
+        test_type: finalTestType,
         status: 'PUBLISHED',
         start_time: start_time ? new Date(start_time) : null,
       }
     });
 
-    // If quiz test and bank_id provided, copy questions from bank
-    if (isQuiz && bank_id) {
+    // If quiz or puzzle test and bank_id provided, copy questions from bank
+    if (isQuizOrPuzzle && bank_id) {
       const bankQs = await prisma.quizQuestion.findMany({
         where: { bank_id },
         orderBy: { order_index: 'asc' }
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
           }
         });
       }
-    } else if (!isQuiz) {
+    } else if (!isQuizOrPuzzle) {
       // Auto-assign unique questions for coding test
       const allQs = await prisma.question.findMany({ orderBy: { created_at: 'asc' } });
       const seenTitles = new Set<string>();
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === 'update_test') {
-    const { id, title, description, instructions, duration_minutes, total_marks, questions_per_student, status, target_division, marks_published, allowed_languages, start_time, end_time } = body;
+    const { id, title, description, instructions, duration_minutes, total_marks, questions_per_student, status, target_division, marks_published, allowed_languages, start_time, end_time, test_type } = body;
     
     // Verify ownership
     const test = await prisma.test.findUnique({ where: { id } });
@@ -167,6 +168,7 @@ export async function POST(request: NextRequest) {
         questions_per_student: parseInt(questions_per_student) || 3,
         status,
         target_division: target_division || null,
+        ...(test_type ? { test_type } : {}),
         allowed_languages: allowed_languages || ['c', 'cpp', 'python', 'java'],
         marks_published: marks_published === true,
         start_time: start_time ? new Date(start_time) : null,

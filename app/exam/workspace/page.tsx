@@ -738,7 +738,7 @@ export default function WorkspacePage() {
 
   if (!sessionData) return null;
 
-  if (sessionData.session.test_type === 'QUIZ') {
+  if (sessionData.session.test_type === 'QUIZ' || sessionData.session.test_type === 'PUZZLE') {
     return (
       <QuizWorkspace
         session={sessionData.session as any}

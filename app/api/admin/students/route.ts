@@ -39,20 +39,22 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { action, students, roll_no, name, division, branch } = body;
 
-  const ensureBranchDiv = async (branchCode: string, divName: string) => {
+  const ensureBranchDiv = async (branchCode: string, divName: string, roll: string) => {
     let b = await prisma.branch.findUnique({ where: { code: branchCode } });
     if (!b) b = await prisma.branch.create({ data: { code: branchCode, name: branchCode } });
     
-    let d = await prisma.division.findUnique({ where: { name: divName } });
-    if (!d) d = await prisma.division.create({ data: { name: divName } });
+    const rollUpper = (roll || '').toUpperCase();
+    const finalDivName = rollUpper.startsWith('AD14') ? 'AIDS B' : rollUpper.startsWith('AD13') ? 'AIDS A' : (divName === 'B' || divName === 'AIDS B') ? 'AIDS B' : 'AIDS A';
+    let d = await prisma.division.findUnique({ where: { name: finalDivName } });
+    if (!d) d = await prisma.division.create({ data: { name: finalDivName } });
     return { branch_id: b.id, division_id: d.id };
   };
 
   if (action === 'import') {
     if (students && students.length > 0) {
       for (const s of students) {
-        const { branch_id, division_id } = await ensureBranchDiv(s.branch || 'AI&DS', s.division || 'A');
-        const roll = s.roll_no.toUpperCase();
+        const roll = (s.roll_no || '').toUpperCase();
+        const { branch_id, division_id } = await ensureBranchDiv(s.branch || 'AI&DS', s.division || 'AIDS A', roll);
         
         await prisma.user.upsert({
           where: { email: `${roll.toLowerCase()}@zcoer.edu.in` },
@@ -77,8 +79,8 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === 'add') {
-    const { branch_id, division_id } = await ensureBranchDiv(branch || 'AI&DS', division || 'A');
-    const roll = roll_no.toUpperCase();
+    const roll = (roll_no || '').toUpperCase();
+    const { branch_id, division_id } = await ensureBranchDiv(branch || 'AI&DS', division || 'AIDS A', roll);
     await prisma.user.upsert({
       where: { email: `${roll.toLowerCase()}@zcoer.edu.in` },
       update: { full_name: name },

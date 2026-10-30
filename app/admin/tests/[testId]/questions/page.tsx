@@ -13,6 +13,7 @@ export default function TestQuestionsPage() {
   const [assignedQuestions, setAssignedQuestions] = useState<any[]>([]);
   const [bankQuestions, setBankQuestions] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [testQuizQuestions, setTestQuizQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -44,6 +45,7 @@ export default function TestQuestionsPage() {
     });
     const qData = await qRes.json();
     setAssignedQuestions(qData.assignedQuestions || []);
+    setTestQuizQuestions(qData.testQuizQuestions || []);
     setBankQuestions(qData.questions || []);
     setSubjects(qData.subjects || []);
     if (qData.subjects?.length > 0 && !newData.subject_name) {
@@ -148,8 +150,8 @@ export default function TestQuestionsPage() {
   if (loading) return <div style={{ padding: '24px', color: 'var(--text-muted)' }}>Loading...</div>;
 
   // Questions assigned to this test, enriched with full question data
-  const isQuiz = test?.test_type === 'QUIZ';
-  const quizQs = test?.quizQuestions || [];
+  const isQuiz = test?.test_type === 'QUIZ' || test?.test_type === 'PUZZLE';
+  const quizQs = testQuizQuestions.length > 0 ? testQuizQuestions : (test?.quizQuestions || []);
 
   const assignedIds = new Set(assignedQuestions.map((q: any) => q.question_id || q.id));
   const unassigned = bankQuestions.filter((q: any) => !assignedIds.has(q.id));

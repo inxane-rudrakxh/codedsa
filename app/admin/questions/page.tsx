@@ -68,7 +68,7 @@ export default function QuestionsPage() {
   const [newBankData, setNewBankData] = useState({
     name: '',
     description: '',
-    category: '',
+    category: 'PUZZLE',
     total_marks: 30,
     duration_minutes: 30,
     subject_code: 'DSA',
@@ -90,6 +90,16 @@ export default function QuestionsPage() {
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [bulkImportText, setBulkImportText] = useState('');
   const [bulkTargetBankId, setBulkTargetBankId] = useState('');
+
+  // Create Test Modal state
+  const [showCreateTestModal, setShowCreateTestModal] = useState(false);
+  const [createTestConfig, setCreateTestConfig] = useState({
+    title: '',
+    test_type: 'PUZZLE',
+    target_division: '',
+    duration_minutes: 30,
+    auto_approve: false,
+  });
 
   // Test creation status
   const [createdTestSlug, setCreatedTestSlug] = useState<string | null>(null);
@@ -238,15 +248,33 @@ export default function QuestionsPage() {
   };
 
   // ── Create Test From Bank ──────────────────────────────────────────────────
-  const handleCreateTestFromBank = async () => {
+  const handleOpenCreateTestModal = () => {
+    if (!currentBank) return;
+    const isPuzzle = (currentBank.category || '').toUpperCase() === 'PUZZLE' || currentBank.name.toLowerCase().includes('puzzle');
+    setCreateTestConfig({
+      title: currentBank.name,
+      test_type: isPuzzle ? 'PUZZLE' : 'QUIZ',
+      target_division: '',
+      duration_minutes: currentBank.duration_minutes || (isPuzzle ? 30 : 20),
+      auto_approve: false,
+    });
+    setShowCreateTestModal(true);
+  };
+
+  const handleConfirmCreateTest = async () => {
     if (!selectedBankId) return;
     const res = await fetch('/api/admin/questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'create_test_from_bank', bank_id: selectedBankId }),
+      body: JSON.stringify({ 
+        action: 'create_test_from_bank', 
+        bank_id: selectedBankId,
+        ...createTestConfig 
+      }),
     });
     const data = await res.json();
     if (res.ok && data.test) {
+      setShowCreateTestModal(false);
       setCreatedTestSlug(data.test.unique_id);
       alert(`Test published successfully! Student test link: /${data.test.unique_id}`);
     } else {
@@ -436,7 +464,7 @@ export default function QuestionsPage() {
               </button>
 
               <button
-                onClick={handleCreateTestFromBank}
+                onClick={handleOpenCreateTestModal}
                 style={{
                   background: '#22c55e',
                   border: 'none',
@@ -802,13 +830,16 @@ export default function QuestionsPage() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Category</label>
-                  <input
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Bank Mode / Category</label>
+                  <select
                     value={newBankData.category}
                     onChange={e => setNewBankData(p => ({ ...p, category: e.target.value }))}
-                    placeholder="e.g. Trees"
                     style={inputStyle}
-                  />
+                  >
+                    <option value="PUZZLE">🧩 Puzzle Test (Pointers & Diagrams)</option>
+                    <option value="QUIZ">📝 Quiz Test (Theory, Stacks & Recursion)</option>
+                    <option value="CODING">💻 Coding Questions Bank</option>
+                  </select>
                 </div>
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Duration (Mins)</label>
@@ -834,7 +865,7 @@ export default function QuestionsPage() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <div style={{ maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '28px' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
-              {editingQuestion ? 'Edit Question' : 'Add New Question'}
+              {editingQuestion ? 'Edit Question Configuration' : 'Add Question Configuration'}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
               <div>
@@ -861,16 +892,24 @@ export default function QuestionsPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Question Type</label>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Question Type (Quiz / Puzzle)</label>
                   <select
                     value={questionFormData.type}
                     onChange={e => setQuestionFormData(p => ({ ...p, type: e.target.value }))}
                     style={inputStyle}
                   >
-                    <option value="SHORT_ANSWER">Short Answer / Output / Statement</option>
-                    <option value="MCQ">Multiple Choice (MCQ)</option>
-                    <option value="PUZZLE">Puzzle</option>
-                    <option value="FILL_BLANK">Fill in Blank</option>
+                    <optgroup label="Quiz Question Types">
+                      <option value="SHORT_ANSWER">📝 Short Answer / Conceptual Definition</option>
+                      <option value="MCQ">🔘 Multiple Choice (MCQ)</option>
+                      <option value="TRUE_FALSE">⚖️ True / False</option>
+                      <option value="FILL_BLANK">✍️ Fill in the Blank</option>
+                    </optgroup>
+                    <optgroup label="Puzzle Question Types">
+                      <option value="POINTER_PUZZLE">🧩 Linked List Pointer / Node Puzzle</option>
+                      <option value="OUTPUT_TRACING">🔍 Output Tracing & Recursion</option>
+                      <option value="MISSING_LINK">🔗 Missing Statement / Link Completion</option>
+                      <option value="ERROR_FIND">🐞 Identify Error / Bug in Code</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div>
@@ -974,6 +1013,85 @@ export default function QuestionsPage() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button onClick={() => setShowBulkImportModal(false)} style={cancelBtn}>Cancel</button>
               <button onClick={handleBulkImport} style={primaryBtn}>Parse & Import</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: CREATE TEST FROM BANK ────────────────────────────────────── */}
+      {showCreateTestModal && currentBank && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ maxWidth: '520px', width: '100%', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '28px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '6px' }}>Publish Test from Question Bank</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+              Configure test mode and target division before publishing.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Test Title *</label>
+                <input
+                  value={createTestConfig.title}
+                  onChange={e => setCreateTestConfig(p => ({ ...p, title: e.target.value }))}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Test Mode</label>
+                  <select
+                    value={createTestConfig.test_type}
+                    onChange={e => setCreateTestConfig(p => ({ ...p, test_type: e.target.value }))}
+                    style={inputStyle}
+                  >
+                    <option value="PUZZLE">🧩 Puzzle Test (Pointers & Diagrams)</option>
+                    <option value="QUIZ">📝 Quiz Test (Theory & Concept)</option>
+                    <option value="CODING">💻 Coding Test</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Duration (Mins)</label>
+                  <input
+                    type="number"
+                    value={createTestConfig.duration_minutes}
+                    onChange={e => setCreateTestConfig(p => ({ ...p, duration_minutes: parseInt(e.target.value) || 30 }))}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Target Division Section</label>
+                <select
+                  value={createTestConfig.target_division}
+                  onChange={e => setCreateTestConfig(p => ({ ...p, target_division: e.target.value }))}
+                  style={inputStyle}
+                >
+                  <option value="">All Divisions (Both AIDS A & AIDS B)</option>
+                  <option value="AIDS A">AIDS A (AD13 Series)</option>
+                  <option value="AIDS B">AIDS B (AD14 Series)</option>
+                </select>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Restricts student access according to Division A (AD13) or Division B (AD14).
+                </p>
+              </div>
+
+              <div style={{ padding: '12px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px' }}>
+                <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>
+                  ⚠️ Anti-Cheat & Alt-Tab Limit:
+                </p>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Strict 3-strike alt-tab violation limit with automatic submission on the 3rd strike is active.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button onClick={() => setShowCreateTestModal(false)} style={cancelBtn}>Cancel</button>
+              <button onClick={handleConfirmCreateTest} style={{ ...primaryBtn, background: '#22c55e' }}>
+                <Rocket size={14} style={{ marginRight: '6px' }} /> Publish Live Test
+              </button>
             </div>
           </div>
         </div>

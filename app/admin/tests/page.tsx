@@ -121,20 +121,20 @@ export default function TestsPage() {
                       fontWeight: 700,
                       padding: '2px 8px',
                       borderRadius: '4px',
-                      background: test.test_type === 'QUIZ' ? 'rgba(168, 85, 247, 0.15)' : 'rgba(59, 130, 246, 0.12)',
-                      color: test.test_type === 'QUIZ' ? '#c084fc' : '#3b82f6',
-                      border: `1px solid ${test.test_type === 'QUIZ' ? 'rgba(168, 85, 247, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
+                      background: test.test_type === 'PUZZLE' ? 'rgba(168, 85, 247, 0.18)' : test.test_type === 'QUIZ' ? 'rgba(59, 130, 246, 0.18)' : 'rgba(204, 120, 92, 0.18)',
+                      color: test.test_type === 'PUZZLE' ? '#c084fc' : test.test_type === 'QUIZ' ? '#60a5fa' : 'var(--accent)',
+                      border: `1px solid ${test.test_type === 'PUZZLE' ? 'rgba(168, 85, 247, 0.35)' : test.test_type === 'QUIZ' ? 'rgba(59, 130, 246, 0.35)' : 'rgba(204, 120, 92, 0.35)'}`,
                       letterSpacing: '0.04em',
                     }}>
-                      {test.test_type === 'QUIZ' ? 'PUZZLE / QUIZ' : 'CODING'}
+                      {test.test_type === 'PUZZLE' ? '🧩 PUZZLE TEST' : test.test_type === 'QUIZ' ? '📝 QUIZ TEST' : '💻 CODING TEST'}
                     </span>
                   </div>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-                    {test.subject?.name} · {test.duration_minutes} Mins · {test.total_marks} Marks · {test.test_type === 'QUIZ' ? `${test.quizQuestions?.length || test.questions_per_student} Questions` : `${test.questions_per_student} Qs/Student`} 
-                    {test.target_division ? ` · Div: ${test.target_division}` : ''}
+                    {test.subject?.name} · {test.duration_minutes} Mins · {test.total_marks} Marks · {test.test_type === 'QUIZ' || test.test_type === 'PUZZLE' ? `${test.quizQuestions?.length || test.questions_per_student} Questions` : `${test.questions_per_student} Qs/Student`} 
+                    {test.target_division ? ` · Div: ${test.target_division}` : ' · All Divisions'}
                   </p>
                   <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', margin: '4px 0 0' }}>
-                    {test.test_type === 'QUIZ' ? 'Mode: Non-coding questions & puzzles' : `Languages: ${test.allowed_languages?.join(', ') || 'c, cpp, python, java'}`}
+                    {test.test_type === 'QUIZ' || test.test_type === 'PUZZLE' ? 'Mode: Non-coding questions & puzzles (Max 3 Alt-Tabs)' : `Languages: ${test.allowed_languages?.join(', ') || 'c, cpp, python, java'}`}
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -164,6 +164,14 @@ export default function TestsPage() {
                       <input value={editData.title} onChange={e => setEditData((p: any) => ({ ...p, title: e.target.value }))} style={inputStyle} />
                     </div>
                     <div>
+                      <p className="text-label" style={{ marginBottom: '4px' }}>Test Mode</p>
+                      <select value={editData.test_type || 'CODING'} onChange={e => setEditData((p: any) => ({ ...p, test_type: e.target.value }))} style={inputStyle}>
+                        <option value="CODING">💻 Coding Test (Compiler & Testcases)</option>
+                        <option value="QUIZ">📝 Quiz Test (MCQs & Short Theory)</option>
+                        <option value="PUZZLE">🧩 Puzzle Test (Pointers & Output Tracing)</option>
+                      </select>
+                    </div>
+                    <div>
                       <p className="text-label" style={{ marginBottom: '4px' }}>Status</p>
                       <select value={editData.status} onChange={e => setEditData((p: any) => ({ ...p, status: e.target.value }))} style={inputStyle}>
                         <option value="DRAFT">DRAFT</option>
@@ -186,8 +194,9 @@ export default function TestsPage() {
                     <div>
                       <p className="text-label" style={{ marginBottom: '4px' }}>Target Division</p>
                       <select value={editData.target_division || ''} onChange={e => setEditData((p: any) => ({ ...p, target_division: e.target.value }))} style={inputStyle}>
-                        <option value="">All Divisions</option>
-                        {divisions.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                        <option value="">All Divisions (Both AIDS A & AIDS B)</option>
+                        <option value="AIDS A">AIDS A (AD13 Series)</option>
+                        <option value="AIDS B">AIDS B (AD14 Series)</option>
                       </select>
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>

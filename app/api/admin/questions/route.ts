@@ -41,12 +41,17 @@ export async function GET(request: NextRequest) {
       where: { test_id },
       orderBy: { order_index: 'asc' },
     });
+    const testQuizQuestions = await prisma.quizQuestion.findMany({
+      where: { test_id },
+      orderBy: { order_index: 'asc' },
+    });
     return NextResponse.json({
       questions,
       questionBanks,
       quizQuestions,
       subjects,
-      assignedQuestions: testQuestions
+      assignedQuestions: testQuestions,
+      testQuizQuestions,
     });
   }
 
@@ -295,7 +300,7 @@ export async function POST(request: NextRequest) {
         total_marks: Math.round(totalMarks),
         questions_per_student: bank.quizQuestions.length,
         target_division: target_division || null,
-        test_type: 'QUIZ',
+        test_type: (body.test_type || bank.category || '').toUpperCase() === 'PUZZLE' ? 'PUZZLE' : 'QUIZ',
         auto_approve: auto_approve === true,
         marks_published: true,
         randomize_questions: false,

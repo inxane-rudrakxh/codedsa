@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     session.is_submitted = true;
   }
 
-  const isQuiz = session.test.test_type === 'QUIZ';
+  const isQuiz = session.test.test_type === 'QUIZ' || session.test.test_type === 'PUZZLE';
 
   // ── QUIZ / PUZZLE TEST LOGIC ──────────────────────────────────────────────
   if (isQuiz) {

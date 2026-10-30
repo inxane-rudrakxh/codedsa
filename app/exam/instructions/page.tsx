@@ -71,7 +71,7 @@ export default function InstructionsPage() {
     }
   };
 
-  const isQuiz = testType === 'QUIZ';
+  const isQuiz = testType === 'QUIZ' || testType === 'PUZZLE';
 
   const dynamicInstructions = isQuiz ? [
     `This test contains ${questionCount} questions for a total of ${totalMarks} marks.`,

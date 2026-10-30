@@ -44,10 +44,12 @@ export async function POST(request: NextRequest) {
           data: { code: 'GEN', name: 'General' }
         });
       }
-      let defaultDivision = await prisma.division.findFirst();
-      if (!defaultDivision) {
-        defaultDivision = await prisma.division.create({
-          data: { name: 'A' }
+      const cleanRoll = roll_no.trim().toUpperCase();
+      const divName = cleanRoll.startsWith('AD14') ? 'AIDS B' : 'AIDS A';
+      let targetDivision = await prisma.division.findFirst({ where: { name: divName } });
+      if (!targetDivision) {
+        targetDivision = await prisma.division.create({
+          data: { name: divName }
         });
       }
 
@@ -62,9 +64,9 @@ export async function POST(request: NextRequest) {
       studentRecord = await prisma.student.create({
         data: {
           id: newUser.id,
-          roll_number: roll_no.trim().toUpperCase(),
+          roll_number: cleanRoll,
           branch_id: defaultBranch.id,
-          division_id: defaultDivision.id
+          division_id: targetDivision.id
         },
         include: {
           user: true,
@@ -146,8 +148,18 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Validate target division
-      if (test.target_division && test.target_division.trim() !== '' && test.target_division !== studentRecord.division?.name) {
-         return NextResponse.json({ error: 'This assessment is not assigned to your division.' }, { status: 403 });
+      if (test.target_division && test.target_division.trim() !== '') {
+        const studentDiv = studentRecord.division?.name || (studentRecord.roll_number.startsWith('AD14') ? 'AIDS B' : 'AIDS A');
+        const targetDiv = test.target_division.trim();
+        const isMatch = (targetDiv === studentDiv) ||
+          ((targetDiv === 'A' || targetDiv === 'AIDS A') && (studentDiv === 'A' || studentDiv === 'AIDS A')) ||
+          ((targetDiv === 'B' || targetDiv === 'AIDS B') && (studentDiv === 'B' || studentDiv === 'AIDS B'));
+
+        if (!isMatch) {
+          return NextResponse.json({ 
+            error: `This assessment is designated for Division ${targetDiv}. Your roll number (${studentRecord.roll_number}) is registered under Division ${studentDiv}.` 
+          }, { status: 403 });
+        }
       }
 
       sessionId = generateSessionId();
