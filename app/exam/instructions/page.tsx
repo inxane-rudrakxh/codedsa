@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AlertTriangle } from 'lucide-react';
 
 export default function InstructionsPage() {
   const router = useRouter();
@@ -191,7 +192,7 @@ export default function InstructionsPage() {
             alignItems: 'center',
             gap: '14px'
           }}>
-            <span style={{ fontSize: '20px' }}>⚠️</span>
+            <AlertTriangle size={20} color="#eab308" style={{ flexShrink: 0 }} />
             <div>
               <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>
                 Anti-Cheat Limit: 3 Alt-Tab / Window Switches

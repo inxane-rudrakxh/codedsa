@@ -52,10 +52,52 @@ export async function GET(request: NextRequest) {
 
   // ── QUIZ / PUZZLE TEST LOGIC ──────────────────────────────────────────────
   if (isQuiz) {
-    const quizQuestions = await prisma.quizQuestion.findMany({
+    let quizQuestions = await prisma.quizQuestion.findMany({
       where: { test_id: session.test.id },
       orderBy: { order_index: 'asc' }
     });
+
+    // Auto-recovery fallback if test has 0 questions
+    if (quizQuestions.length === 0) {
+      const titleLower = session.test.title.toLowerCase();
+      const isPuzzle = session.test.test_type === 'PUZZLE' || titleLower.includes('puzzle') || titleLower.includes('linked list');
+      const bank = await prisma.questionBank.findFirst({
+        where: isPuzzle 
+          ? { OR: [{ category: 'PUZZLE' }, { name: { contains: 'Linked Lists', mode: 'insensitive' } }] }
+          : { OR: [{ category: 'QUIZ' }, { name: { contains: 'Stacks', mode: 'insensitive' } }] }
+      });
+      if (bank) {
+        const bankQs = await prisma.quizQuestion.findMany({
+          where: { bank_id: bank.id },
+          orderBy: { order_index: 'asc' }
+        });
+        if (bankQs.length > 0) {
+          for (let i = 0; i < bankQs.length; i++) {
+            const bq = bankQs[i];
+            await prisma.quizQuestion.create({
+              data: {
+                test_id: session.test.id,
+                bank_id: bq.bank_id,
+                bank_name: bq.bank_name,
+                type: bq.type,
+                question_text: bq.question_text,
+                code_snippet: bq.code_snippet,
+                options: bq.options,
+                correct_answer: bq.correct_answer,
+                alternate_answers: bq.alternate_answers,
+                explanation: bq.explanation,
+                marks: bq.marks,
+                order_index: i + 1,
+              }
+            });
+          }
+          quizQuestions = await prisma.quizQuestion.findMany({
+            where: { test_id: session.test.id },
+            orderBy: { order_index: 'asc' }
+          });
+        }
+      }
+    }
 
     const quizAnswerRows = await prisma.quizAnswer.findMany({
       where: { session_id: session.id }
@@ -103,7 +145,7 @@ export async function GET(request: NextRequest) {
         remaining_seconds: Math.floor(remaining),
         test_title: session.test.title,
         test_instructions: session.test.instructions || '',
-        test_type: 'QUIZ',
+        test_type: session.test.test_type || 'QUIZ',
         duration_minutes: session.test.duration_minutes,
         total_marks: session.test.total_marks,
         marks_published: session.test.marks_published,

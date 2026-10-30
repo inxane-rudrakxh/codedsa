@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Code2, BookOpen, Puzzle } from 'lucide-react';
 
 export default function TestsPage() {
   const router = useRouter();
@@ -125,8 +126,17 @@ export default function TestsPage() {
                       color: test.test_type === 'PUZZLE' ? '#c084fc' : test.test_type === 'QUIZ' ? '#60a5fa' : 'var(--accent)',
                       border: `1px solid ${test.test_type === 'PUZZLE' ? 'rgba(168, 85, 247, 0.35)' : test.test_type === 'QUIZ' ? 'rgba(59, 130, 246, 0.35)' : 'rgba(204, 120, 92, 0.35)'}`,
                       letterSpacing: '0.04em',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
                     }}>
-                      {test.test_type === 'PUZZLE' ? '🧩 PUZZLE TEST' : test.test_type === 'QUIZ' ? '📝 QUIZ TEST' : '💻 CODING TEST'}
+                      {test.test_type === 'PUZZLE' ? (
+                        <><Puzzle size={12} /> PUZZLE TEST</>
+                      ) : test.test_type === 'QUIZ' ? (
+                        <><BookOpen size={12} /> QUIZ TEST</>
+                      ) : (
+                        <><Code2 size={12} /> CODING TEST</>
+                      )}
                     </span>
                   </div>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
@@ -166,9 +176,9 @@ export default function TestsPage() {
                     <div>
                       <p className="text-label" style={{ marginBottom: '4px' }}>Test Mode</p>
                       <select value={editData.test_type || 'CODING'} onChange={e => setEditData((p: any) => ({ ...p, test_type: e.target.value }))} style={inputStyle}>
-                        <option value="CODING">💻 Coding Test (Compiler & Testcases)</option>
-                        <option value="QUIZ">📝 Quiz Test (MCQs & Short Theory)</option>
-                        <option value="PUZZLE">🧩 Puzzle Test (Pointers & Output Tracing)</option>
+                        <option value="CODING">Coding Test (Compiler & Testcases)</option>
+                        <option value="QUIZ">Quiz Test (MCQs & Short Theory)</option>
+                        <option value="PUZZLE">Puzzle Test (Pointers & Output Tracing)</option>
                       </select>
                     </div>
                     <div>

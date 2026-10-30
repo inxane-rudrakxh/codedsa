@@ -96,7 +96,8 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
 
   const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('session_token') || '' : '';
 
-  const currentQ = questions[activeIdx] || questions[0];
+  const safeQuestions = Array.isArray(questions) ? questions : [];
+  const currentQ = safeQuestions.length > 0 ? (safeQuestions[activeIdx] || safeQuestions[0]) : null;
 
   // ── Auto-save function ────────────────────────────────────────────────────
   const persistAnswer = useCallback(async (qid: string, ans: string) => {
@@ -290,8 +291,41 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
   const isTimeEmergency = timeRemaining < 120; // < 2 mins
 
   const answeredCount = Object.keys(answers).filter(k => answers[k]?.trim() !== '').length;
-  const unansweredCount = questions.length - answeredCount;
+  const unansweredCount = Math.max(0, safeQuestions.length - answeredCount);
   const reviewCount = reviewSet.size;
+
+  if (safeQuestions.length === 0) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+        <div style={{ maxWidth: '440px', width: '100%', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '32px', textAlign: 'center' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(245, 158, 11, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#f59e0b' }}>
+            <AlertTriangle size={24} />
+          </div>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+            No Questions Configured
+          </h2>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '24px' }}>
+            This assessment test currently has no questions assigned. Please contact your instructor or exam proctor.
+          </p>
+          <button
+            onClick={() => router.push('/exam')}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '6px',
+              background: 'var(--accent)',
+              color: '#ffffff',
+              border: 'none',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Return to Exam Portal
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column', color: 'var(--text-primary)' }}>
@@ -457,28 +491,33 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
                   alignItems: 'center',
                   gap: '4px',
                 }}>
-                  {saveStatus === 'saving' ? 'Saving...' : 'Saved ✓'}
+                  {saveStatus === 'saving' ? 'Saving...' : (
+                    <>
+                      <Check size={12} color="#22c55e" />
+                      <span>Saved</span>
+                    </>
+                  )}
                 </span>
 
                 {/* Mark for review toggle */}
                 <button
-                  onClick={() => toggleReview(currentQ.id)}
+                  onClick={() => currentQ && toggleReview(currentQ.id)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
                     padding: '6px 12px',
                     borderRadius: '4px',
-                    background: reviewSet.has(currentQ.id) ? 'rgba(168, 85, 247, 0.15)' : 'var(--surface-2)',
-                    border: `1px solid ${reviewSet.has(currentQ.id) ? 'rgba(168, 85, 247, 0.4)' : 'var(--border)'}`,
-                    color: reviewSet.has(currentQ.id) ? '#a855f7' : 'var(--text-secondary)',
+                    background: currentQ && reviewSet.has(currentQ.id) ? 'rgba(168, 85, 247, 0.15)' : 'var(--surface-2)',
+                    border: `1px solid ${currentQ && reviewSet.has(currentQ.id) ? 'rgba(168, 85, 247, 0.4)' : 'var(--border)'}`,
+                    color: currentQ && reviewSet.has(currentQ.id) ? '#a855f7' : 'var(--text-secondary)',
                     fontSize: '12px',
                     fontWeight: 600,
                     cursor: 'pointer',
                   }}
                 >
-                  <Flag size={13} fill={reviewSet.has(currentQ.id) ? '#a855f7' : 'none'} />
-                  {reviewSet.has(currentQ.id) ? 'Marked' : 'Mark for Review'}
+                  <Flag size={13} fill={currentQ && reviewSet.has(currentQ.id) ? '#a855f7' : 'none'} />
+                  {currentQ && reviewSet.has(currentQ.id) ? 'Marked' : 'Mark for Review'}
                 </button>
               </div>
             </div>
@@ -607,7 +646,7 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
                 /* Short Answer / Puzzle Output / Textarea */
                 <div>
                   <textarea
-                    value={answers[currentQ?.id] || ''}
+                    value={currentQ ? (answers[currentQ.id] || '') : ''}
                     onChange={e => handleAnswerChange(e.target.value)}
                     placeholder="Type your answer, output, or statement here..."
                     rows={4}
@@ -627,7 +666,7 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
                   />
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
                     <span>Auto-saves as you type</span>
-                    {answers[currentQ?.id] && (
+                    {currentQ && answers[currentQ.id] && (
                       <button
                         onClick={() => handleAnswerChange('')}
                         style={{

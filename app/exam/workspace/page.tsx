@@ -743,7 +743,7 @@ export default function WorkspacePage() {
       <QuizWorkspace
         session={sessionData.session as any}
         student={sessionData.student}
-        questions={((sessionData as any).quiz_questions || sessionData.questions) as any}
+        questions={((sessionData as any).quiz_questions || sessionData.questions || []) as any}
         initialAnswers={((sessionData as any).quiz_answers || {}) as any}
       />
     );

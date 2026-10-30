@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Check, Code2, BookOpen, Puzzle } from 'lucide-react';
+import { CheckCircle2, Check, Code2, BookOpen, Puzzle, AlertTriangle } from 'lucide-react';
 
 export default function CreateTestWizard() {
   const router = useRouter();
@@ -421,8 +421,8 @@ export default function CreateTestWizard() {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px' }}>Anti-Cheat & Exam Rules</label>
               
               <div style={{ padding: '16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px', marginBottom: '16px' }}>
-                <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                  ⚠️ Strict Alt-Tab Limit: Up to 3 Violations
+                <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertTriangle size={15} color="#f59e0b" /> Strict Alt-Tab Limit: Up to 3 Violations
                 </p>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   Tab switching, exiting fullscreen, or minimizing the window is recorded. On the <strong>3rd violation</strong>, the student's exam is automatically submitted immediately with their current answers.
@@ -468,7 +468,14 @@ export default function CreateTestWizard() {
               <p style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '24px' }}>{formData.title || 'Untitled Test'}</p>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '14px' }}>
-                <div><span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Test Mode:</span> <strong>{formData.test_mode === 'PUZZLE' ? '🧩 Puzzle Test' : formData.test_mode === 'QUIZ' ? '📝 Quiz Test' : '💻 Coding Test'}</strong></div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Test Mode:</span>
+                  <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    {formData.test_mode === 'PUZZLE' && <><Puzzle size={14} color="#c084fc" /> Puzzle Test</>}
+                    {formData.test_mode === 'QUIZ' && <><BookOpen size={14} color="#60a5fa" /> Quiz Test</>}
+                    {formData.test_mode === 'CODING' && <><Code2 size={14} color="var(--accent)" /> Coding Test</>}
+                  </strong>
+                </div>
                 <div><span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Division Eligibility:</span> <strong>{formData.target_division === 'AIDS A' ? 'AIDS A (AD13 Series)' : formData.target_division === 'AIDS B' ? 'AIDS B (AD14 Series)' : 'All Divisions (AIDS A & B)'}</strong></div>
                 <div><span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Duration:</span> <strong>{formData.duration_minutes} minutes</strong></div>
                 <div><span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Total Marks:</span> <strong>{formData.total_marks} Marks</strong></div>

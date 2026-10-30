@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sparkles, Plus, Trash2, Edit2, UploadCloud, Rocket, Check, ExternalLink, Code2, BookOpen, Layers } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Edit2, UploadCloud, Rocket, Check, ExternalLink, Code2, BookOpen, Layers, Puzzle, AlertTriangle, Lightbulb } from 'lucide-react';
 
 interface QuestionBank {
   id: string;
@@ -745,8 +745,8 @@ export default function QuestionsPage() {
                       </p>
                     )}
                     {q.explanation && (
-                      <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-secondary)', borderTop: '1px solid rgba(34, 197, 94, 0.2)', paddingTop: '6px' }}>
-                        💡 {q.explanation}
+                      <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-secondary)', borderTop: '1px solid rgba(34, 197, 94, 0.2)', paddingTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Lightbulb size={13} color="#22c55e" style={{ flexShrink: 0 }} /> {q.explanation}
                       </p>
                     )}
                   </div>
@@ -836,9 +836,9 @@ export default function QuestionsPage() {
                     onChange={e => setNewBankData(p => ({ ...p, category: e.target.value }))}
                     style={inputStyle}
                   >
-                    <option value="PUZZLE">🧩 Puzzle Test (Pointers & Diagrams)</option>
-                    <option value="QUIZ">📝 Quiz Test (Theory, Stacks & Recursion)</option>
-                    <option value="CODING">💻 Coding Questions Bank</option>
+                    <option value="PUZZLE">Puzzle Test (Pointers & Diagrams)</option>
+                    <option value="QUIZ">Quiz Test (Theory, Stacks & Recursion)</option>
+                    <option value="CODING">Coding Questions Bank</option>
                   </select>
                 </div>
                 <div>
@@ -899,16 +899,16 @@ export default function QuestionsPage() {
                     style={inputStyle}
                   >
                     <optgroup label="Quiz Question Types">
-                      <option value="SHORT_ANSWER">📝 Short Answer / Conceptual Definition</option>
-                      <option value="MCQ">🔘 Multiple Choice (MCQ)</option>
-                      <option value="TRUE_FALSE">⚖️ True / False</option>
-                      <option value="FILL_BLANK">✍️ Fill in the Blank</option>
+                      <option value="SHORT_ANSWER">Short Answer / Conceptual Definition</option>
+                      <option value="MCQ">Multiple Choice (MCQ)</option>
+                      <option value="TRUE_FALSE">True / False</option>
+                      <option value="FILL_BLANK">Fill in the Blank</option>
                     </optgroup>
                     <optgroup label="Puzzle Question Types">
-                      <option value="POINTER_PUZZLE">🧩 Linked List Pointer / Node Puzzle</option>
-                      <option value="OUTPUT_TRACING">🔍 Output Tracing & Recursion</option>
-                      <option value="MISSING_LINK">🔗 Missing Statement / Link Completion</option>
-                      <option value="ERROR_FIND">🐞 Identify Error / Bug in Code</option>
+                      <option value="POINTER_PUZZLE">Linked List Pointer / Node Puzzle</option>
+                      <option value="OUTPUT_TRACING">Output Tracing & Recursion</option>
+                      <option value="MISSING_LINK">Missing Statement / Link Completion</option>
+                      <option value="ERROR_FIND">Identify Error / Bug in Code</option>
                     </optgroup>
                   </select>
                 </div>
@@ -1045,9 +1045,9 @@ export default function QuestionsPage() {
                     onChange={e => setCreateTestConfig(p => ({ ...p, test_type: e.target.value }))}
                     style={inputStyle}
                   >
-                    <option value="PUZZLE">🧩 Puzzle Test (Pointers & Diagrams)</option>
-                    <option value="QUIZ">📝 Quiz Test (Theory & Concept)</option>
-                    <option value="CODING">💻 Coding Test</option>
+                    <option value="PUZZLE">Puzzle Test (Pointers & Diagrams)</option>
+                    <option value="QUIZ">Quiz Test (Theory & Concept)</option>
+                    <option value="CODING">Coding Test</option>
                   </select>
                 </div>
                 <div>
@@ -1078,8 +1078,8 @@ export default function QuestionsPage() {
               </div>
 
               <div style={{ padding: '12px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px' }}>
-                <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>
-                  ⚠️ Anti-Cheat & Alt-Tab Limit:
+                <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertTriangle size={14} color="#f59e0b" /> Anti-Cheat & Alt-Tab Limit:
                 </p>
                 <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                   Strict 3-strike alt-tab violation limit with automatic submission on the 3rd strike is active.

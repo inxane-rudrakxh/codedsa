@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Sparkles, Check } from 'lucide-react';
+import { Sparkles, Check, Lightbulb, BookOpen } from 'lucide-react';
 
 export default function TestQuestionsPage() {
   const params = useParams();
@@ -213,60 +213,75 @@ export default function TestQuestionsPage() {
 
         {/* Questions List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {quizQs.map((q: any, idx: number) => (
-            <div
-              key={q.id}
-              style={{
-                background: 'var(--surface-1)',
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-                padding: '20px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                <span style={{ fontFamily: 'Söhne Mono, monospace', fontSize: '14px', fontWeight: 700, color: 'var(--accent)' }}>
-                  Q{idx + 1}.
-                </span>
-                <span style={{
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  background: 'rgba(59, 130, 246, 0.12)',
-                  color: '#3b82f6',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  border: '1px solid rgba(59, 130, 246, 0.25)',
-                }}>
-                  {q.marks} {q.marks === 1 ? 'Mark' : 'Marks'}
-                </span>
-                <span style={{ fontSize: '11px', background: 'var(--surface-2)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: '4px' }}>
-                  {q.type}
-                </span>
-              </div>
-
-              <p style={{ fontSize: '14.5px', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, marginBottom: '12px' }}>
-                {q.question_text}
+          {quizQs.length === 0 ? (
+            <div style={{ padding: '40px 24px', textAlign: 'center', background: 'var(--surface-1)', border: '1px dashed var(--border)', borderRadius: '6px' }}>
+              <BookOpen size={36} color="var(--accent)" style={{ margin: '0 auto 12px' }} />
+              <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                No Questions Configured for this Test
               </p>
-
-              {q.code_snippet && (
-                <div style={{ background: '#0d1117', border: '1px solid #30363d', borderRadius: '4px', padding: '12px 16px', marginBottom: '14px' }}>
-                  <pre style={{ margin: 0, fontFamily: 'Fira Code, monospace', fontSize: '13px', color: '#58a6ff' }}>
-                    {q.code_snippet}
-                  </pre>
-                </div>
-              )}
-
-              <div style={{ padding: '10px 14px', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.25)', fontSize: '13px' }}>
-                <p style={{ margin: 0, color: '#22c55e', fontWeight: 600 }}>
-                  Correct Answer: <span style={{ color: 'var(--text-primary)', fontFamily: 'Söhne Mono, monospace' }}>{q.correct_answer}</span>
-                </p>
-                {q.explanation && (
-                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    💡 {q.explanation}
-                  </p>
-                )}
-              </div>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '420px', margin: '0 auto 20px', lineHeight: 1.5 }}>
+                Configure questions or assign from existing question banks.
+              </p>
+              <Link href="/admin/questions" style={{ ...primaryBtn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <BookOpen size={14} /> Open Question Banks & Tests
+              </Link>
             </div>
-          ))}
+          ) : (
+            quizQs.map((q: any, idx: number) => (
+              <div
+                key={q.id}
+                style={{
+                  background: 'var(--surface-1)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  padding: '20px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                  <span style={{ fontFamily: 'Söhne Mono, monospace', fontSize: '14px', fontWeight: 700, color: 'var(--accent)' }}>
+                    Q{idx + 1}.
+                  </span>
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    background: 'rgba(59, 130, 246, 0.12)',
+                    color: '#3b82f6',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(59, 130, 246, 0.25)',
+                  }}>
+                    {q.marks} {q.marks === 1 ? 'Mark' : 'Marks'}
+                  </span>
+                  <span style={{ fontSize: '11px', background: 'var(--surface-2)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: '4px' }}>
+                    {q.type}
+                  </span>
+                </div>
+
+                <p style={{ fontSize: '14.5px', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, marginBottom: '12px' }}>
+                  {q.question_text}
+                </p>
+
+                {q.code_snippet && (
+                  <div style={{ background: '#0d1117', border: '1px solid #30363d', borderRadius: '4px', padding: '12px 16px', marginBottom: '14px' }}>
+                    <pre style={{ margin: 0, fontFamily: 'Fira Code, monospace', fontSize: '13px', color: '#58a6ff' }}>
+                      {q.code_snippet}
+                    </pre>
+                  </div>
+                )}
+
+                <div style={{ padding: '10px 14px', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.25)', fontSize: '13px' }}>
+                  <p style={{ margin: 0, color: '#22c55e', fontWeight: 600 }}>
+                    Correct Answer: <span style={{ color: 'var(--text-primary)', fontFamily: 'Söhne Mono, monospace' }}>{q.correct_answer}</span>
+                  </p>
+                  {q.explanation && (
+                    <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Lightbulb size={13} color="#22c55e" style={{ flexShrink: 0 }} /> {q.explanation}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     );

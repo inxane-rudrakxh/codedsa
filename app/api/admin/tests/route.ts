@@ -101,30 +101,47 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // If quiz or puzzle test and bank_id provided, copy questions from bank
-    if (isQuizOrPuzzle && bank_id) {
-      const bankQs = await prisma.quizQuestion.findMany({
-        where: { bank_id },
-        orderBy: { order_index: 'asc' }
-      });
-      for (let i = 0; i < bankQs.length; i++) {
-        const bq = bankQs[i];
-        await prisma.quizQuestion.create({
-          data: {
-            test_id: test.id,
-            bank_id: bq.bank_id,
-            bank_name: bq.bank_name,
-            type: bq.type,
-            question_text: bq.question_text,
-            code_snippet: bq.code_snippet,
-            options: bq.options,
-            correct_answer: bq.correct_answer,
-            alternate_answers: bq.alternate_answers,
-            explanation: bq.explanation,
-            marks: bq.marks,
-            order_index: i + 1,
-          }
+    // If quiz or puzzle test, copy questions from selected bank or default bank for this mode
+    if (isQuizOrPuzzle) {
+      let targetBankId = bank_id;
+      if (!targetBankId) {
+        // Auto-match default question bank
+        const isPuzzle = finalTestType === 'PUZZLE' || title.toLowerCase().includes('puzzle') || title.toLowerCase().includes('linked list');
+        const defaultBank = await prisma.questionBank.findFirst({
+          where: isPuzzle 
+            ? { OR: [{ category: 'PUZZLE' }, { name: { contains: 'Linked Lists', mode: 'insensitive' } }] }
+            : { OR: [{ category: 'QUIZ' }, { name: { contains: 'Stacks', mode: 'insensitive' } }] },
+          include: { _count: { select: { quizQuestions: true } } }
         });
+        if (defaultBank && (defaultBank._count?.quizQuestions || 0) > 0) {
+          targetBankId = defaultBank.id;
+        }
+      }
+
+      if (targetBankId) {
+        const bankQs = await prisma.quizQuestion.findMany({
+          where: { bank_id: targetBankId },
+          orderBy: { order_index: 'asc' }
+        });
+        for (let i = 0; i < bankQs.length; i++) {
+          const bq = bankQs[i];
+          await prisma.quizQuestion.create({
+            data: {
+              test_id: test.id,
+              bank_id: bq.bank_id,
+              bank_name: bq.bank_name,
+              type: bq.type,
+              question_text: bq.question_text,
+              code_snippet: bq.code_snippet,
+              options: bq.options,
+              correct_answer: bq.correct_answer,
+              alternate_answers: bq.alternate_answers,
+              explanation: bq.explanation,
+              marks: bq.marks,
+              order_index: i + 1,
+            }
+          });
+        }
       }
     } else if (!isQuizOrPuzzle) {
       // Auto-assign unique questions for coding test
@@ -214,6 +231,43 @@ export async function POST(request: NextRequest) {
     }
     await prisma.testQuestion.deleteMany({ where: { test_id, question_id } });
     return NextResponse.json({ success: true });
+  }
+
+  if (action === 'import_bank_questions') {
+    const { test_id, bank_id } = body;
+    const test = await prisma.test.findUnique({ where: { id: test_id } });
+    if (!test || (payload.role !== 'ADMIN' && test.teacher_id !== payload.user_id)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    const bankQs = await prisma.quizQuestion.findMany({
+      where: { bank_id },
+      orderBy: { order_index: 'asc' }
+    });
+
+    const existingCount = await prisma.quizQuestion.count({ where: { test_id } });
+
+    for (let i = 0; i < bankQs.length; i++) {
+      const bq = bankQs[i];
+      await prisma.quizQuestion.create({
+        data: {
+          test_id: test.id,
+          bank_id: bq.bank_id,
+          bank_name: bq.bank_name,
+          type: bq.type,
+          question_text: bq.question_text,
+          code_snippet: bq.code_snippet,
+          options: bq.options,
+          correct_answer: bq.correct_answer,
+          alternate_answers: bq.alternate_answers,
+          explanation: bq.explanation,
+          marks: bq.marks,
+          order_index: existingCount + i + 1,
+        }
+      });
+    }
+
+    return NextResponse.json({ success: true, count: bankQs.length });
   }
 
   if (action === 'delete_test') {
