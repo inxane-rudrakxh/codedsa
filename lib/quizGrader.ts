@@ -3,13 +3,30 @@ export interface GradedResult {
   marks_awarded: number;
 }
 
-export function normalizeText(text: string): string {
+export function cleanText(text: string): string {
   if (!text) return '';
   return text
     .trim()
-    .toLowerCase()
-    .replace(/^[a-d]\s*[\)\.\-:]\s*/i, '') // strip leading "A) ", "B. ", "C- "
+    .replace(/^["'`]|["'`]$/g, '') // remove surrounding quotes
+    .replace(/[→]/g, '->') // normalize unicode right arrow
+    .replace(/[⇄]/g, '<->') // normalize unicode double arrow
+    .replace(/-->/g, '->')
+    .replace(/<-->/g, '<->')
     .replace(/\s+/g, ' '); // collapse whitespace
+}
+
+export function normalizeAnswer(text: string): string {
+  if (!text) return '';
+  let cleaned = cleanText(text).toLowerCase();
+  // Strip trailing semicolon or period
+  cleaned = cleaned.replace(/[;.]+$/, '').trim();
+  // Strip common prefixes like "output:", "result:", "ans:", "answer:"
+  cleaned = cleaned.replace(/^(?:output|result|ans|answer|key)\s*[:=-]\s*/i, '').trim();
+  // Normalize whitespace around operators
+  cleaned = cleaned.replace(/\s*->\s*/g, '->');
+  cleaned = cleaned.replace(/\s*=\s*/g, '=');
+  cleaned = cleaned.replace(/\s*==\s*/g, '==');
+  return cleaned;
 }
 
 export function extractOptionLetter(text: string): string | null {
@@ -31,105 +48,73 @@ export function checkQuizAnswer(
   }
 
   const rawStudent = studentAnswer.trim();
-  const normStudent = normalizeText(rawStudent);
+  const normStudent = normalizeAnswer(rawStudent);
   const studentLetter = extractOptionLetter(rawStudent);
 
   const rawCorrect = (correctAnswer || '').trim();
-  const normCorrect = normalizeText(rawCorrect);
+  const normCorrect = normalizeAnswer(rawCorrect);
   const correctLetter = extractOptionLetter(rawCorrect);
 
+  // Pool of acceptable answers: correct_answer + all alternate_answers
+  const allAccepted = [rawCorrect, ...(alternateAnswers || [])].filter(Boolean);
+  const allAcceptedNorm = allAccepted.map(a => normalizeAnswer(a));
+
+  // 1. Direct or normalized match against any accepted answer
+  if (allAcceptedNorm.includes(normStudent) || allAccepted.some(a => cleanText(a).toLowerCase() === cleanText(rawStudent).toLowerCase())) {
+    return { is_correct: true, marks_awarded: marks };
+  }
+
+  // 2. Spaces-stripped match (for postfix/prefix/equations like "ABC*+" vs "A B C * +" or "1 2 3" vs "123")
+  const strippedStudent = normStudent.replace(/\s+/g, '');
+  if (allAcceptedNorm.some(a => a.replace(/\s+/g, '') === strippedStudent)) {
+    return { is_correct: true, marks_awarded: marks };
+  }
+
+  // 3. For MCQ questions
   if (type === 'MCQ') {
-    // 1. Direct normalized match
-    if (normStudent === normCorrect) {
-      return { is_correct: true, marks_awarded: marks };
-    }
-
-    // 2. Letter match (e.g. student chose "B", answer is "B) Pixel" or vice versa)
     if (studentLetter && correctLetter && studentLetter === correctLetter) {
       return { is_correct: true, marks_awarded: marks };
     }
 
-    // 3. Option text match against options list
-    // Find index of student selection
     const studentOptIndex = options.findIndex((opt, idx) => {
-      const optLetter = String.fromCharCode(65 + idx); // A, B, C, D
+      const optLetter = String.fromCharCode(65 + idx);
       return (
-        normStudent === normalizeText(opt) ||
+        normStudent === normalizeAnswer(opt) ||
         studentLetter === optLetter ||
-        rawStudent === opt
+        rawStudent.toLowerCase() === opt.trim().toLowerCase()
       );
     });
 
     const correctOptIndex = options.findIndex((opt, idx) => {
       const optLetter = String.fromCharCode(65 + idx);
       return (
-        normCorrect === normalizeText(opt) ||
+        normCorrect === normalizeAnswer(opt) ||
         correctLetter === optLetter ||
-        rawCorrect === opt
+        rawCorrect.toLowerCase() === opt.trim().toLowerCase()
       );
     });
 
     if (studentOptIndex !== -1 && correctOptIndex !== -1 && studentOptIndex === correctOptIndex) {
       return { is_correct: true, marks_awarded: marks };
     }
-
-    // 4. Check alternate answers
-    for (const alt of alternateAnswers) {
-      if (normStudent === normalizeText(alt)) {
-        return { is_correct: true, marks_awarded: marks };
-      }
-    }
-
-    return { is_correct: false, marks_awarded: 0 };
   }
 
-  if (type === 'FILL_BLANK') {
-    // Case-insensitive trimmed match
-    if (normStudent === normCorrect) {
-      return { is_correct: true, marks_awarded: marks };
-    }
-
-    // Check alternate answers
-    for (const alt of alternateAnswers) {
-      if (normStudent === normalizeText(alt)) {
-        return { is_correct: true, marks_awarded: marks };
-      }
-    }
-
-    // Also remove dashes and punctuation for lenient matching (e.g., "scan conversion" vs "scan-conversion")
-    const strippedStudent = normStudent.replace(/[^a-z0-9]/g, '');
-    const strippedCorrect = normCorrect.replace(/[^a-z0-9]/g, '');
-    if (strippedStudent && strippedCorrect && strippedStudent === strippedCorrect) {
-      return { is_correct: true, marks_awarded: marks };
-    }
-
-    return { is_correct: false, marks_awarded: 0 };
+  // 4. Keyword / Lenient matching for short conceptual explanations
+  // (e.g. "principle: LIFO" or "stops recursion" or "calls itself")
+  if (normCorrect.includes('lifo') && (normStudent.includes('lifo') || (normStudent.includes('last in') && normStudent.includes('first out')))) {
+    return { is_correct: true, marks_awarded: marks };
   }
 
-  if (type === 'ODD_ONE_OUT') {
-    // Match either the option text, letter, or direct value
-    if (normStudent === normCorrect) {
-      return { is_correct: true, marks_awarded: marks };
-    }
-    if (studentLetter && correctLetter && studentLetter === correctLetter) {
-      return { is_correct: true, marks_awarded: marks };
-    }
+  if (normCorrect.includes('function') && normCorrect.includes('itself') && (normStudent.includes('function') || normStudent.includes('calls')) && normStudent.includes('itself')) {
+    return { is_correct: true, marks_awarded: marks };
+  }
 
-    const studentOptIndex = options.findIndex((opt, idx) => {
-      const optLetter = String.fromCharCode(65 + idx);
-      return normStudent === normalizeText(opt) || studentLetter === optLetter;
-    });
+  if (normCorrect.includes('empty stack') && normStudent.includes('empty') && (normStudent.includes('pop') || normStudent.includes('stack') || normStudent.includes('underflow'))) {
+    return { is_correct: true, marks_awarded: marks };
+  }
 
-    const correctOptIndex = options.findIndex((opt, idx) => {
-      const optLetter = String.fromCharCode(65 + idx);
-      return normCorrect === normalizeText(opt) || correctLetter === optLetter;
-    });
-
-    if (studentOptIndex !== -1 && correctOptIndex !== -1 && studentOptIndex === correctOptIndex) {
-      return { is_correct: true, marks_awarded: marks };
-    }
-
-    return { is_correct: false, marks_awarded: 0 };
+  if (normCorrect.includes('full stack') && normStudent.includes('full') && (normStudent.includes('push') || normStudent.includes('stack') || normStudent.includes('overflow'))) {
+    return { is_correct: true, marks_awarded: marks };
   }
 
   return { is_correct: false, marks_awarded: 0 };

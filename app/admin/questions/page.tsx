@@ -1,20 +1,46 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Edit2, UploadCloud, Rocket, Check, ExternalLink, Code2, BookOpen, Layers } from 'lucide-react';
 
-interface Question {
-  id: number;
+interface QuestionBank {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  total_marks?: number;
+  duration_minutes?: number;
+  subject_code?: string;
+  _count?: { quizQuestions: number };
+}
+
+interface QuizQuestion {
+  id: string;
+  bank_id?: string;
+  bank_name?: string;
+  order_index: number;
+  type: string;
+  question_text: string;
+  code_snippet?: string;
+  options: string[];
+  correct_answer: string;
+  alternate_answers: string[];
+  explanation?: string;
+  marks: number;
+}
+
+interface CodingQuestion {
+  id: string;
   title: string;
   topic: string;
   description: string;
-  statement?: string;
   input_format: string;
   output_format: string;
   constraints: string;
-  example_input: string;
-  example_output: string;
-  is_enabled: number;
+  sample_input: string;
+  sample_output: string;
+  marks: number;
+  difficulty: string;
   testCases: Array<{
     id: string;
     input: string;
@@ -25,415 +51,966 @@ interface Question {
 }
 
 export default function QuestionsPage() {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [subjects, setSubjects] = useState<any[]>([]);
+  const [tab, setTab] = useState<'QUIZ' | 'CODING'>('QUIZ');
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editData, setEditData] = useState<Partial<Question>>({});
-  const [addingTC, setAddingTC] = useState<number | null>(null);
-  const [newTC, setNewTC] = useState({ input: '', expected_output: '', is_hidden: true, marks: 1 });
-  
-  const [isCreating, setIsCreating] = useState(false);
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const [newData, setNewData] = useState({ title: '', topic: '', description: '', input_format: '', output_format: '', constraints: '', sample_input: '', sample_output: '', subject_name: '' });
 
-  const getToken = () => localStorage.getItem('admin_token') || '';
+  // Quiz Banks & Questions
+  const [banks, setBanks] = useState<QuestionBank[]>([]);
+  const [selectedBankId, setSelectedBankId] = useState<string>('');
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
 
-  const fetchQuestions = async () => {
-    const res = await fetch('/api/admin/questions', {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    const data = await res.json();
-    setQuestions(data.questions || []);
-    setSubjects(data.subjects || []);
-    if (data.subjects && data.subjects.length > 0 && !newData.subject_name) {
-      setNewData(prev => ({ ...prev, subject_name: data.subjects[0].name }));
+  // Coding Questions
+  const [codingQuestions, setCodingQuestions] = useState<CodingQuestion[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
+
+  // Modals
+  const [showNewBankModal, setShowNewBankModal] = useState(false);
+  const [newBankData, setNewBankData] = useState({
+    name: '',
+    description: '',
+    category: '',
+    total_marks: 30,
+    duration_minutes: 30,
+    subject_code: 'DSA',
+  });
+
+  const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<QuizQuestion | null>(null);
+  const [questionFormData, setQuestionFormData] = useState({
+    question_text: '',
+    code_snippet: '',
+    type: 'SHORT_ANSWER',
+    optionsText: '',
+    correct_answer: '',
+    alternatesText: '',
+    explanation: '',
+    marks: 2,
+  });
+
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+  const [bulkImportText, setBulkImportText] = useState('');
+  const [bulkTargetBankId, setBulkTargetBankId] = useState('');
+
+  // Test creation status
+  const [createdTestSlug, setCreatedTestSlug] = useState<string | null>(null);
+
+  const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : '';
+
+  const fetchData = async () => {
+    try {
+      const res = await fetch('/api/admin/questions', {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await res.json();
+      setBanks(data.questionBanks || []);
+      setQuizQuestions(data.quizQuestions || []);
+      setCodingQuestions(data.questions || []);
+      setSubjects(data.subjects || []);
+
+      if (data.questionBanks?.length > 0 && !selectedBankId) {
+        setSelectedBankId(data.questionBanks[0].id);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  useEffect(() => { fetchQuestions(); }, []);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
+  // Filtered quiz questions for the selected bank
+  const currentBank = banks.find(b => b.id === selectedBankId);
+  const currentBankQuestions = quizQuestions.filter(q => q.bank_id === selectedBankId);
 
-  const handleGenerateAI = async () => {
-    if (!aiPrompt.trim()) return;
-    setAiGenerating(true);
+  // ── Bank Handlers ──────────────────────────────────────────────────────────
+  const handleCreateBank = async () => {
+    if (!newBankData.name.trim()) return alert('Bank name is required');
     try {
       const res = await fetch('/api/admin/questions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ action: 'generate_ai', prompt: aiPrompt, subject_name: subjects[0]?.name || 'General' }),
+        body: JSON.stringify({ action: 'create_bank', ...newBankData }),
       });
       const data = await res.json();
       if (res.ok) {
-        setIsGeneratingAI(false);
-        setAiPrompt('');
-        fetchQuestions();
+        setShowNewBankModal(false);
+        setNewBankData({ name: '', description: '', category: '', total_marks: 30, duration_minutes: 30, subject_code: 'DSA' });
+        await fetchData();
+        if (data.bank) setSelectedBankId(data.bank.id);
       } else {
-        alert(data.error || 'Failed to generate question with AI');
+        alert(data.error || 'Failed to create bank');
       }
-    } catch (e) {
-      console.error(e);
-      alert('An error occurred while calling the AI service');
+    } catch {
+      alert('Error creating question bank');
     }
-    setAiGenerating(false);
   };
 
-  const handleCreate = async () => {
-    // Process subject_id logic or send subject_name to API (we'll send subject_id)
-    // Wait, let's update API to accept subject_name as well!
+  const handleDeleteBank = async (bankId: string) => {
+    if (!confirm('Are you sure you want to delete this question bank and all its questions?')) return;
     await fetch('/api/admin/questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'create', ...newData }),
+      body: JSON.stringify({ action: 'delete_bank', bank_id: bankId }),
     });
-    setIsCreating(false);
-    setNewData({ title: '', topic: '', description: '', input_format: '', output_format: '', constraints: '', sample_input: '', sample_output: '', subject_name: subjects[0]?.name || '' });
-    fetchQuestions();
+    fetchData();
   };
 
-  const handleUpdate = async (id: number) => {
+  // ── Question Handlers ──────────────────────────────────────────────────────
+  const handleSaveQuestion = async () => {
+    if (!questionFormData.question_text.trim()) return alert('Question text is required');
+
+    const options = questionFormData.optionsText
+      .split('\n')
+      .map(o => o.trim())
+      .filter(Boolean);
+
+    const alternate_answers = questionFormData.alternatesText
+      .split('\n')
+      .map(a => a.trim())
+      .filter(Boolean);
+
+    const payload = {
+      action: editingQuestion ? 'update_quiz_question' : 'create_quiz_question',
+      id: editingQuestion?.id,
+      bank_id: selectedBankId,
+      bank_name: currentBank?.name,
+      question_text: questionFormData.question_text,
+      code_snippet: questionFormData.code_snippet,
+      type: questionFormData.type,
+      options,
+      correct_answer: questionFormData.correct_answer,
+      alternate_answers,
+      explanation: questionFormData.explanation,
+      marks: questionFormData.marks,
+    };
+
+    const res = await fetch('/api/admin/questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      setShowAddQuestionModal(false);
+      setEditingQuestion(null);
+      setQuestionFormData({ question_text: '', code_snippet: '', type: 'SHORT_ANSWER', optionsText: '', correct_answer: '', alternatesText: '', explanation: '', marks: 2 });
+      fetchData();
+    } else {
+      const d = await res.json();
+      alert(d.error || 'Failed to save question');
+    }
+  };
+
+  const handleDeleteQuizQuestion = async (id: string) => {
+    if (!confirm('Delete this question?')) return;
     await fetch('/api/admin/questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'update', id, ...editData }),
+      body: JSON.stringify({ action: 'delete_quiz_question', id }),
     });
-    setEditingId(null);
-    fetchQuestions();
+    fetchData();
   };
 
-  const handleDelete = async (id: number) => {
-    await fetch('/api/admin/questions', {
+  // ── Bulk Import ────────────────────────────────────────────────────────────
+  const handleBulkImport = async () => {
+    if (!bulkImportText.trim()) return alert('Please paste question content to import');
+    const targetId = bulkTargetBankId || selectedBankId;
+    if (!targetId) return alert('Please select a question bank');
+
+    const res = await fetch('/api/admin/questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'delete', id }),
+      body: JSON.stringify({ action: 'bulk_import_bank', bank_id: targetId, text: bulkImportText }),
     });
-    fetchQuestions();
+
+    const data = await res.json();
+    if (res.ok) {
+      alert(`Successfully imported ${data.count} questions!`);
+      setShowBulkImportModal(false);
+      setBulkImportText('');
+      fetchData();
+    } else {
+      alert(data.error || 'Bulk import failed');
+    }
   };
 
-  const handleAddTC = async (questionId: number) => {
-    await fetch('/api/admin/questions', {
+  // ── Create Test From Bank ──────────────────────────────────────────────────
+  const handleCreateTestFromBank = async () => {
+    if (!selectedBankId) return;
+    const res = await fetch('/api/admin/questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'add_test_case', question_id: questionId, ...newTC }),
+      body: JSON.stringify({ action: 'create_test_from_bank', bank_id: selectedBankId }),
     });
-    setAddingTC(null);
-    setNewTC({ input: '', expected_output: '', is_hidden: true, marks: 1 });
-    fetchQuestions();
+    const data = await res.json();
+    if (res.ok && data.test) {
+      setCreatedTestSlug(data.test.unique_id);
+      alert(`Test published successfully! Student test link: /${data.test.unique_id}`);
+    } else {
+      alert(data.error || 'Failed to create test');
+    }
   };
 
-  const handleDeleteTC = async (tcId: string) => {
-    await fetch('/api/admin/questions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ action: 'delete_test_case', id: tcId }),
-    });
-    fetchQuestions();
-  };
-
-  if (loading) {
-    return <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'Söhne Mono, ui-monospace, monospace' }}>Loading...</div>;
-  }
+  if (loading) return <div style={{ padding: '24px', color: 'var(--text-muted)' }}>Loading Question Bank...</div>;
 
   return (
     <div>
-      <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      {/* ── Page Header ─────────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <p className="text-label" style={{ marginBottom: '8px' }}>Management</p>
-          <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Question Bank</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            {questions.length} questions available
-          </p>
+          <p className="text-label" style={{ marginBottom: '6px' }}>Curriculum Repository</p>
+          <h1 style={{ fontSize: '26px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            Question Bank
+          </h1>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => setIsGeneratingAI(true)} style={{ ...outlineBtn, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <Sparkles size={14} /> Generate with AI
-          </button>
-          <button onClick={() => setIsCreating(true)} style={primaryBtn}>
-            Create New Question
-          </button>
-        </div>
-      </div>
 
-      {isGeneratingAI && (
-        <div style={{ padding: '24px', background: 'var(--surface-1)', border: '1px dashed var(--border)', borderRadius: '4px', marginBottom: '24px' }}>
-          <p className="text-label" style={{ marginBottom: '16px' }}>Generate Question with AI</p>
-          <div style={{ marginBottom: '16px' }}>
-            <p className="text-label" style={{ marginBottom: '4px' }}>Topic & Difficulty</p>
-            <textarea 
-              value={aiPrompt} 
-              onChange={e => setAiPrompt(e.target.value)} 
-              rows={3} 
-              style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }} 
-            />
-          </div>
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-            <button onClick={() => setIsGeneratingAI(false)} style={outlineBtn}>Cancel</button>
-            <button onClick={handleGenerateAI} disabled={aiGenerating} style={primaryBtn}>
-              {aiGenerating ? 'Generating...' : 'Generate & Save'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {isCreating && (
-        <div style={{ padding: '24px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '4px', marginBottom: '24px' }}>
-          <p className="text-label" style={{ marginBottom: '16px' }}>Create New Question</p>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Title</p>
-              <input value={newData.title} onChange={e => setNewData(p => ({ ...p, title: e.target.value }))} style={inputStyle} />
-            </div>
-            <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Topic</p>
-              <input value={newData.topic} onChange={e => setNewData(p => ({ ...p, topic: e.target.value }))} style={inputStyle} />
-            </div>
-            <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Subject</p>
-              <input value={newData.subject_name} onChange={e => setNewData(p => ({ ...p, subject_name: e.target.value }))} style={inputStyle} />
-            </div>
-          </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
-            <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Problem Description</p>
-              <textarea value={newData.description} onChange={e => setNewData(p => ({ ...p, description: e.target.value }))} rows={4} style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
-              {/* Removed Input/Output fields per request */}
-            </div>
-            <div>
-              <p className="text-label" style={{ marginBottom: '4px' }}>Constraints</p>
-              <textarea value={newData.constraints} onChange={e => setNewData(p => ({ ...p, constraints: e.target.value }))} rows={2} style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }} />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-            <button onClick={() => setIsCreating(false)} style={outlineBtn}>Cancel</button>
-            <button onClick={handleCreate} style={primaryBtn}>Save & Create</button>
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {questions.map((q, i) => (
-          <div key={q.id} style={{
-            border: '1px solid var(--border)',
-            borderRadius: '4px',
-            overflow: 'hidden',
-          }}>
-            {/* Question header */}
-            <div style={{
-              padding: '16px 20px',
-              background: 'var(--surface-1)',
+        {/* Tab Switcher */}
+        <div style={{ display: 'flex', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '6px', padding: '3px' }}>
+          <button
+            onClick={() => setTab('QUIZ')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '4px',
+              border: 'none',
+              background: tab === 'QUIZ' ? 'var(--accent)' : 'transparent',
+              color: tab === 'QUIZ' ? '#ffffff' : 'var(--text-secondary)',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '16px',
+              gap: '6px',
+            }}
+          >
+            <BookOpen size={14} /> Puzzle & Quiz Banks ({banks.length})
+          </button>
+          <button
+            onClick={() => setTab('CODING')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '4px',
+              border: 'none',
+              background: tab === 'CODING' ? 'var(--accent)' : 'transparent',
+              color: tab === 'CODING' ? '#ffffff' : 'var(--text-secondary)',
+              fontSize: '13px',
+              fontWeight: 600,
               cursor: 'pointer',
-            }} onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}>
-              <span style={{
-                fontFamily: 'Söhne Mono, ui-monospace, monospace',
-                fontSize: '12px',
-                color: 'var(--text-muted)',
-                minWidth: '24px',
-              }}>
-                {String(i + 1).padStart(2, '0')}
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <Code2 size={14} /> Coding Question Bank ({codingQuestions.length})
+          </button>
+        </div>
+      </div>
+
+      {/* ── TAB 1: PUZZLE & QUIZ QUESTION BANKS ──────────────────────────────── */}
+      {tab === 'QUIZ' && (
+        <div>
+          {/* Controls toolbar */}
+          <div style={{
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border)',
+            borderRadius: '6px',
+            padding: '16px 20px',
+            marginBottom: '24px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '16px',
+          }}>
+            {/* Bank Selector */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
+                Select Bank:
               </span>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{q.title}</p>
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{q.topic} · {q.testCases?.length || 0} test cases</p>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select
+                value={selectedBankId}
+                onChange={e => setSelectedBankId(e.target.value)}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  minWidth: '280px',
+                }}
+              >
+                {banks.map(b => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b._count?.quizQuestions || 0} Qs)
+                  </option>
+                ))}
+              </select>
+
+              {currentBank && (
                 <button
-                  onClick={e => { e.stopPropagation(); setEditingId(q.id); setEditData(q); setExpandedId(q.id); }}
-                  style={smallBtn}
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={e => {
-                    e.stopPropagation();
-                    if (confirm('Are you sure you want to delete this question?')) {
-                      handleDelete(q.id);
-                    }
+                  onClick={() => handleDeleteBank(currentBank.id)}
+                  title="Delete this Question Bank"
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#ef4444',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
                   }}
-                  style={{ ...smallBtn, color: 'var(--error)' }}
                 >
-                  Delete
+                  <Trash2 size={14} />
                 </button>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '8px' }}>{expandedId === q.id ? '▲' : '▼'}</span>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                onClick={() => setShowNewBankModal(true)}
+                style={{
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Plus size={14} /> New Bank
+              </button>
+
+              <button
+                onClick={() => {
+                  setBulkTargetBankId(selectedBankId);
+                  setShowBulkImportModal(true);
+                }}
+                style={{
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <UploadCloud size={14} /> Bulk Import
+              </button>
+
+              <button
+                onClick={() => {
+                  setEditingQuestion(null);
+                  setQuestionFormData({ question_text: '', code_snippet: '', type: 'SHORT_ANSWER', optionsText: '', correct_answer: '', alternatesText: '', explanation: '', marks: 2 });
+                  setShowAddQuestionModal(true);
+                }}
+                style={{
+                  background: 'var(--accent)',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Plus size={14} /> Add Question
+              </button>
+
+              <button
+                onClick={handleCreateTestFromBank}
+                style={{
+                  background: '#22c55e',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Rocket size={14} /> Create Test
+              </button>
+            </div>
+          </div>
+
+          {/* Active Bank Header Details */}
+          {currentBank && (
+            <div style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border)',
+              borderRadius: '6px',
+              padding: '20px 24px',
+              marginBottom: '28px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                <div>
+                  <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    {currentBank.name}
+                  </h2>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    {currentBank.description || 'Question Bank repository for assessments'}
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {currentBank.name.includes('Unit III') && (
+                    <a
+                      href="/unit-3-linked-lists"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                        background: 'rgba(59, 130, 246, 0.12)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        color: '#3b82f6',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <ExternalLink size={13} /> Open Live Test (/unit-3-linked-lists)
+                    </a>
+                  )}
+
+                  {currentBank.name.includes('Unit IV') && (
+                    <a
+                      href="/unit-4-stacks"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                        background: 'rgba(59, 130, 246, 0.12)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        color: '#3b82f6',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <ExternalLink size={13} /> Open Live Test (/unit-4-stacks)
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Badges */}
+              <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-muted)', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                <span>Total Questions: <strong style={{ color: 'var(--text-primary)' }}>{currentBankQuestions.length}</strong></span>
+                <span>Total Marks: <strong style={{ color: 'var(--text-primary)' }}>{currentBankQuestions.reduce((s, q) => s + q.marks, 0) || currentBank.total_marks || 30}</strong></span>
+                <span>Default Duration: <strong style={{ color: 'var(--text-primary)' }}>{currentBank.duration_minutes || 30} mins</strong></span>
+                <span>Category: <strong style={{ color: 'var(--text-primary)' }}>{currentBank.category || 'General'}</strong></span>
+              </div>
+            </div>
+          )}
+
+          {/* Questions List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {currentBankQuestions.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '48px',
+                background: 'var(--surface-1)',
+                border: '1px dashed var(--border)',
+                borderRadius: '6px',
+              }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '16px' }}>
+                  No questions in this bank yet.
+                </p>
+                <button
+                  onClick={() => {
+                    setEditingQuestion(null);
+                    setShowAddQuestionModal(true);
+                  }}
+                  style={{
+                    background: 'var(--accent)',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '8px 18px',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  + Add First Question
+                </button>
+              </div>
+            ) : (
+              currentBankQuestions.map((q, idx) => (
+                <div
+                  key={q.id}
+                  style={{
+                    background: 'var(--surface-1)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    padding: '20px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{
+                        fontFamily: 'Söhne Mono, ui-monospace, monospace',
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        color: 'var(--accent)',
+                      }}>
+                        Q{idx + 1}.
+                      </span>
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        background: 'rgba(59, 130, 246, 0.1)',
+                        color: '#3b82f6',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid rgba(59, 130, 246, 0.25)',
+                      }}>
+                        {q.marks} {q.marks === 1 ? 'Mark' : 'Marks'}
+                      </span>
+                      <span style={{
+                        fontSize: '11px',
+                        background: 'var(--surface-2)',
+                        color: 'var(--text-muted)',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                      }}>
+                        {q.type}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => {
+                          setEditingQuestion(q);
+                          setQuestionFormData({
+                            question_text: q.question_text,
+                            code_snippet: q.code_snippet || '',
+                            type: q.type,
+                            optionsText: (q.options || []).join('\n'),
+                            correct_answer: q.correct_answer,
+                            alternatesText: (q.alternate_answers || []).join('\n'),
+                            explanation: q.explanation || '',
+                            marks: q.marks,
+                          });
+                          setShowAddQuestionModal(true);
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--border)',
+                          color: 'var(--text-secondary)',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '12px',
+                        }}
+                      >
+                        <Edit2 size={12} /> Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteQuizQuestion(q.id)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          color: '#ef4444',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '12px',
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Question Text */}
+                  <p style={{ fontSize: '14.5px', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, marginBottom: '12px' }}>
+                    {q.question_text}
+                  </p>
+
+                  {/* Code snippet / Diagram */}
+                  {q.code_snippet && (
+                    <div style={{
+                      background: '#0d1117',
+                      border: '1px solid #30363d',
+                      borderRadius: '4px',
+                      padding: '12px 16px',
+                      marginBottom: '14px',
+                      overflowX: 'auto',
+                    }}>
+                      <pre style={{ margin: 0, fontFamily: 'Fira Code, Söhne Mono, monospace', fontSize: '13px', color: '#58a6ff' }}>
+                        {q.code_snippet}
+                      </pre>
+                    </div>
+                  )}
+
+                  {/* Options if MCQ */}
+                  {q.options && q.options.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px' }}>
+                      {q.options.map((opt, i) => (
+                        <div key={i} style={{
+                          padding: '8px 12px',
+                          background: 'var(--surface-2)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '4px',
+                          fontSize: '13px',
+                          color: 'var(--text-secondary)',
+                        }}>
+                          <strong style={{ color: 'var(--text-primary)', marginRight: '6px' }}>{String.fromCharCode(65 + i)}.</strong>
+                          {opt}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Answer & Explanation */}
+                  <div style={{
+                    padding: '12px 14px',
+                    borderRadius: '4px',
+                    background: 'rgba(34, 197, 94, 0.08)',
+                    border: '1px solid rgba(34, 197, 94, 0.25)',
+                    fontSize: '13px',
+                  }}>
+                    <p style={{ margin: 0, color: '#22c55e', fontWeight: 600 }}>
+                      Correct Answer: <span style={{ color: 'var(--text-primary)', fontFamily: 'Söhne Mono, monospace' }}>{q.correct_answer}</span>
+                    </p>
+                    {q.alternate_answers && q.alternate_answers.length > 0 && (
+                      <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>
+                        Accepted variations: {q.alternate_answers.join(' | ')}
+                      </p>
+                    )}
+                    {q.explanation && (
+                      <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-secondary)', borderTop: '1px solid rgba(34, 197, 94, 0.2)', paddingTop: '6px' }}>
+                        💡 {q.explanation}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 2: CODING QUESTIONS BANK (Existing) ─────────────────────────── */}
+      {tab === 'CODING' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border)',
+            borderRadius: '6px',
+            padding: '16px 20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <div>
+              <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Coding Questions Bank ({codingQuestions.length})
+              </p>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Programs with automated testcase execution via Judge0
+              </p>
+            </div>
+          </div>
+
+          {codingQuestions.map((q, idx) => (
+            <div key={q.id} style={{
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border)',
+              borderRadius: '6px',
+              padding: '20px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    {idx + 1}. {q.title}
+                  </h3>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                    Topic: {q.topic || 'DSA'} · Difficulty: {q.difficulty} · Marks: {q.marks} · {q.testCases?.length || 0} Testcases
+                  </p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'pre-wrap' }}>
+                    {q.description.substring(0, 180)}...
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── MODAL: CREATE QUESTION BANK ─────────────────────────────────────── */}
+      {showNewBankModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ maxWidth: '480px', width: '100%', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '28px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>Create New Question Bank</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Bank Name *</label>
+                <input
+                  value={newBankData.name}
+                  onChange={e => setNewBankData(p => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g. Unit V – Trees & Binary Search Trees"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Description</label>
+                <input
+                  value={newBankData.description}
+                  onChange={e => setNewBankData(p => ({ ...p, description: e.target.value }))}
+                  placeholder="Brief description of topics covered"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Category</label>
+                  <input
+                    value={newBankData.category}
+                    onChange={e => setNewBankData(p => ({ ...p, category: e.target.value }))}
+                    placeholder="e.g. Trees"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Duration (Mins)</label>
+                  <input
+                    type="number"
+                    value={newBankData.duration_minutes}
+                    onChange={e => setNewBankData(p => ({ ...p, duration_minutes: parseInt(e.target.value) || 30 }))}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button onClick={() => setShowNewBankModal(false)} style={cancelBtn}>Cancel</button>
+              <button onClick={handleCreateBank} style={primaryBtn}>Create Bank</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: ADD / EDIT QUESTION ──────────────────────────────────────── */}
+      {showAddQuestionModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '28px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
+              {editingQuestion ? 'Edit Question' : 'Add New Question'}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Question Text *</label>
+                <textarea
+                  rows={3}
+                  value={questionFormData.question_text}
+                  onChange={e => setQuestionFormData(p => ({ ...p, question_text: e.target.value }))}
+                  placeholder="Enter the complete question..."
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Code Snippet / Diagram (Optional)</label>
+                <textarea
+                  rows={3}
+                  value={questionFormData.code_snippet}
+                  onChange={e => setQuestionFormData(p => ({ ...p, code_snippet: e.target.value }))}
+                  placeholder="e.g. 10 -> 20 -> 30 -> NULL or C++ code block"
+                  style={{ ...inputStyle, fontFamily: 'Fira Code, monospace', fontSize: '13px' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Question Type</label>
+                  <select
+                    value={questionFormData.type}
+                    onChange={e => setQuestionFormData(p => ({ ...p, type: e.target.value }))}
+                    style={inputStyle}
+                  >
+                    <option value="SHORT_ANSWER">Short Answer / Output / Statement</option>
+                    <option value="MCQ">Multiple Choice (MCQ)</option>
+                    <option value="PUZZLE">Puzzle</option>
+                    <option value="FILL_BLANK">Fill in Blank</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Marks</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={questionFormData.marks}
+                    onChange={e => setQuestionFormData(p => ({ ...p, marks: parseFloat(e.target.value) || 1 }))}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              {questionFormData.type === 'MCQ' && (
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Options (One per line)</label>
+                  <textarea
+                    rows={4}
+                    value={questionFormData.optionsText}
+                    onChange={e => setQuestionFormData(p => ({ ...p, optionsText: e.target.value }))}
+                    placeholder="Option A\nOption B\nOption C\nOption D"
+                    style={inputStyle}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Correct Answer *</label>
+                <input
+                  value={questionFormData.correct_answer}
+                  onChange={e => setQuestionFormData(p => ({ ...p, correct_answer: e.target.value }))}
+                  placeholder="Expected answer (e.g. 10, or temp->next = n1;)"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Alternate Acceptable Answers (One per line)</label>
+                <textarea
+                  rows={2}
+                  value={questionFormData.alternatesText}
+                  onChange={e => setQuestionFormData(p => ({ ...p, alternatesText: e.target.value }))}
+                  placeholder="Variations, e.g. '10', 'node 10', 'Node 10'"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Explanation / Solution Notes</label>
+                <input
+                  value={questionFormData.explanation}
+                  onChange={e => setQuestionFormData(p => ({ ...p, explanation: e.target.value }))}
+                  placeholder="Detailed explanation shown to students when marks are published"
+                  style={inputStyle}
+                />
               </div>
             </div>
 
-            {/* Expanded content */}
-            {expandedId === q.id && (
-              <div style={{ padding: '20px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)' }}>
-                {editingId === q.id ? (
-                  <div>
-                    <p className="text-label" style={{ marginBottom: '16px' }}>Edit Question</p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
-                      {[
-                        { label: 'Title', key: 'title' },
-                        { label: 'Topic', key: 'topic' },
-                      ].map(({ label, key }) => (
-                        <div key={key}>
-                          <p className="text-label" style={{ marginBottom: '4px' }}>{label}</p>
-                          <input
-                            value={(editData as Record<string, string>)[key] || ''}
-                            onChange={e => setEditData(prev => ({ ...prev, [key]: e.target.value }))}
-                            style={inputStyle}
-                          />
-                        </div>
-                      ))}
-                      {[
-                        { label: 'Problem Statement', key: 'statement' },
-                        { label: 'Constraints', key: 'constraints' },
-                      ].map(({ label, key }) => (
-                        <div key={key}>
-                          <p className="text-label" style={{ marginBottom: '4px' }}>{label}</p>
-                          <textarea
-                            value={(editData as Record<string, string>)[key] || ''}
-                            onChange={e => setEditData(prev => ({ ...prev, [key]: e.target.value }))}
-                            rows={3}
-                            style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={() => setEditingId(null)} style={outlineBtn}>Cancel</button>
-                      <button onClick={() => handleUpdate(q.id)} style={primaryBtn}>Save Changes</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    {/* Test Cases */}
-                    <div style={{ marginBottom: '16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                        <p className="text-label">Test Cases</p>
-                        <button onClick={() => setAddingTC(q.id)} style={smallBtn}>Add Test Case</button>
-                      </div>
-
-                      {addingTC === q.id && (
-                        <div style={{ padding: '12px', border: '1px solid var(--border)', borderRadius: '3px', marginBottom: '8px', background: 'var(--surface-1)' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                            <div>
-                              <p className="text-label" style={{ marginBottom: '4px' }}>Input</p>
-                              <textarea value={newTC.input} onChange={e => setNewTC(p => ({ ...p, input: e.target.value }))} rows={3} style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }} />
-                            </div>
-                            <div>
-                              <p className="text-label" style={{ marginBottom: '4px' }}>Expected Output</p>
-                              <textarea value={newTC.expected_output} onChange={e => setNewTC(p => ({ ...p, expected_output: e.target.value }))} rows={3} style={{ ...inputStyle, fontFamily: 'Söhne Mono, ui-monospace, monospace', resize: 'vertical' }} />
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-                            <label style={{ display: 'flex', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                              <input type="checkbox" checked={!newTC.is_hidden} onChange={e => setNewTC(p => ({ ...p, is_hidden: !e.target.checked }))} />
-                              Visible to student
-                            </label>
-                          </div>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button onClick={() => setAddingTC(null)} style={outlineBtn}>Cancel</button>
-                            <button onClick={() => handleAddTC(q.id)} style={primaryBtn}>Add</button>
-                          </div>
-                        </div>
-                      )}
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {(q.testCases || []).map((tc, ti) => (
-                          <div key={tc.id} style={{
-                            display: 'flex',
-                            gap: '12px',
-                            alignItems: 'flex-start',
-                            padding: '10px',
-                            background: 'var(--surface-1)',
-                            borderRadius: '3px',
-                            border: '1px solid var(--border)',
-                          }}>
-                            <span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '11px', color: 'var(--text-muted)', minWidth: '16px' }}>{ti + 1}</span>
-                            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                              <pre style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '11px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{tc.input}</pre>
-                              <pre style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '11px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{tc.expected_output}</pre>
-                            </div>
-                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                              <span style={{
-                                fontSize: '9px',
-                                fontWeight: 700,
-                                letterSpacing: '0.08em',
-                                color: !tc.is_hidden ? 'var(--accent)' : 'var(--text-muted)',
-                                background: !tc.is_hidden ? 'var(--accent-dim)' : 'var(--surface-2)',
-                                padding: '2px 5px',
-                                borderRadius: '2px',
-                              }}>
-                                {!tc.is_hidden ? 'VISIBLE' : 'HIDDEN'}
-                              </span>
-                              <button
-                                onClick={() => handleDeleteTC(tc.id)}
-                                style={{ fontSize: '10px', color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
-                              >
-                                ×
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button onClick={() => setShowAddQuestionModal(false)} style={cancelBtn}>Cancel</button>
+              <button onClick={handleSaveQuestion} style={primaryBtn}>{editingQuestion ? 'Update Question' : 'Add Question'}</button>
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* ── MODAL: BULK IMPORT QUESTIONS ────────────────────────────────────── */}
+      {showBulkImportModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ maxWidth: '680px', width: '100%', maxHeight: '90vh', overflowY: 'auto', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '28px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '6px' }}>Bulk Import Questions</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: 1.5 }}>
+              Paste questions below. The parser automatically detects question numbers, options, answers, and marks!
+            </p>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Target Question Bank</label>
+              <select
+                value={bulkTargetBankId}
+                onChange={e => setBulkTargetBankId(e.target.value)}
+                style={inputStyle}
+              >
+                {banks.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Questions Content</label>
+              <textarea
+                rows={12}
+                value={bulkImportText}
+                onChange={e => setBulkImportText(e.target.value)}
+                placeholder={`Example formats supported:\n\nQ1. Which principle does a stack follow?\nAnswer: LIFO\nMarks: 1\n\nQ2. Sample MCQ\nA) Option 1\nB) Option 2\nAnswer: B`}
+                style={{ ...inputStyle, fontFamily: 'Fira Code, monospace', fontSize: '12.5px' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button onClick={() => setShowBulkImportModal(false)} style={cancelBtn}>Cancel</button>
+              <button onClick={handleBulkImport} style={primaryBtn}>Parse & Import</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: '8px 12px',
-  background: 'var(--surface-1)',
+  padding: '10px 14px',
+  background: 'var(--surface-2)',
   border: '1px solid var(--border)',
-  borderRadius: '3px',
-  color: 'var(--text-secondary)',
+  borderRadius: '6px',
+  color: 'var(--text-primary)',
   fontSize: '13px',
   outline: 'none',
 };
-const smallBtn: React.CSSProperties = {
-  padding: '5px 10px',
-  background: 'transparent',
+
+const cancelBtn: React.CSSProperties = {
+  padding: '10px 18px',
+  borderRadius: '6px',
+  background: 'var(--surface-2)',
   border: '1px solid var(--border)',
-  borderRadius: '3px',
-  color: 'var(--text-muted)',
-  fontSize: '11px',
-  cursor: 'pointer',
-  letterSpacing: '0.02em',
-};
-const outlineBtn: React.CSSProperties = {
-  padding: '8px 16px',
-  background: 'transparent',
-  border: '1px solid var(--border)',
-  borderRadius: '3px',
-  color: 'var(--text-secondary)',
-  fontSize: '11px',
-  fontWeight: 600,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase' as const,
+  color: 'var(--text-primary)',
+  fontSize: '13px',
+  fontWeight: 500,
   cursor: 'pointer',
 };
+
 const primaryBtn: React.CSSProperties = {
-  padding: '8px 16px',
+  padding: '10px 22px',
+  borderRadius: '6px',
   background: 'var(--accent)',
-  border: '1px solid transparent',
-  borderRadius: '3px',
+  border: 'none',
   color: '#ffffff',
-  fontSize: '11px',
+  fontSize: '13px',
   fontWeight: 600,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase' as const,
   cursor: 'pointer',
 };

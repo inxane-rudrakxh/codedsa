@@ -8,8 +8,12 @@ export default function InstructionsPage() {
   const [checked, setChecked] = useState(false);
   const [studentName, setStudentName] = useState('');
   const [sessionStatus, setSessionStatus] = useState<string | null>(null);
-  const [testTitle, setTestTitle] = useState('Coding Assessment');
+  const [testTitle, setTestTitle] = useState('Assessment');
   const [testInstructions, setTestInstructions] = useState('');
+  const [testType, setTestType] = useState('CODING');
+  const [duration, setDuration] = useState(60);
+  const [totalMarks, setTotalMarks] = useState(30);
+  const [questionCount, setQuestionCount] = useState(3);
 
   useEffect(() => {
     const token = localStorage.getItem('session_token');
@@ -32,8 +36,16 @@ export default function InstructionsPage() {
           setSessionStatus(data.session.status);
           if (data.session.test_title) setTestTitle(data.session.test_title);
           if (data.session.test_instructions) setTestInstructions(data.session.test_instructions);
-          
-          if (data.session.status === 'active' && ((data.saves && Object.keys(data.saves).length > 0) || (data.submissions && Object.keys(data.submissions).length > 0))) {
+          if (data.session.test_type) setTestType(data.session.test_type);
+          if (data.session.duration_minutes) setDuration(data.session.duration_minutes);
+          if (data.session.total_marks) setTotalMarks(data.session.total_marks);
+          if (data.questions && data.questions.length > 0) setQuestionCount(data.questions.length);
+
+          const hasAnswers = data.quiz_answers && Object.keys(data.quiz_answers).length > 0;
+          const hasSaves = data.saves && Object.keys(data.saves).length > 0;
+          const hasSubs = data.submissions && Object.keys(data.submissions).length > 0;
+
+          if (data.session.status === 'active' && (hasAnswers || hasSaves || hasSubs)) {
             router.replace('/exam/workspace');
             return;
           }
@@ -58,6 +70,27 @@ export default function InstructionsPage() {
       router.push('/exam/workspace');
     }
   };
+
+  const isQuiz = testType === 'QUIZ';
+
+  const dynamicInstructions = isQuiz ? [
+    `This test contains ${questionCount} questions for a total of ${totalMarks} marks.`,
+    `The exam duration is ${duration} minutes. A live countdown timer is visible throughout the test.`,
+    'This is a non-coding assessment covering puzzle problems, output tracing, pointer operations, and conceptual theory.',
+    'You can navigate between questions using the Question Palette, answer in any order, and mark questions for review.',
+    'Your responses are automatically saved in real time as you type or select options.',
+    'Tab-switching and exiting fullscreen are strictly restricted. You have a limit of up to 3 violations — on the 3rd violation, your exam will be automatically submitted immediately.',
+    'Ensure you do not open developer tools, inspect element, or attempt copy-pasting from external sources.',
+    'Click "Submit Exam" once you have reviewed all your answers. Once submitted, answers cannot be edited.',
+  ] : [
+    `You will be assigned ${questionCount} questions from the question bank. Your assignment is fixed.`,
+    `The exam duration is ${duration} minutes. A countdown timer is visible at all times.`,
+    'Write your solutions in C++, C, Python, or Java with syntax highlighting and compiler execution.',
+    'Use the "Run Code" button to test your program against visible test cases before submitting.',
+    'Tab-switching and exiting fullscreen are restricted. You have a limit of up to 3 violations — on the 3rd violation, your exam will be automatically submitted.',
+    'Your code is automatically saved every few seconds to prevent progress loss.',
+    `Each question is evaluated independently. Total marks: ${totalMarks}.`,
+  ];
 
   return (
     <main style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
@@ -92,7 +125,7 @@ export default function InstructionsPage() {
       }}>
         <div className="animate-fade-up">
           {/* Title */}
-          <div style={{ marginBottom: '48px' }}>
+          <div style={{ marginBottom: '40px' }}>
             <p style={{
               fontSize: '11px',
               fontWeight: 600,
@@ -100,16 +133,16 @@ export default function InstructionsPage() {
               textTransform: 'uppercase',
               color: 'var(--text-muted)',
               marginBottom: '12px',
-            }}>Exam Instructions</p>
+            }}>{isQuiz ? 'Puzzle & Quiz Test' : 'Coding Assessment'}</p>
             <h1 style={{
               fontSize: '32px',
               fontWeight: 600,
               color: 'var(--text-primary)',
               letterSpacing: '-0.02em',
-              lineHeight: 1.1,
-              marginBottom: '8px',
+              lineHeight: 1.15,
+              marginBottom: '12px',
             }}>{testTitle}</h1>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
               {testInstructions || 'Please read the instructions carefully before beginning your test.'}
             </p>
           </div>
@@ -121,15 +154,15 @@ export default function InstructionsPage() {
             gap: '1px',
             background: 'var(--border)',
             border: '1px solid var(--border)',
-            borderRadius: '4px',
+            borderRadius: '6px',
             overflow: 'hidden',
             marginBottom: '40px',
           }}>
             {[
-              { label: 'Total Marks', value: '30' },
-              { label: 'Duration', value: '60 min' },
-              { label: 'Questions', value: '3 / 9' },
-              { label: 'Language', value: 'C++' },
+              { label: 'Total Marks', value: `${totalMarks}` },
+              { label: 'Duration', value: `${duration} min` },
+              { label: 'Questions', value: `${questionCount}` },
+              { label: 'Test Mode', value: isQuiz ? 'Puzzle / Quiz' : 'Coding' },
             ].map(({ label, value }) => (
               <div key={label} style={{
                 padding: '20px 16px',
@@ -137,91 +170,94 @@ export default function InstructionsPage() {
               }}>
                 <p className="text-label" style={{ marginBottom: '6px' }}>{label}</p>
                 <p style={{
-                  fontSize: '18px',
+                  fontSize: '17px',
                   fontWeight: 600,
                   color: 'var(--text-primary)',
                   fontFamily: 'Söhne Mono, ui-monospace, monospace',
+                  letterSpacing: '-0.02em',
                 }}>{value}</p>
               </div>
             ))}
           </div>
 
-          {/* Instructions */}
-          <div style={{ marginBottom: '40px' }}>
-            <p style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              color: 'var(--text-muted)',
-              marginBottom: '20px',
-            }}>Before You Begin</p>
+          {/* Anti-cheat banner */}
+          <div style={{
+            background: 'rgba(234, 179, 8, 0.08)',
+            border: '1px solid rgba(234, 179, 8, 0.3)',
+            borderRadius: '6px',
+            padding: '16px 20px',
+            marginBottom: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px'
+          }}>
+            <span style={{ fontSize: '20px' }}>⚠️</span>
+            <div>
+              <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>
+                Anti-Cheat Limit: 3 Alt-Tab / Window Switches
+              </p>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                Exiting fullscreen or switching to another application is strictly counted. On the <strong>3rd violation</strong>, your exam will be automatically submitted with your current answers.
+              </p>
+            </div>
+          </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-              {instructions.map((item, i) => (
-                <div key={i} style={{
-                  padding: '16px 0',
-                  borderBottom: '1px solid var(--border-subtle)',
-                  display: 'flex',
-                  gap: '16px',
-                  alignItems: 'flex-start',
-                }}>
+          {/* Instructions List */}
+          <div style={{ marginBottom: '40px' }}>
+            <p className="text-label" style={{ marginBottom: '16px' }}>Guidelines</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {dynamicInstructions.map((inst, i) => (
+                <div key={i} style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
                   <span style={{
-                    fontSize: '11px',
                     fontFamily: 'Söhne Mono, ui-monospace, monospace',
+                    fontSize: '11px',
                     color: 'var(--text-muted)',
-                    marginTop: '2px',
-                    minWidth: '20px',
+                    paddingTop: '2px',
+                    flexShrink: 0,
+                    width: '18px',
                   }}>
                     {String(i + 1).padStart(2, '0')}
                   </span>
-                  <p style={{
-                    fontSize: '14px',
-                    color: 'var(--text-secondary)',
-                    lineHeight: 1.6,
-                  }}>{item}</p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+                    {inst}
+                  </p>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Acknowledgement */}
+          {/* Agreement Checkbox */}
           <label style={{
             display: 'flex',
             alignItems: 'flex-start',
             gap: '12px',
-            cursor: 'pointer',
             marginBottom: '32px',
-            padding: '16px',
-            border: `1px solid ${checked ? 'var(--accent)' : 'var(--border)'}`,
-            borderRadius: '4px',
-            background: checked ? 'var(--accent-dim)' : 'transparent',
-            transition: 'all 0.15s ease',
+            cursor: 'pointer',
           }}>
             <input
               type="checkbox"
               checked={checked}
               onChange={e => setChecked(e.target.checked)}
               style={{
-                width: '14px',
-                height: '14px',
+                width: '16px',
+                height: '16px',
                 marginTop: '2px',
                 accentColor: 'var(--accent)',
                 cursor: 'pointer',
               }}
             />
             <span style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              I have read and understood the instructions and am ready to begin the test.
+              I have read and understood the instructions, anti-cheat regulations, and am ready to begin the test.
             </span>
           </label>
 
           {sessionStatus === 'pending_approval' ? (
             <div style={{
               width: '100%',
-              padding: '15px',
+              padding: '16px',
               background: 'var(--warning-dim)',
               border: '1px solid var(--warning)',
-              borderRadius: '4px',
+              borderRadius: '6px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -248,10 +284,10 @@ export default function InstructionsPage() {
                 letterSpacing: '0.12em',
                 textTransform: 'uppercase',
               }}>
-                Waiting for Admin Approval...
+                Waiting for Faculty Approval...
               </span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                Please wait in this lobby. The exam will start automatically.
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                Please stay on this screen. Once approved, the button below will activate.
               </span>
             </div>
           ) : (
@@ -261,20 +297,21 @@ export default function InstructionsPage() {
               disabled={!checked}
               style={{
                 width: '100%',
-                padding: '15px',
+                padding: '16px',
                 background: checked ? 'var(--accent)' : 'var(--surface-2)',
                 border: '1px solid transparent',
-                borderRadius: '4px',
+                borderRadius: '6px',
                 color: checked ? '#ffffff' : 'var(--text-muted)',
-                fontSize: '12px',
+                fontSize: '13px',
                 fontWeight: 600,
-                letterSpacing: '0.12em',
+                letterSpacing: '0.08em',
                 textTransform: 'uppercase',
                 cursor: checked ? 'pointer' : 'not-allowed',
                 transition: 'all 0.15s ease',
+                boxShadow: checked ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
               }}
             >
-              Begin Exam
+              Begin {isQuiz ? 'Quiz & Puzzle' : 'Coding'} Exam
             </button>
           )}
         </div>
@@ -282,16 +319,3 @@ export default function InstructionsPage() {
     </main>
   );
 }
-
-const instructions = [
-  'You will be assigned exactly 3 questions from the question bank. Your assignment is fixed — refreshing the page will not change your questions.',
-  'The exam duration is 60 minutes. A countdown timer is visible at all times. The exam auto-submits when time expires.',
-  'Write your solutions in C++17. A Monaco code editor with syntax highlighting is provided for each question.',
-  'Use the "Run Code" button to test your program against visible test cases before submitting. Each question is evaluated independently.',
-  'Click "Submit" for each question individually when you are satisfied with your solution. Submitted questions cannot be edited.',
-  'Your code is automatically saved every few seconds. If you accidentally close the tab, your work will be restored.',
-  'You can run and test your code freely. Code is automatically saved every few seconds.',
-  'Each question is worth 10 marks (Total: 30). Scoring is based on test case passage — partial credit is awarded.',
-  'Do not refresh the page unnecessarily. Your session and timer persist on the server and will not reset.',
-  'Ensure you have a stable internet connection before starting. Network interruptions may affect code submission.',
-];

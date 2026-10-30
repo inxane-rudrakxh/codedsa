@@ -23,10 +23,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Session not active' }, { status: 403 });
   }
 
+  const newWarningCount = (session.integrity_warnings || 0) + 1;
+  const shouldAutoSubmit = newWarningCount >= 3;
+
   await prisma.examSession.update({
     where: { id: payload.session_id },
-    data: { integrity_warnings: { increment: 1 } },
+    data: {
+      integrity_warnings: newWarningCount,
+      ...(shouldAutoSubmit ? {
+        status: 'COMPLETED',
+        is_submitted: true,
+        end_time: new Date(),
+      } : {})
+    },
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({
+    success: true,
+    warning_count: newWarningCount,
+    auto_submitted: shouldAutoSubmit,
+  });
 }

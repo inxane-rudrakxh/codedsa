@@ -148,6 +148,9 @@ export default function TestQuestionsPage() {
   if (loading) return <div style={{ padding: '24px', color: 'var(--text-muted)' }}>Loading...</div>;
 
   // Questions assigned to this test, enriched with full question data
+  const isQuiz = test?.test_type === 'QUIZ';
+  const quizQs = test?.quizQuestions || [];
+
   const assignedIds = new Set(assignedQuestions.map((q: any) => q.question_id || q.id));
   const unassigned = bankQuestions.filter((q: any) => !assignedIds.has(q.id));
   // Full question objects for assigned
@@ -155,6 +158,117 @@ export default function TestQuestionsPage() {
     const full = bankQuestions.find((q: any) => q.id === (aq.question_id || aq.id));
     return full ? { ...full, order_index: aq.order_index } : null;
   }).filter(Boolean);
+
+  if (isQuiz) {
+    return (
+      <div>
+        {/* Breadcrumb */}
+        <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
+          <Link href="/admin/tests" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Tests</Link>
+          <span>›</span>
+          <Link href={`/admin/tests/${testId}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{test?.title || testId}</Link>
+          <span>›</span>
+          <span style={{ color: 'var(--text-primary)' }}>Questions</span>
+        </div>
+
+        {/* Header */}
+        <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <p className="text-label" style={{ margin: 0 }}>Puzzle / Quiz Test</p>
+              <span style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '4px',
+                background: 'rgba(168, 85, 247, 0.15)',
+                color: '#c084fc',
+                border: '1px solid rgba(168, 85, 247, 0.3)',
+              }}>NON-CODING</span>
+            </div>
+            <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              {test?.title}
+            </h1>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+              {quizQs.length} Questions · Total Marks: {test?.total_marks} · Duration: {test?.duration_minutes} Mins
+            </p>
+          </div>
+          <div>
+            <Link
+              href="/admin/questions"
+              style={{
+                ...primaryBtn,
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              Open Question Bank
+            </Link>
+          </div>
+        </div>
+
+        {/* Questions List */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {quizQs.map((q: any, idx: number) => (
+            <div
+              key={q.id}
+              style={{
+                background: 'var(--surface-1)',
+                border: '1px solid var(--border)',
+                borderRadius: '6px',
+                padding: '20px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <span style={{ fontFamily: 'Söhne Mono, monospace', fontSize: '14px', fontWeight: 700, color: 'var(--accent)' }}>
+                  Q{idx + 1}.
+                </span>
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  background: 'rgba(59, 130, 246, 0.12)',
+                  color: '#3b82f6',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(59, 130, 246, 0.25)',
+                }}>
+                  {q.marks} {q.marks === 1 ? 'Mark' : 'Marks'}
+                </span>
+                <span style={{ fontSize: '11px', background: 'var(--surface-2)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: '4px' }}>
+                  {q.type}
+                </span>
+              </div>
+
+              <p style={{ fontSize: '14.5px', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, marginBottom: '12px' }}>
+                {q.question_text}
+              </p>
+
+              {q.code_snippet && (
+                <div style={{ background: '#0d1117', border: '1px solid #30363d', borderRadius: '4px', padding: '12px 16px', marginBottom: '14px' }}>
+                  <pre style={{ margin: 0, fontFamily: 'Fira Code, monospace', fontSize: '13px', color: '#58a6ff' }}>
+                    {q.code_snippet}
+                  </pre>
+                </div>
+              )}
+
+              <div style={{ padding: '10px 14px', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.25)', fontSize: '13px' }}>
+                <p style={{ margin: 0, color: '#22c55e', fontWeight: 600 }}>
+                  Correct Answer: <span style={{ color: 'var(--text-primary)', fontFamily: 'Söhne Mono, monospace' }}>{q.correct_answer}</span>
+                </p>
+                {q.explanation && (
+                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    💡 {q.explanation}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

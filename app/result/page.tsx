@@ -133,32 +133,53 @@ export default function ResultPage() {
             Roll {data.student.roll_no} · Division {data.student.division} {data.student.branch ? `· ${data.student.branch}` : ''}
           </p>
 
-          {/* Official Announcement Notice */}
-          <div style={{
-            padding: '20px 22px',
-            background: 'var(--surface-1, #181715)',
-            border: '1px solid var(--accent, #cc785c)',
-            borderRadius: '8px',
-            marginBottom: '32px',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <Sparkles size={16} style={{ color: 'var(--accent, #cc785c)' }} />
-              <h2 style={{
-                fontSize: '15px',
-                fontWeight: 600,
-                color: 'var(--text-primary)',
-                margin: 0,
-                fontFamily: 'Copernicus, Georgia, serif',
-              }}>
-                Results Will Be Out Soon
+          {/* Score display or Official Announcement */}
+          {data.marks_published && data.total_score !== null ? (
+            <div style={{
+              padding: '24px',
+              background: 'rgba(34, 197, 94, 0.08)',
+              border: '1px solid rgba(34, 197, 94, 0.3)',
+              borderRadius: '8px',
+              marginBottom: '32px',
+              textAlign: 'center',
+            }}>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                Your Score
+              </p>
+              <h2 style={{ fontSize: '42px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Söhne Mono, ui-monospace, monospace', margin: 0 }}>
+                {data.total_score} <span style={{ fontSize: '20px', color: 'var(--text-muted)', fontWeight: 500 }}>/ 30</span>
               </h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '8px', marginBottom: 0 }}>
+                Assessment completed and verified.
+              </p>
             </div>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-              Your exam responses and code drafts have been securely saved and submitted. 
-              The official results and evaluation marksheet PDF will be published and shared directly in your <strong>College WhatsApp Group</strong> once faculty verification is completed.
-            </p>
-          </div>
+          ) : (
+            <div style={{
+              padding: '20px 22px',
+              background: 'var(--surface-1, #181715)',
+              border: '1px solid var(--accent, #cc785c)',
+              borderRadius: '8px',
+              marginBottom: '32px',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <Sparkles size={16} style={{ color: 'var(--accent, #cc785c)' }} />
+                <h2 style={{
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  margin: 0,
+                  fontFamily: 'Copernicus, Georgia, serif',
+                }}>
+                  Results Will Be Out Soon
+                </h2>
+              </div>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+                Your exam responses have been securely saved and submitted. 
+                The official results and evaluation marksheet will be published once faculty verification is completed.
+              </p>
+            </div>
+          )}
 
           <div style={{
             display: 'flex',

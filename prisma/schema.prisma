@@ -158,20 +158,38 @@ model TestCase {
   submissionResults SubmissionResult[]
 }
 
+model QuestionBank {
+  id               String         @id @default(auto()) @map("_id") @db.ObjectId
+  name             String         @unique
+  description      String?
+  category         String?
+  subject_code     String?        @default("DSA")
+  total_marks      Int?           @default(30)
+  duration_minutes Int?           @default(30)
+  created_at       DateTime       @default(now())
+  updated_at       DateTime       @updatedAt
+
+  quizQuestions    QuizQuestion[]
+}
+
 model QuizQuestion {
-  id                String       @id @default(auto()) @map("_id") @db.ObjectId
-  test_id           String       @db.ObjectId
-  test              Test         @relation(fields: [test_id], references: [id], onDelete: Cascade)
-  type              String       @default("MCQ") // "MCQ" | "FILL_BLANK" | "ODD_ONE_OUT"
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  test_id           String?       @db.ObjectId
+  test              Test?         @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  bank_id           String?       @db.ObjectId
+  bank              QuestionBank? @relation(fields: [bank_id], references: [id], onDelete: Cascade)
+  bank_name         String?
+  type              String        @default("SHORT_ANSWER") // "MCQ" | "SHORT_ANSWER" | "FILL_BLANK" | "ODD_ONE_OUT" | "PUZZLE"
   question_text     String
-  options           String[]     @default([])
+  code_snippet      String?
+  options           String[]      @default([])
   correct_answer    String
-  alternate_answers String[]     @default([])
+  alternate_answers String[]      @default([])
   explanation       String?
-  marks             Float        @default(1.0)
-  order_index       Int          @default(0)
-  created_at        DateTime     @default(now())
-  updated_at        DateTime     @updatedAt
+  marks             Float         @default(1.0)
+  order_index       Int           @default(0)
+  created_at        DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
 
   quizAnswers       QuizAnswer[]
 }

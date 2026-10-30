@@ -32,12 +32,102 @@ export async function GET(request: NextRequest) {
   if (remaining <= 0 && session.status !== 'EXPIRED' && session.status !== 'STOPPED' && !session.is_submitted) {
     await prisma.examSession.update({
       where: { id: session.id },
-      data: { status: 'EXPIRED', is_submitted: true }
+      data: { status: 'EXPIRED', is_submitted: true, end_time: new Date() }
     });
     session.status = 'EXPIRED';
     session.is_submitted = true;
   }
 
+  // Auto-submit if integrity warnings exceeded limit of 3
+  if ((session.integrity_warnings || 0) >= 3 && !session.is_submitted && session.status !== 'STOPPED') {
+    await prisma.examSession.update({
+      where: { id: session.id },
+      data: { status: 'COMPLETED', is_submitted: true, end_time: new Date() }
+    });
+    session.status = 'COMPLETED';
+    session.is_submitted = true;
+  }
+
+  const isQuiz = session.test.test_type === 'QUIZ';
+
+  // ── QUIZ / PUZZLE TEST LOGIC ──────────────────────────────────────────────
+  if (isQuiz) {
+    const quizQuestions = await prisma.quizQuestion.findMany({
+      where: { test_id: session.test.id },
+      orderBy: { order_index: 'asc' }
+    });
+
+    const quizAnswerRows = await prisma.quizAnswer.findMany({
+      where: { session_id: session.id }
+    });
+
+    const answersMap: Record<string, any> = {};
+    const submissions: Record<string, any> = {};
+    let totalScore = 0;
+
+    quizAnswerRows.forEach(a => {
+      answersMap[a.question_id] = {
+        selected_answer: a.selected_answer,
+        is_correct: session.test.marks_published ? a.is_correct : undefined,
+        marks_awarded: session.test.marks_published ? a.marks_awarded : undefined,
+      };
+      if (a.selected_answer) {
+        submissions[a.question_id] = {
+          answer: a.selected_answer,
+          marks_awarded: a.marks_awarded,
+          is_correct: a.is_correct,
+        };
+      }
+      totalScore += a.marks_awarded || 0;
+    });
+
+    const formattedQuizQuestions = quizQuestions.map(q => ({
+      id: q.id,
+      title: `Question ${q.order_index}`,
+      order_index: q.order_index,
+      type: q.type,
+      question_text: q.question_text,
+      code_snippet: q.code_snippet,
+      options: q.options || [],
+      marks: q.marks,
+      explanation: session.test.marks_published ? q.explanation : undefined,
+      correct_answer: session.test.marks_published ? q.correct_answer : undefined,
+    }));
+
+    return NextResponse.json({
+      session: {
+        id: session.id,
+        start_time: session.start_time,
+        status: session.status === 'PENDING_APPROVAL' ? 'pending_approval' : (session.status === 'STOPPED' ? 'stopped' : (session.is_submitted ? 'submitted' : session.status.toLowerCase())),
+        is_submitted: session.is_submitted,
+        remaining_seconds: Math.floor(remaining),
+        test_title: session.test.title,
+        test_instructions: session.test.instructions || '',
+        test_type: 'QUIZ',
+        duration_minutes: session.test.duration_minutes,
+        total_marks: session.test.total_marks,
+        marks_published: session.test.marks_published,
+        allowed_languages: [],
+        integrity_warnings: session.integrity_warnings || 0,
+        total_score: session.test.marks_published ? totalScore : null,
+      },
+      student: {
+        roll_no: session.student.roll_number,
+        name: session.student.user.full_name,
+        branch: session.student.branch?.name,
+        division: session.student.division?.name
+      },
+      questions: formattedQuizQuestions,
+      quiz_questions: formattedQuizQuestions,
+      quiz_answers: answersMap,
+      submissions,
+      saves: {},
+      saveLangs: {},
+      testCases: {},
+    });
+  }
+
+  // ── CODING TEST LOGIC ─────────────────────────────────────────────────────
   // Get assigned questions
   const assignedRows = await prisma.assignedQuestion.findMany({
     where: { session_id: session.id },
@@ -105,6 +195,9 @@ export async function GET(request: NextRequest) {
       remaining_seconds: Math.floor(remaining),
       test_title: session.test.title,
       test_instructions: session.test.instructions || '',
+      test_type: session.test.test_type || 'CODING',
+      duration_minutes: session.test.duration_minutes,
+      total_marks: session.test.total_marks,
       marks_published: session.test.marks_published,
       allowed_languages: session.test.allowed_languages,
       integrity_warnings: session.integrity_warnings || 0,

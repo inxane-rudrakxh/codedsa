@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { AlertTriangle, ShieldAlert, Check, Info, Terminal, CheckCircle, Square, Sparkles, Maximize } from 'lucide-react';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
+import QuizWorkspace from './QuizWorkspace';
 
 interface Question {
   id: number;
@@ -41,6 +42,9 @@ interface SessionData {
   session: {
     id: string;
     status: string;
+    test_type?: string;
+    total_marks?: number;
+    duration_minutes?: number;
     is_submitted: number;
     remaining_seconds: number;
     integrity_warnings: number;
@@ -53,6 +57,8 @@ interface SessionData {
   };
   student: { roll_no: string; name: string; division: string };
   questions: Question[];
+  quiz_questions?: any[];
+  quiz_answers?: Record<string, string>;
   submissions: Record<number, Submission>;
   saves: Record<number, string>;
   // language_id per question from CodeDraft (2=cpp,3=python,4=java,1=c)
@@ -731,6 +737,17 @@ export default function WorkspacePage() {
   }
 
   if (!sessionData) return null;
+
+  if (sessionData.session.test_type === 'QUIZ') {
+    return (
+      <QuizWorkspace
+        session={sessionData.session as any}
+        student={sessionData.student}
+        questions={((sessionData as any).quiz_questions || sessionData.questions) as any}
+        initialAnswers={((sessionData as any).quiz_answers || {}) as any}
+      />
+    );
+  }
 
   const currentQuestion = sessionData.questions[activeQuestion];
   const isSubmitted = currentQuestion && !!sessionData.submissions[currentQuestion.id];

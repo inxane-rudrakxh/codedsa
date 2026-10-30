@@ -109,17 +109,33 @@ export default function TestsPage() {
             <div style={{ padding: '20px', borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                 <div>
-                  <h2
-                    onClick={() => router.push(`/admin/tests/${test.id}`)}
-                    style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px', cursor: 'pointer' }}
-                  >
-                    {test.title}
-                  </h2>
-                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    {test.subject?.name} · {test.duration_minutes} Mins · {test.total_marks} Marks · {test.questions_per_student} Qs/Student 
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <h2
+                      onClick={() => router.push(`/admin/tests/${test.id}`)}
+                      style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', margin: 0 }}
+                    >
+                      {test.title}
+                    </h2>
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      background: test.test_type === 'QUIZ' ? 'rgba(168, 85, 247, 0.15)' : 'rgba(59, 130, 246, 0.12)',
+                      color: test.test_type === 'QUIZ' ? '#c084fc' : '#3b82f6',
+                      border: `1px solid ${test.test_type === 'QUIZ' ? 'rgba(168, 85, 247, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
+                      letterSpacing: '0.04em',
+                    }}>
+                      {test.test_type === 'QUIZ' ? 'PUZZLE / QUIZ' : 'CODING'}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+                    {test.subject?.name} · {test.duration_minutes} Mins · {test.total_marks} Marks · {test.test_type === 'QUIZ' ? `${test.quizQuestions?.length || test.questions_per_student} Questions` : `${test.questions_per_student} Qs/Student`} 
                     {test.target_division ? ` · Div: ${test.target_division}` : ''}
                   </p>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Languages: {test.allowed_languages?.join(', ') || 'c, cpp, python, java'}</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', margin: '4px 0 0' }}>
+                    {test.test_type === 'QUIZ' ? 'Mode: Non-coding questions & puzzles' : `Languages: ${test.allowed_languages?.join(', ') || 'c, cpp, python, java'}`}
+                  </p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                   {test.status === 'PUBLISHED' && test.unique_id && (

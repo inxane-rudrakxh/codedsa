@@ -22,7 +22,10 @@ export async function GET(request: NextRequest) {
         include: { question: true },
         orderBy: { order_index: 'asc' }
       },
-      _count: { select: { examSessions: true } }
+      quizQuestions: {
+        orderBy: { order_index: 'asc' }
+      },
+      _count: { select: { examSessions: true, quizQuestions: true, testQuestions: true } }
     },
     orderBy: { created_at: 'desc' }
   });
@@ -48,7 +51,7 @@ export async function POST(request: NextRequest) {
   const { action } = body;
 
   if (action === 'create_test') {
-    const { title, description, instructions, subject_name, duration_minutes, total_marks, questions_per_student, target_division, allowed_languages, start_time, end_time } = body;
+    const { title, description, instructions, subject_name, duration_minutes, total_marks, questions_per_student, target_division, allowed_languages, start_time, end_time, test_type, bank_id } = body;
     
     // Always map the created test to the current user (admin)
     const teacher_id = payload.user_id;
@@ -67,16 +70,16 @@ export async function POST(request: NextRequest) {
     if (!subject_id) return NextResponse.json({ error: 'Subject is required' }, { status: 400 });
     
     const crypto = require('crypto');
-    // Generate a slug-like unique ID, e.g. test-dsa-5v8f35
     const subjectStr = subject_name || 'test';
     let slugBase = subjectStr.split(/\s+/).map((w: string) => w[0]?.toLowerCase()).join('');
     if (!/^[a-z]+$/.test(slugBase)) {
       slugBase = subjectStr.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 5);
     }
-    // ensure trailing - is removed
     slugBase = slugBase.replace(/-+$/, '');
     const randomHex = crypto.randomBytes(3).toString('hex');
     const uniqueId = `test-${slugBase}-${randomHex}`;
+
+    const isQuiz = test_type === 'QUIZ';
 
     const test = await prisma.test.create({
       data: {
@@ -86,30 +89,58 @@ export async function POST(request: NextRequest) {
         instructions: instructions || null,
         subject_id,
         teacher_id,
-        duration_minutes: parseInt(duration_minutes) || 60,
+        duration_minutes: parseInt(duration_minutes) || (isQuiz ? 30 : 60),
         total_marks: parseInt(total_marks) || 30,
-        questions_per_student: parseInt(questions_per_student) || 3,
+        questions_per_student: parseInt(questions_per_student) || (isQuiz ? 15 : 3),
         target_division: target_division || null,
-        allowed_languages: allowed_languages || ['c', 'cpp', 'python', 'java'],
+        allowed_languages: isQuiz ? [] : (allowed_languages || ['c', 'cpp', 'python', 'java']),
+        test_type: isQuiz ? 'QUIZ' : 'CODING',
         status: 'PUBLISHED',
         start_time: start_time ? new Date(start_time) : null,
       }
     });
 
-    // Auto-assign unique questions to this new test
-    const allQs = await prisma.question.findMany({ orderBy: { created_at: 'asc' } });
-    const seenTitles = new Set<string>();
-    let orderIdx = 0;
-    for (const q of allQs) {
-      if (!seenTitles.has(q.title)) {
-        seenTitles.add(q.title);
-        await prisma.testQuestion.create({
+    // If quiz test and bank_id provided, copy questions from bank
+    if (isQuiz && bank_id) {
+      const bankQs = await prisma.quizQuestion.findMany({
+        where: { bank_id },
+        orderBy: { order_index: 'asc' }
+      });
+      for (let i = 0; i < bankQs.length; i++) {
+        const bq = bankQs[i];
+        await prisma.quizQuestion.create({
           data: {
             test_id: test.id,
-            question_id: q.id,
-            order_index: orderIdx++
+            bank_id: bq.bank_id,
+            bank_name: bq.bank_name,
+            type: bq.type,
+            question_text: bq.question_text,
+            code_snippet: bq.code_snippet,
+            options: bq.options,
+            correct_answer: bq.correct_answer,
+            alternate_answers: bq.alternate_answers,
+            explanation: bq.explanation,
+            marks: bq.marks,
+            order_index: i + 1,
           }
         });
+      }
+    } else if (!isQuiz) {
+      // Auto-assign unique questions for coding test
+      const allQs = await prisma.question.findMany({ orderBy: { created_at: 'asc' } });
+      const seenTitles = new Set<string>();
+      let orderIdx = 0;
+      for (const q of allQs) {
+        if (!seenTitles.has(q.title)) {
+          seenTitles.add(q.title);
+          await prisma.testQuestion.create({
+            data: {
+              test_id: test.id,
+              question_id: q.id,
+              order_index: orderIdx++
+            }
+          });
+        }
       }
     }
 

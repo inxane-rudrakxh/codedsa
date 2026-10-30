@@ -20,13 +20,16 @@ export async function GET(request: NextRequest) {
         testQuestions: {
           include: { question: true },
           orderBy: { order_index: 'asc' }
+        },
+        quizQuestions: {
+          orderBy: { order_index: 'asc' }
         }
       }
     });
     if (!test) return NextResponse.json({ error: 'Test not found' }, { status: 404 });
 
-    // Check teacher owns this test
-    if (test.teacher_id !== payload.user_id) {
+    // Check teacher owns this test (Admins bypass)
+    if (payload.role !== 'ADMIN' && test.teacher_id && test.teacher_id !== payload.user_id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
@@ -45,16 +48,40 @@ export async function GET(request: NextRequest) {
       include: {
         assignedQuestions: { include: { question: true }, orderBy: { order_index: 'asc' } },
         submissions: { orderBy: { created_at: 'desc' } },
-        codeDrafts: true
+        codeDrafts: true,
+        quizAnswers: { include: { question: true } }
       }
     });
+
+    const isQuiz = test.test_type === 'QUIZ';
 
     const results = students.map(student => {
       const session = sessions.find(s => s.student_id === student.id);
       let questionsData: any[] = [];
       let total_score = 0;
 
-      if (session) {
+      if (isQuiz) {
+        const quizQs = test.quizQuestions || [];
+        for (let qi = 0; qi < quizQs.length; qi++) {
+          const qq = quizQs[qi];
+          const ans = session?.quizAnswers?.find(a => a.question_id === qq.id);
+          const marks = ans?.marks_awarded ?? null;
+          if (marks !== null && marks !== undefined) total_score += marks;
+          questionsData.push({
+            question_id: qq.id,
+            question_title: `Q${qq.order_index}. ${qq.question_text.substring(0, 35)}...`,
+            order_index: qi + 1,
+            submission_id: ans?.id || null,
+            source_code: ans?.selected_answer || null,
+            status: ans ? (ans.is_correct ? 'ACCEPTED' : 'WRONG_ANSWER') : null,
+            passed_test_cases: ans?.is_correct ? 1 : 0,
+            total_test_cases: 1,
+            marks_awarded: marks,
+            max_marks: qq.marks,
+            ai_feedback: qq.explanation || null,
+          });
+        }
+      } else if (session) {
         for (let qi = 0; qi < session.assignedQuestions.length; qi++) {
           const aq = session.assignedQuestions[qi];
           // Get the latest submission for this question
