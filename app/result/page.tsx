@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Sparkles } from 'lucide-react';
+import { exitFullscreenSafely } from '@/lib/inAppClipboard';
 
 interface ResultData {
   student: { roll_no: string; name: string; division: string; branch: string };
@@ -19,7 +20,9 @@ export default function ResultPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    exitFullscreenSafely();
     const token = localStorage.getItem('session_token');
+
     if (!token) { router.push('/'); return; }
 
     fetch('/api/exam/session', {

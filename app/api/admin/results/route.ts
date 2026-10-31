@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getAdminUser, teacherScope } from '@/lib/permissions';
 
+function resolveTargetDivisionNames(target: string | null | undefined): string[] {
+  if (!target) return [];
+  const t = target.trim().toUpperCase();
+  const matched = new Set<string>();
+  matched.add(target.trim());
+
+  if (t === 'C' || t.includes('DIV - C') || t.includes('DIV-C') || t.includes('DIV C') || t === 'AIDS A' || t === 'A') {
+    matched.add('AIDS A');
+    matched.add('C');
+    matched.add('A');
+  }
+  if (t === 'D' || t.includes('DIV - D') || t.includes('DIV-D') || t.includes('DIV D') || t === 'AIDS B' || t === 'B') {
+    matched.add('AIDS B');
+    matched.add('D');
+    matched.add('B');
+  }
+  return Array.from(matched);
+}
+
 export async function GET(request: NextRequest) {
   const payload = await getAdminUser(request);
   if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -33,19 +52,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const targetDivision = test.target_division || test.title.match(/Div\s*-\s*([A-Za-z0-9]+)/i)?.[1]?.toUpperCase() || null;
-    const students = await prisma.student.findMany({
-      where: {
-        user: { status: 'ACTIVE' },
-        ...(targetDivision ? { division: { name: targetDivision } } : {})
-      },
-      include: { user: true, branch: true, division: true },
-      orderBy: { roll_number: 'asc' }
-    });
-
     const sessions = await prisma.examSession.findMany({
       where: { test_id },
       include: {
+        student: { include: { user: true, branch: true, division: true } },
         assignedQuestions: { include: { question: true }, orderBy: { order_index: 'asc' } },
         submissions: { orderBy: { created_at: 'desc' } },
         codeDrafts: true,
@@ -53,9 +63,48 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    const targetDivision = test.target_division || test.title.match(/Div\s*-\s*([A-Za-z0-9]+)/i)?.[1]?.toUpperCase() || null;
+    const possibleDivNames = resolveTargetDivisionNames(targetDivision);
+    const sessionDivNames = Array.from(new Set(sessions.map(s => s.student?.division?.name).filter(Boolean))) as string[];
+    const allRelevantDivNames = Array.from(new Set([...possibleDivNames, ...sessionDivNames]));
+    const sessionStudentIds = sessions.map(s => s.student_id);
+
+    const whereClause: any = {
+      user: { status: 'ACTIVE' },
+    };
+
+    if (sessionStudentIds.length > 0 && allRelevantDivNames.length > 0) {
+      whereClause.OR = [
+        { id: { in: sessionStudentIds } },
+        { division: { name: { in: allRelevantDivNames } } }
+      ];
+    } else if (sessionStudentIds.length > 0) {
+      whereClause.id = { in: sessionStudentIds };
+    } else if (allRelevantDivNames.length > 0) {
+      whereClause.division = { name: { in: allRelevantDivNames } };
+    }
+
+    const students = await prisma.student.findMany({
+      where: whereClause,
+      include: { user: true, branch: true, division: true },
+      orderBy: { roll_number: 'asc' }
+    });
+
+    // Ensure every student in sessions is included even if user was marked inactive or division unassigned
+    const studentMap = new Map(students.map(s => [s.id, s]));
+    for (const s of sessions) {
+      if (s.student && !studentMap.has(s.student.id)) {
+        studentMap.set(s.student.id, s.student as any);
+      }
+    }
+
+    const finalStudents = Array.from(studentMap.values()).sort((a, b) =>
+      (a.roll_number || '').localeCompare(b.roll_number || '')
+    );
+
     const isQuiz = test.test_type === 'QUIZ';
 
-    const results = students.map(student => {
+    const results = finalStudents.map(student => {
       const session = sessions.find(s => s.student_id === student.id);
       let questionsData: any[] = [];
       let total_score = 0;
@@ -82,25 +131,39 @@ export async function GET(request: NextRequest) {
           });
         }
       } else if (session) {
-        for (let qi = 0; qi < session.assignedQuestions.length; qi++) {
-          const aq = session.assignedQuestions[qi];
-          // Get the latest submission for this question
-          const subs = session.submissions.filter(s => s.question_id === aq.question_id);
+        const questionsList = session.assignedQuestions.length > 0
+          ? session.assignedQuestions.map((aq: any, idx: number) => ({
+              question_id: aq.question_id,
+              question_title: aq.question?.title || `Question ${idx + 1}`,
+              max_marks: aq.question?.marks ?? 10,
+              order_index: idx + 1,
+            }))
+          : (test.testQuestions && test.testQuestions.length > 0)
+          ? test.testQuestions.slice(0, test.questions_per_student || 3).map((tq: any, idx: number) => ({
+              question_id: tq.question_id,
+              question_title: tq.question?.title || `Question ${idx + 1}`,
+              max_marks: tq.question?.marks ?? 10,
+              order_index: idx + 1,
+            }))
+          : [];
+
+        for (const qItem of questionsList) {
+          const subs = session.submissions.filter(s => s.question_id === qItem.question_id);
           const sub = subs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-          const draft = session.codeDrafts?.find((d: any) => d.question_id === aq.question_id);
+          const draft = session.codeDrafts?.find((d: any) => d.question_id === qItem.question_id);
           const marks = sub?.marks_awarded ?? null;
           if (marks !== null && marks !== undefined) total_score += marks;
           questionsData.push({
-            question_id: aq.question_id,
-            question_title: aq.question.title,
-            order_index: qi + 1,
+            question_id: qItem.question_id,
+            question_title: qItem.question_title,
+            order_index: qItem.order_index,
             submission_id: sub?.id || null,
             source_code: sub?.source_code || draft?.source_code || null,
             status: sub?.status || (draft ? 'DRAFT' : null),
             passed_test_cases: sub?.passed_test_cases ?? null,
             total_test_cases: sub?.total_test_cases ?? null,
             marks_awarded: marks,
-            max_marks: aq.question.marks,
+            max_marks: qItem.max_marks,
             ai_feedback: sub?.error_message || null,
           });
         }
@@ -331,41 +394,92 @@ export async function POST(request: NextRequest) {
 
   if (action === 'generate_report') {
     const { test_id } = body;
-    const test = await prisma.test.findUnique({ where: { id: test_id } });
+    const test = await prisma.test.findUnique({
+      where: { id: test_id },
+      include: {
+        testQuestions: { include: { question: true }, orderBy: { order_index: 'asc' } },
+        quizQuestions: { orderBy: { order_index: 'asc' } }
+      }
+    });
     if (!test) return NextResponse.json({ error: 'Test not found' }, { status: 404 });
 
     if (payload.role !== 'ADMIN' && test.teacher_id !== payload.user_id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    const sessions = await prisma.examSession.findMany({
+      where: { test_id },
+      include: {
+        student: { include: { user: true, branch: true, division: true } },
+        assignedQuestions: { include: { question: true }, orderBy: { order_index: 'asc' } },
+        submissions: true,
+        quizAnswers: { include: { question: true } }
+      }
+    });
+
+    const isQuiz = test.test_type === 'QUIZ';
     const targetDivision = test.target_division || test.title.match(/Div\s*-\s*([A-Za-z0-9]+)/i)?.[1]?.toUpperCase() || null;
+    const possibleDivNames = resolveTargetDivisionNames(targetDivision);
+    const sessionDivNames = Array.from(new Set(sessions.map(s => s.student?.division?.name).filter(Boolean))) as string[];
+    const allRelevantDivNames = Array.from(new Set([...possibleDivNames, ...sessionDivNames]));
+    const sessionStudentIds = sessions.map(s => s.student_id);
+
+    const whereClause: any = {
+      user: { status: 'ACTIVE' },
+    };
+
+    if (sessionStudentIds.length > 0 && allRelevantDivNames.length > 0) {
+      whereClause.OR = [
+        { id: { in: sessionStudentIds } },
+        { division: { name: { in: allRelevantDivNames } } }
+      ];
+    } else if (sessionStudentIds.length > 0) {
+      whereClause.id = { in: sessionStudentIds };
+    } else if (allRelevantDivNames.length > 0) {
+      whereClause.division = { name: { in: allRelevantDivNames } };
+    }
+
     const students = await prisma.student.findMany({
-      where: {
-        user: { status: 'ACTIVE' },
-        ...(targetDivision ? { division: { name: targetDivision } } : {})
-      },
+      where: whereClause,
       include: { user: true, branch: true, division: true },
       orderBy: { roll_number: 'asc' }
     });
 
-    const sessions = await prisma.examSession.findMany({
-      where: { test_id },
-      include: {
-        assignedQuestions: { include: { question: true }, orderBy: { order_index: 'asc' } },
-        submissions: true
+    const studentMap = new Map(students.map(s => [s.id, s]));
+    for (const s of sessions) {
+      if (s.student && !studentMap.has(s.student.id)) {
+        studentMap.set(s.student.id, s.student as any);
       }
-    });
+    }
 
-    const reportRows = students.map(student => {
+    const finalStudents = Array.from(studentMap.values()).sort((a, b) =>
+      (a.roll_number || '').localeCompare(b.roll_number || '')
+    );
+
+    const reportRows = finalStudents.map(student => {
       const session = sessions.find(s => s.student_id === student.id);
       let total_score = 0;
       const qScores: Record<string, number | null> = {};
 
-      if (session) {
-        for (let qi = 0; qi < session.assignedQuestions.length; qi++) {
-          const aq = session.assignedQuestions[qi];
-          const subs = session.submissions.filter(s => s.question_id === aq.question_id);
-          const sub = subs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+      if (isQuiz) {
+        const quizQs = test.quizQuestions || [];
+        for (let qi = 0; qi < quizQs.length; qi++) {
+          const qq = quizQs[qi];
+          const ans = session?.quizAnswers?.find((a: any) => a.question_id === qq.id);
+          const marks = ans?.marks_awarded ?? null;
+          if (marks !== null && marks !== undefined) total_score += marks;
+          qScores[`Q${qi + 1}`] = marks;
+        }
+      } else if (session) {
+        const questionsList = session.assignedQuestions.length > 0
+          ? session.assignedQuestions
+          : (test.testQuestions || []);
+
+        for (let qi = 0; qi < questionsList.length; qi++) {
+          const aq = questionsList[qi];
+          const qId = aq.question_id;
+          const subs = session.submissions.filter((s: any) => s.question_id === qId);
+          const sub = subs.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
           const marks = sub?.marks_awarded ?? null;
           if (marks !== null && marks !== undefined) total_score += marks;
           qScores[`Q${qi + 1}`] = marks;

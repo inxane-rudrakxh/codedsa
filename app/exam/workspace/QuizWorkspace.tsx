@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, Check, Clock, Flag, ChevronLeft, ChevronRight, Send, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { exitFullscreenSafely } from '@/lib/inAppClipboard';
 
 interface QuizQuestion {
   id: string;
@@ -92,6 +93,7 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
 
   // Proctoring armed ref
   const proctoringArmedRef = useRef(false);
+  const isSubmittedRef = useRef(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('session_token') || '' : '';
@@ -151,6 +153,10 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
   const handleSubmitExam = useCallback(async () => {
     if (submitting) return;
     setSubmitting(true);
+    isSubmittedRef.current = true;
+    proctoringArmedRef.current = false;
+    exitFullscreenSafely();
+
     try {
       const res = await fetch('/api/exam/quiz/submit', {
         method: 'POST',
@@ -165,12 +171,17 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
           localStorage.removeItem(`quiz_answers_${session.id}`);
           localStorage.removeItem(`quiz_review_${session.id}`);
         }
+        exitFullscreenSafely();
         router.push('/result');
       } else {
+        isSubmittedRef.current = false;
+        proctoringArmedRef.current = true;
         alert('Submission failed. Please check your network and try again.');
         setSubmitting(false);
       }
     } catch (e) {
+      isSubmittedRef.current = false;
+      proctoringArmedRef.current = true;
       console.error(e);
       alert('Error submitting test. Please try again.');
       setSubmitting(false);
@@ -233,6 +244,7 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
     };
 
     const onFullscreenChange = () => {
+      if (isSubmittedRef.current) return;
       if (!document.fullscreenElement) {
         reportIntegrity('fullscreen_exit');
       }

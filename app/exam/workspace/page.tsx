@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { AlertTriangle, ShieldAlert, Check, Info, Terminal, CheckCircle, Square, Sparkles, Maximize } from 'lucide-react';
+import { inAppClipboard, exitFullscreenSafely, IN_APP_CLIPBOARD_MIME } from '@/lib/inAppClipboard';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 import QuizWorkspace from './QuizWorkspace';
@@ -172,11 +173,44 @@ export default function WorkspacePage() {
   const sessionLoadedRef = useRef<boolean>(false); // proctoring registered once
   const autoSubmitRef = useRef<(() => Promise<void>) | null>(null);
 
+  const isExamSubmittedRef = useRef(false);
+
   // Keep refs in sync with state on every render
   codesRef.current = codes;
   activeQuestionRef.current = activeQuestion;
   sessionDataRef.current = sessionData;
   loadingRef.current = loading;
+
+  const getExamContextTexts = useCallback((): string[] => {
+    const texts: string[] = [];
+    if (codesRef.current) {
+      Object.values(codesRef.current).forEach(c => {
+        if (c) texts.push(c);
+      });
+    }
+    Object.values(STARTER_CODES).forEach(sc => {
+      if (sc) texts.push(sc);
+    });
+    const sd = sessionDataRef.current;
+    if (sd?.questions) {
+      sd.questions.forEach(q => {
+        if (q.title) texts.push(q.title);
+        if (q.description) texts.push(q.description);
+        if (q.statement) texts.push(q.statement);
+        if (q.example_input) texts.push(q.example_input);
+        if (q.example_output) texts.push(q.example_output);
+      });
+    }
+    if (sd?.testCases) {
+      Object.values(sd.testCases).forEach(tcList => {
+        tcList?.forEach(tc => {
+          if (tc.input) texts.push(tc.input);
+          if (tc.expected_output) texts.push(tc.expected_output);
+        });
+      });
+    }
+    return texts;
+  }, []);
 
   const getToken = useCallback(() => {
     if (!tokenRef.current) {
@@ -389,6 +423,9 @@ export default function WorkspacePage() {
           const allQuestionsDone = (data?.questions || []).length > 0 &&
             (data?.questions || []).every((q: any) => Boolean(data?.submissions?.[q.id]));
           if (data?.session?.status === 'stopped' || data?.session?.status === 'expired' || (data?.session?.is_submitted && allQuestionsDone)) {
+            isExamSubmittedRef.current = true;
+            proctoringArmedRef.current = false;
+            exitFullscreenSafely();
             setShowFinalScreen(true);
           }
         })
@@ -490,6 +527,9 @@ export default function WorkspacePage() {
     }
 
     const onFullscreenChange = () => {
+      if (isExamSubmittedRef.current || showFinalScreen) {
+        return;
+      }
       if (!document.fullscreenElement) {
         // Exited fullscreen
         if (proctoringArmedRef.current) {
@@ -562,16 +602,6 @@ export default function WorkspacePage() {
         e.stopPropagation();
       }
 
-      // Block copy, cut, paste shortcuts
-      const isCopy  = (ctrlKey || metaKey) && (key === 'c' || key === 'C');
-      const isCut   = (ctrlKey || metaKey) && (key === 'x' || key === 'X');
-      const isPaste = (ctrlKey || metaKey) && (key === 'v' || key === 'V');
-      if (isCopy || isCut || isPaste) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-
       // Block inspect / devtools shortcuts
       const isDevTools =
         key === 'F12' ||
@@ -604,22 +634,46 @@ export default function WorkspacePage() {
       }
     };
 
-    // ── 4. Block right-click, copy, cut, and paste ────────────────────────
-    const preventClipboardAndContext = (e: Event) => {
+    // ── 4. Block right-click, allow in-app copy/cut, gate paste ───────────
+    const preventContextMenu = (e: Event) => {
       e.preventDefault();
       e.stopPropagation();
       return false;
+    };
+
+    const handleCopyCut = (e: ClipboardEvent) => {
+      const selection = window.getSelection()?.toString();
+      if (selection) {
+        inAppClipboard.recordCopy(selection);
+        try {
+          e.clipboardData?.setData(IN_APP_CLIPBOARD_MIME, '1');
+          e.clipboardData?.setData('text/plain', selection);
+        } catch {}
+      }
+    };
+
+    const handlePaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData('text/plain') || '';
+      if (!text) return;
+
+      if (inAppClipboard.isInternal(text, e.clipboardData, getExamContextTexts)) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      inAppClipboard.notify('External paste blocked: Only code/text copied within this exam is allowed.', 'error');
     };
 
     window.addEventListener('blur', onWindowBlur);
     document.addEventListener('visibilitychange', onVisibilityChange);
     document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('keydown', onKeyDown, { capture: true });
-    window.addEventListener('contextmenu', preventClipboardAndContext, { capture: true });
-    document.addEventListener('contextmenu', preventClipboardAndContext, { capture: true });
-    document.addEventListener('copy', preventClipboardAndContext, { capture: true });
-    document.addEventListener('cut', preventClipboardAndContext, { capture: true });
-    document.addEventListener('paste', preventClipboardAndContext, { capture: true });
+    window.addEventListener('contextmenu', preventContextMenu, { capture: true });
+    document.addEventListener('contextmenu', preventContextMenu, { capture: true });
+    document.addEventListener('copy', handleCopyCut, { capture: true });
+    document.addEventListener('cut', handleCopyCut, { capture: true });
+    document.addEventListener('paste', handlePaste, { capture: true });
 
     // Note: cleanup on unmount only. Re-registration is guarded by sessionLoadedRef.
     return () => {
@@ -628,11 +682,11 @@ export default function WorkspacePage() {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
       document.removeEventListener('keydown', onKeyDown, { capture: true });
-      window.removeEventListener('contextmenu', preventClipboardAndContext, { capture: true });
-      document.removeEventListener('contextmenu', preventClipboardAndContext, { capture: true });
-      document.removeEventListener('copy', preventClipboardAndContext, { capture: true });
-      document.removeEventListener('cut', preventClipboardAndContext, { capture: true });
-      document.removeEventListener('paste', preventClipboardAndContext, { capture: true });
+      window.removeEventListener('contextmenu', preventContextMenu, { capture: true });
+      document.removeEventListener('contextmenu', preventContextMenu, { capture: true });
+      document.removeEventListener('copy', handleCopyCut, { capture: true });
+      document.removeEventListener('cut', handleCopyCut, { capture: true });
+      document.removeEventListener('paste', handlePaste, { capture: true });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionData?.session.id, loading]);
@@ -640,6 +694,10 @@ export default function WorkspacePage() {
   // Bug 1 & 5 fix: wrapped in useCallback with stable codesRef so stale closures
   // inside timers and integrity handlers always call the latest version.
   const handleAutoSubmit = useCallback(async () => {
+    isExamSubmittedRef.current = true;
+    proctoringArmedRef.current = false;
+    exitFullscreenSafely();
+
     const sd = sessionDataRef.current;
     if (!sd) return;
     for (const q of sd.questions) {
@@ -647,6 +705,7 @@ export default function WorkspacePage() {
         await doSubmit(q.id, codesRef.current[q.id] || STARTER_CODE);
       }
     }
+    exitFullscreenSafely();
     router.push('/result');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
@@ -675,6 +734,9 @@ export default function WorkspacePage() {
     if (data.success) {
       setSubmitScores(prev => ({ ...prev, [questionId]: data.score ?? 0 }));
       if (data.all_submitted) {
+        isExamSubmittedRef.current = true;
+        proctoringArmedRef.current = false;
+        exitFullscreenSafely();
         setTimeout(() => router.push('/result'), 1500);
       }
       return data.score ?? 0;
@@ -1446,38 +1508,110 @@ export default function WorkspacePage() {
                           e.event.stopPropagation();
                         });
 
-                        // Disable Monaco clipboard commands
-                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {});
-                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {});
-                        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {});
-
                         // Ctrl+Enter → Run Code
                         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
                           if (!isSubmitted) handleRunCode();
                         });
 
-                        // Intercept keydown in Monaco — block Copy, Cut, Paste shortcuts
+                        // Intercept keydown in Monaco — prevent edits if submitted
                         editor.onKeyDown((ke) => {
-                          const isCopy  = (ke.ctrlKey || ke.metaKey) && ke.keyCode === monaco.KeyCode.KeyC;
-                          const isCut   = (ke.ctrlKey || ke.metaKey) && ke.keyCode === monaco.KeyCode.KeyX;
-                          const isPaste = (ke.ctrlKey || ke.metaKey) && ke.keyCode === monaco.KeyCode.KeyV;
-                          if (isCopy || isCut || isPaste) {
-                            ke.preventDefault();
-                            ke.stopPropagation();
+                          if (isSubmitted) {
+                            const isCut   = (ke.ctrlKey || ke.metaKey) && ke.keyCode === monaco.KeyCode.KeyX;
+                            const isPaste = (ke.ctrlKey || ke.metaKey) && ke.keyCode === monaco.KeyCode.KeyV;
+                            if (isCut || isPaste) {
+                              ke.preventDefault();
+                              ke.stopPropagation();
+                            }
                           }
                         });
 
-                        // Prevent contextmenu, copy, cut, paste on Monaco DOM node
+                        // Handle in-app clipboard on Monaco DOM node
                         const domNode = editor.getDomNode();
                         if (domNode) {
-                          const blockDom = (e: Event) => {
+                          const blockContextMenu = (e: Event) => {
                             e.preventDefault();
                             e.stopPropagation();
                           };
-                          domNode.addEventListener('contextmenu', blockDom, { capture: true });
-                          domNode.addEventListener('copy', blockDom, { capture: true });
-                          domNode.addEventListener('cut', blockDom, { capture: true });
-                          domNode.addEventListener('paste', blockDom, { capture: true });
+
+                          const handleMonacoCopy = (e: ClipboardEvent) => {
+                            const selection = editor.getSelection();
+                            const model = editor.getModel();
+                            let text = '';
+                            if (selection && model && !selection.isEmpty()) {
+                              text = model.getValueInRange(selection);
+                            } else if (model && selection) {
+                              text = model.getLineContent(selection.positionLineNumber) + '\n';
+                            }
+                            if (text) {
+                              inAppClipboard.recordCopy(text);
+                              try {
+                                e.clipboardData?.setData(IN_APP_CLIPBOARD_MIME, '1');
+                                e.clipboardData?.setData('text/plain', text);
+                              } catch {}
+                              inAppClipboard.notify('Copied to in-exam clipboard', 'info');
+                            }
+                          };
+
+                          const handleMonacoCut = (e: ClipboardEvent) => {
+                            if (isSubmitted) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              return;
+                            }
+                            const selection = editor.getSelection();
+                            const model = editor.getModel();
+                            let text = '';
+                            if (selection && model && !selection.isEmpty()) {
+                              text = model.getValueInRange(selection);
+                            } else if (model && selection) {
+                              text = model.getLineContent(selection.positionLineNumber) + '\n';
+                            }
+                            if (text) {
+                              inAppClipboard.recordCopy(text);
+                              try {
+                                e.clipboardData?.setData(IN_APP_CLIPBOARD_MIME, '1');
+                                e.clipboardData?.setData('text/plain', text);
+                              } catch {}
+                              inAppClipboard.notify('Cut to in-exam clipboard', 'info');
+                            }
+                          };
+
+                          const handleMonacoPaste = (e: ClipboardEvent) => {
+                            if (isSubmitted) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              return;
+                            }
+                            const text = e.clipboardData?.getData('text/plain') || '';
+                            if (!text) {
+                              const fallback = inAppClipboard.getLastCopiedText();
+                              if (fallback) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const sel = editor.getSelection();
+                                if (sel) {
+                                  editor.executeEdits('inAppPaste', [{ range: sel, text: fallback, forceMoveMarkers: true }]);
+                                }
+                              }
+                              return;
+                            }
+
+                            if (inAppClipboard.isInternal(text, e.clipboardData, getExamContextTexts)) {
+                              // Valid in-app paste — allow Monaco native paste
+                              inAppClipboard.recordCopy(text);
+                              return;
+                            }
+
+                            // Block external paste
+                            e.preventDefault();
+                            e.stopPropagation();
+                            inAppClipboard.notify('External paste blocked: Only code/text copied within this exam is allowed.', 'error');
+                          };
+
+                          domNode.addEventListener('contextmenu', blockContextMenu, { capture: true });
+                          domNode.addEventListener('copy', handleMonacoCopy, { capture: true });
+                          domNode.addEventListener('cut', handleMonacoCut, { capture: true });
+                          domNode.addEventListener('paste', handleMonacoPaste, { capture: true });
                         }
                       }}
                     />
@@ -2601,6 +2735,10 @@ function FinalScreen({
   totalScore: number;
   isStopped?: boolean;
 }) {
+  useEffect(() => {
+    exitFullscreenSafely();
+  }, []);
+
   return (
     <div style={{
       minHeight: '100vh',
