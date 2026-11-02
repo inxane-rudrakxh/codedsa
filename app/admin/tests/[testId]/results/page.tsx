@@ -304,6 +304,7 @@ export default function TestResultsPage() {
 
   const maxQuestions = Math.max(...results.map(r => r.questions.length), 0);
   const qHeaders = Array.from({ length: maxQuestions }, (_, i) => `Q${i + 1}`);
+  const isCompact = qHeaders.length > 5;
 
   return (
     <div>
@@ -492,11 +493,11 @@ export default function TestResultsPage() {
       )}
 
       {/* Table */}
-      <div style={{ border: '1px solid var(--border)', borderRadius: '4px', overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '750px' }}>
+      <div style={{ border: '1px solid var(--border)', borderRadius: '6px', overflowX: 'auto', background: 'var(--surface-1)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', width: '100%' }}>
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: '100%' }}>
           <thead>
             <tr style={{ background: 'var(--surface-2)' }}>
-              <th style={{ ...thStyle, width: '40px', textAlign: 'center' }}>
+              <th style={{ ...thStyle, width: '42px', minWidth: '42px', maxWidth: '42px', textAlign: 'center', position: 'sticky', left: 0, zIndex: 10, background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
                 <input
                   type="checkbox"
                   checked={activeStudents.length > 0 && activeStudents.every(s => selectedSessionIds.includes(s.session_id!))}
@@ -511,9 +512,16 @@ export default function TestResultsPage() {
                   title={activeStudents.length > 0 ? "Select/deselect all active students" : "No active students to select"}
                 />
               </th>
-              {['Roll', 'Name', 'Div', ...qHeaders, 'Total', 'Status', 'Warnings', 'Actions'].map(h => (
-                <th key={h} style={thStyle}>{h}</th>
+              <th style={{ ...thStyle, width: '90px', minWidth: '90px', position: 'sticky', left: '42px', zIndex: 10, background: 'var(--surface-2)', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>Roll</th>
+              <th style={{ ...thStyle, width: '190px', minWidth: '180px', position: 'sticky', left: '132px', zIndex: 10, background: 'var(--surface-2)', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)', borderRight: '1px solid var(--border)', boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)' }}>Name</th>
+              <th style={{ ...thStyle, width: '60px', minWidth: '60px', textAlign: 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>Div</th>
+              {qHeaders.map(h => (
+                <th key={h} style={{ ...thStyle, width: isCompact ? '48px' : '64px', minWidth: isCompact ? '48px' : '64px', padding: isCompact ? '8px 4px' : '10px 10px', textAlign: 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>{h}</th>
               ))}
+              <th style={{ ...thStyle, width: '70px', minWidth: '65px', textAlign: 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>Total</th>
+              <th style={{ ...thStyle, width: '100px', minWidth: '95px', textAlign: 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>Status</th>
+              <th style={{ ...thStyle, width: '75px', minWidth: '70px', textAlign: 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>Warnings</th>
+              <th style={{ ...thStyle, width: '90px', minWidth: '85px', textAlign: 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -526,17 +534,16 @@ export default function TestResultsPage() {
               const isSubmitted = Boolean(r.is_submitted || hasMarks || r.total_score > 0);
               const sStatus = r.status === 'STOPPED' ? 'stopped' : (isSubmitted ? 'submitted' : (r.session_id ? 'active' : 'not_started'));
               const isActive = sStatus === 'active' && Boolean(r.session_id);
+              const isSelected = selectedSessionIds.includes(r.session_id || '');
+              const rowBg = isSelected ? 'rgba(229, 83, 75, 0.08)' : 'var(--surface-1)';
 
               return (
-                <tr key={r.roll_no} style={{
-                  borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none',
-                  background: selectedSessionIds.includes(r.session_id || '') ? 'rgba(229, 83, 75, 0.04)' : 'var(--surface-1)'
-                }}>
-                  <td style={{ ...tdStyle, textAlign: 'center', width: '40px' }}>
+                <tr key={r.roll_no} style={{ background: rowBg }}>
+                  <td style={{ ...tdStyle, textAlign: 'center', width: '42px', minWidth: '42px', maxWidth: '42px', position: 'sticky', left: 0, zIndex: 2, background: rowBg, borderBottom: '1px solid var(--border)' }}>
                     {isActive ? (
                       <input
                         type="checkbox"
-                        checked={selectedSessionIds.includes(r.session_id!)}
+                        checked={isSelected}
                         onChange={() => toggleSelectSession(r.session_id!)}
                         style={{
                           cursor: 'pointer',
@@ -550,39 +557,47 @@ export default function TestResultsPage() {
                       <span style={{ color: 'var(--border)', fontSize: '12px' }}>—</span>
                     )}
                   </td>
-                  <td style={tdStyle}><span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '12px', color: 'var(--text-primary)' }}>{r.roll_no}</span></td>
-                  <td style={tdStyle}><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.name}</span></td>
-                  <td style={tdStyle}><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.division}</span></td>
+                  <td style={{ ...tdStyle, width: '90px', minWidth: '90px', position: 'sticky', left: '42px', zIndex: 2, background: rowBg, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '12px', color: 'var(--text-primary)', fontWeight: 600 }}>{r.roll_no}</span>
+                  </td>
+                  <td style={{ ...tdStyle, width: '190px', minWidth: '180px', position: 'sticky', left: '132px', zIndex: 2, background: rowBg, borderBottom: '1px solid var(--border)', borderRight: '1px solid var(--border)', boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>{r.name}</span>
+                  </td>
+                  <td style={{ ...tdStyle, width: '60px', minWidth: '60px', textAlign: 'center', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.division}</span>
+                  </td>
                   {qHeaders.map((_, qi) => {
                     const q = r.questions.find(q => q.order_index === qi + 1);
                     return (
-                      <td key={qi} style={tdStyle}>
+                      <td key={qi} style={{ ...tdStyle, width: isCompact ? '48px' : '64px', minWidth: isCompact ? '48px' : '64px', padding: isCompact ? '8px 4px' : '10px 10px', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>
                         {q && (r.session_id || r.student_id) ? (
                           <button
                             onClick={() => setSelectedCode({ name: r.name, roll: r.roll_no, q, editMarks: q.marks_awarded ?? 0, session_id: r.session_id || '', student_id: r.student_id })}
                             style={{
                               background: 'transparent', border: 'none', cursor: 'pointer',
-                              fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px',
+                              fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: isCompact ? '12px' : '13px',
+                              padding: '2px 4px',
                               textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '3px',
                               color: q.marks_awarded === null ? 'var(--text-muted)' : q.marks_awarded >= q.max_marks * 0.7 ? 'var(--success)' : q.marks_awarded >= q.max_marks * 0.4 ? 'var(--warning, #f0a500)' : 'var(--error)',
+                              whiteSpace: 'nowrap'
                             }}
                             title="Click to view code and assign marks"
                           >
                             {q.marks_awarded !== null ? `${q.marks_awarded}/${q.max_marks}` : `?/${q.max_marks}`}
                           </button>
                         ) : (
-                          <span style={{ color: 'var(--text-muted)', fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px' }}>—</span>
+                          <span style={{ color: 'var(--text-muted)', fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: isCompact ? '12px' : '13px' }}>—</span>
                         )}
                       </td>
                     );
                   })}
-                  <td style={tdStyle}>
+                  <td style={{ ...tdStyle, width: '70px', minWidth: '65px', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>
                     <span style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', fontWeight: 600, color: isSubmitted ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                       {isSubmitted ? `${r.total_score}/${r.max_total}` : '—'}
                     </span>
                   </td>
-                  <td style={tdStyle}><StatusPill status={sStatus} /></td>
-                  <td style={tdStyle}>
+                  <td style={{ ...tdStyle, width: '100px', minWidth: '95px', textAlign: 'center', borderBottom: '1px solid var(--border)' }}><StatusPill status={sStatus} /></td>
+                  <td style={{ ...tdStyle, width: '75px', minWidth: '70px', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>
                     {r.integrity_warnings > 0
                       ? (
                         <span style={{ fontSize: '11px', color: 'var(--error)', fontFamily: 'Söhne Mono, ui-monospace, monospace', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
@@ -592,8 +607,8 @@ export default function TestResultsPage() {
                       : <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>—</span>
                     }
                   </td>
-                  <td style={tdStyle}>
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <td style={{ ...tdStyle, width: '90px', minWidth: '85px', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
                       {isActive && (
                         <button
                           onClick={() => setStopModal({

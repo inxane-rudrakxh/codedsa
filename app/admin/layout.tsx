@@ -3,12 +3,14 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [checking, setChecking] = useState(true);
   const [userInfo, setUserInfo] = useState<{ name: string; role: string } | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (pathname === '/admin/login' || pathname === '/admin/signup') { setChecking(false); return; }
@@ -31,6 +33,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <p style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', color: 'var(--text-muted)', fontSize: '13px' }}>Verifying...</p>
     </div>
   );
+
+  const isResultsPage = pathname.includes('/results');
 
   const nav = [
     { href: '/admin/dashboard', label: 'Overview' },
@@ -56,7 +60,25 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         top: 0,
         zIndex: 100,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={() => setSidebarCollapsed(prev => !prev)}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: '4px',
+              padding: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-secondary)',
+              transition: 'all 0.15s ease'
+            }}
+            title={sidebarCollapsed ? "Expand sidebar navigation" : "Collapse sidebar to expand screen"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
           <span style={{
             fontFamily: 'Söhne Mono, ui-monospace, monospace',
             fontSize: '14px',
@@ -111,13 +133,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         
         {/* Sidebar Navigation */}
         <aside style={{
-          width: '240px',
-          borderRight: '1px solid var(--border)',
+          width: sidebarCollapsed ? '0px' : '240px',
+          minWidth: sidebarCollapsed ? '0px' : '240px',
+          borderRight: sidebarCollapsed ? 'none' : '1px solid var(--border)',
           background: 'var(--surface-1)',
           display: 'flex',
           flexDirection: 'column',
-          padding: '24px 16px',
-          gap: '8px'
+          padding: sidebarCollapsed ? '0px' : '24px 16px',
+          gap: '8px',
+          overflow: 'hidden',
+          transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1), padding 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          opacity: sidebarCollapsed ? 0 : 1,
+          pointerEvents: sidebarCollapsed ? 'none' : 'auto',
+          whiteSpace: 'nowrap'
         }}>
           {nav.map(({ href, label }) => {
             const active = pathname === href || pathname.startsWith(href + '/');
@@ -145,8 +173,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </aside>
 
         {/* Page Content */}
-        <main style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', position: 'relative' }}>
-          <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 48px' }}>
+        <main style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', position: 'relative', width: '100%' }}>
+          <div style={{
+            maxWidth: isResultsPage ? '100%' : '1200px',
+            margin: '0 auto',
+            padding: isResultsPage ? '28px 32px' : '40px 48px',
+            width: '100%',
+            boxSizing: 'border-box'
+          }}>
             {children}
           </div>
         </main>
