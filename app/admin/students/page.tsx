@@ -18,20 +18,28 @@ export default function StudentsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newStudent, setNewStudent] = useState({ roll_no: '', name: '', division: 'AIDS A', branch: 'AI&DS' });
   const [csvError, setCsvError] = useState('');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const getToken = () => localStorage.getItem('admin_token') || '';
+  const reload = () => setRefreshTrigger(t => t + 1);
 
-  const fetchStudents = async () => {
-    const res = await fetch('/api/admin/students', {
+  useEffect(() => {
+    let active = true;
+    fetch('/api/admin/students', {
       headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    const data = await res.json();
-    setStudents(data.students || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchStudents(); }, []);
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (active) {
+          setStudents(data.students || []);
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [refreshTrigger]);
 
   const handleToggle = async (roll_no: string) => {
     await fetch('/api/admin/students', {
@@ -39,7 +47,17 @@ export default function StudentsPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify({ action: 'toggle', roll_no }),
     });
-    fetchStudents();
+    reload();
+  };
+
+  const handleDelete = async (roll_no: string, name: string) => {
+    if (!confirm(`Are you sure you want to permanently remove ${roll_no} (${name})? All their sessions and records will be deleted.`)) return;
+    await fetch('/api/admin/students', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ action: 'delete', roll_no }),
+    });
+    reload();
   };
 
   const handleAdd = async () => {
@@ -51,7 +69,7 @@ export default function StudentsPage() {
     });
     setShowAdd(false);
     setNewStudent({ roll_no: '', name: '', division: 'AIDS A', branch: 'AI&DS' });
-    fetchStudents();
+    reload();
   };
 
   const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,7 +99,7 @@ export default function StudentsPage() {
       body: JSON.stringify({ action: 'import', students: parsed }),
     });
     setCsvError('');
-    fetchStudents();
+    reload();
     e.target.value = '';
   };
 
@@ -240,21 +258,39 @@ export default function StudentsPage() {
                     </span>
                   </td>
                   <td style={tdStyle}>
-                    <button
-                      onClick={() => handleToggle(s.roll_no)}
-                      style={{
-                        fontSize: '11px',
-                        color: s.is_active ? 'var(--error)' : 'var(--success)',
-                        background: 'none',
-                        border: '1px solid var(--border)',
-                        borderRadius: '3px',
-                        padding: '4px 10px',
-                        cursor: 'pointer',
-                        letterSpacing: '0.04em',
-                      }}
-                    >
-                      {s.is_active ? 'Deactivate' : 'Activate'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        onClick={() => handleToggle(s.roll_no)}
+                        style={{
+                          fontSize: '11px',
+                          color: s.is_active ? 'var(--text-secondary)' : 'var(--success)',
+                          background: 'none',
+                          border: '1px solid var(--border)',
+                          borderRadius: '3px',
+                          padding: '4px 10px',
+                          cursor: 'pointer',
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        {s.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button
+                        onClick={() => handleDelete(s.roll_no, s.name)}
+                        style={{
+                          fontSize: '11px',
+                          color: 'var(--error)',
+                          background: 'none',
+                          border: '1px solid var(--border)',
+                          borderRadius: '3px',
+                          padding: '4px 8px',
+                          cursor: 'pointer',
+                          letterSpacing: '0.04em',
+                        }}
+                        title="Delete student"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

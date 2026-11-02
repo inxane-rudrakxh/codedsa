@@ -111,7 +111,18 @@ export async function POST(request: NextRequest) {
 
     const authToken = await createAuthToken(user.id, user.role, user.email || '');
 
-    let responsePayload: any = {
+    const responsePayload: {
+      token: string;
+      user: {
+        id: string;
+        email: string | null;
+        full_name: string;
+        role: string;
+        roll_number?: string;
+        department?: string | null;
+        subject?: string | null;
+      };
+    } = {
       token: authToken,
       user: {
         id: user.id,
@@ -134,7 +145,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responsePayload);
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Auth Error:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }

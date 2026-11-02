@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     include: {
       student: { include: { user: true, division: true, branch: true } },
       test: { include: { subject: true } },
-      _count: { select: { submissions: true } }
+      _count: { select: { submissions: true, quizAnswers: true } }
     },
     orderBy: { created_at: 'desc' },
     take: 100
@@ -61,6 +61,9 @@ export async function GET(request: NextRequest) {
     else if (remaining <= 0) displayStatus = 'expired';
     else displayStatus = 'active';
 
+    const isQuizTest = session.test.test_type === 'QUIZ' || session.test.test_type === 'PUZZLE';
+    const submittedCount = isQuizTest ? session._count.quizAnswers : session._count.submissions;
+
     activeSessions.push({
       session_id: session.id,
       test_id: session.test_id,
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest) {
       status: displayStatus,
       remaining_seconds: Math.floor(remaining),
       integrity_warnings: session.integrity_warnings,
-      submitted_count: session._count.submissions,
+      submitted_count: submittedCount,
     });
   }
 

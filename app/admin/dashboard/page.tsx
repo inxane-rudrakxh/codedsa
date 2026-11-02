@@ -10,22 +10,30 @@ export default function AdminDashboard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
-    const token = localStorage.getItem('admin_token');
-    const res = await fetch('/api/admin/dashboard', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      const d = await res.json();
-      setData(d);
-    }
-    setLoading(false);
-  };
-
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
+    let active = true;
+    const load = () => {
+      const token = localStorage.getItem('admin_token');
+      fetch('/api/admin/dashboard', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(res => res.json())
+        .then(d => {
+          if (!active) return;
+          setData(d);
+          setLoading(false);
+        })
+        .catch(() => {
+          if (active) setLoading(false);
+        });
+    };
+
+    load();
+    const interval = setInterval(load, 5000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   if (loading) {

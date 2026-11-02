@@ -205,14 +205,15 @@ export async function compileAndRun(
           stderr: data.error || '',
           execution_time: execDuration,
         };
-      } catch (networkErr: any) {
+      } catch (networkErr: unknown) {
         if (attempts < 2) {
           await new Promise(r => setTimeout(r, 1500));
           continue;
         }
+        const errMsg = networkErr instanceof Error ? networkErr.message : 'Connection failed';
         return {
           success: false,
-          runtime_error: `Network error reaching compiler: ${networkErr.message || 'Connection failed'}`,
+          runtime_error: `Network error reaching compiler: ${errMsg}`,
           execution_time: Date.now() - startTime,
         };
       }
@@ -379,6 +380,6 @@ export function compareOutputs(actual: string, expected: string): boolean {
   return false;
 }
 
-export function checkCodeLogic(code: string, questionId: number): { valid: boolean; reason?: string } {
+export function checkCodeLogic(_code: string, _questionId: string | number): { valid: boolean; reason?: string } {
   return { valid: true };
 }

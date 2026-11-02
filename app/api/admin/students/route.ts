@@ -111,5 +111,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   }
 
+  if (action === 'delete') {
+    const studentData = await prisma.student.findUnique({
+      where: { roll_number: roll_no.toUpperCase() },
+      include: { examSessions: { select: { id: true } } }
+    });
+    if (!studentData) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+
+    const sessionIds = studentData.examSessions.map(s => s.id);
+    if (sessionIds.length > 0) {
+      const subs = await prisma.submission.findMany({
+        where: { session_id: { in: sessionIds } },
+        select: { id: true }
+      });
+      const subIds = subs.map(s => s.id);
+      if (subIds.length > 0) {
+        await prisma.submissionResult.deleteMany({ where: { submission_id: { in: subIds } } }).catch(() => {});
+      }
+      await prisma.submission.deleteMany({ where: { session_id: { in: sessionIds } } }).catch(() => {});
+      await prisma.codeDraft.deleteMany({ where: { session_id: { in: sessionIds } } }).catch(() => {});
+      await prisma.assignedQuestion.deleteMany({ where: { session_id: { in: sessionIds } } }).catch(() => {});
+      await prisma.quizAnswer.deleteMany({ where: { session_id: { in: sessionIds } } }).catch(() => {});
+      await prisma.examSession.deleteMany({ where: { id: { in: sessionIds } } }).catch(() => {});
+    }
+
+    await prisma.student.delete({ where: { id: studentData.id } }).catch(() => {});
+    await prisma.user.delete({ where: { id: studentData.id } }).catch(() => {});
+
+    return NextResponse.json({ success: true });
+  }
+
   return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
 }

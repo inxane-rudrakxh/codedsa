@@ -8,10 +8,9 @@ export function cleanText(text: string): string {
   return text
     .trim()
     .replace(/^["'`]|["'`]$/g, '') // remove surrounding quotes
-    .replace(/[→]/g, '->') // normalize unicode right arrow
-    .replace(/[⇄]/g, '<->') // normalize unicode double arrow
-    .replace(/-->/g, '->')
-    .replace(/<-->/g, '<->')
+    .replace(/[⇄⇆↔⇔⇿⟺]|<-->|<==>/g, '<->') // normalize double arrows
+    .replace(/[→⇒➜➝➞➡➔➤↦⇾⟶]|-->|==>/g, '->') // normalize right arrows
+    .replace(/[←⇐⇦]|<--|<==/g, '<-') // normalize left arrows
     .replace(/\s+/g, ' '); // collapse whitespace
 }
 

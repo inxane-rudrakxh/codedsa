@@ -175,11 +175,13 @@ export default function WorkspacePage() {
 
   const isExamSubmittedRef = useRef(false);
 
-  // Keep refs in sync with state on every render
-  codesRef.current = codes;
-  activeQuestionRef.current = activeQuestion;
-  sessionDataRef.current = sessionData;
-  loadingRef.current = loading;
+  // Keep refs in sync with state
+  useEffect(() => {
+    codesRef.current = codes;
+    activeQuestionRef.current = activeQuestion;
+    sessionDataRef.current = sessionData;
+    loadingRef.current = loading;
+  }, [codes, activeQuestion, sessionData, loading]);
 
   const getExamContextTexts = useCallback((): string[] => {
     const texts: string[] = [];
@@ -314,10 +316,13 @@ export default function WorkspacePage() {
 
   // Handle active question change — reset demo state
   useEffect(() => {
-    setDemoActive(false);
-    setDemoPlaying(false);
-    setDemoCode('');
-    setDemoIndex(0);
+    const t = setTimeout(() => {
+      setDemoActive(false);
+      setDemoPlaying(false);
+      setDemoCode('');
+      setDemoIndex(0);
+    }, 0);
+    return () => clearTimeout(t);
   }, [activeQuestion, sessionData]);
 
   // Demo playback loop
@@ -329,8 +334,8 @@ export default function WorkspacePage() {
 
     const solutionLines = demoSetup.solution.split('\n');
     if (demoIndex >= solutionLines.length) {
-      setDemoPlaying(false);
-      return;
+      const t = setTimeout(() => setDemoPlaying(false), 0);
+      return () => clearTimeout(t);
     }
 
     const timer = setTimeout(() => {
@@ -511,9 +516,11 @@ export default function WorkspacePage() {
     // Initial check on mount: if already in fullscreen (e.g. from instructions page), arm after grace period
     if (typeof document !== 'undefined' && document.fullscreenElement) {
       hasEnteredFullscreenRef.current = true;
-      setShowFullscreenPrompt(false);
-      setIsFullscreenViolation(false);
       lockKeyboard();
+      setTimeout(() => {
+        setShowFullscreenPrompt(false);
+        setIsFullscreenViolation(false);
+      }, 0);
       setTimeout(() => {
         if (typeof document !== 'undefined' && document.fullscreenElement) {
           proctoringArmedRef.current = true;
@@ -522,8 +529,6 @@ export default function WorkspacePage() {
     } else {
       hasEnteredFullscreenRef.current = false;
       proctoringArmedRef.current = false;
-      setIsFullscreenViolation(false);
-      setShowFullscreenPrompt(true);
     }
 
     const onFullscreenChange = () => {
@@ -691,37 +696,7 @@ export default function WorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionData?.session.id, loading]);
 
-  // Bug 1 & 5 fix: wrapped in useCallback with stable codesRef so stale closures
-  // inside timers and integrity handlers always call the latest version.
-  const handleAutoSubmit = useCallback(async () => {
-    isExamSubmittedRef.current = true;
-    proctoringArmedRef.current = false;
-    exitFullscreenSafely();
-
-    const sd = sessionDataRef.current;
-    if (!sd) return;
-    for (const q of sd.questions) {
-      if (!sd.submissions[q.id]) {
-        await doSubmit(q.id, codesRef.current[q.id] || STARTER_CODE);
-      }
-    }
-    exitFullscreenSafely();
-    router.push('/result');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
-
-  // Keep the ref in sync so timers always call the latest handleAutoSubmit
-  autoSubmitRef.current = handleAutoSubmit;
-
-  const [runTrigger, setRunTrigger] = useState(0);
-
-  const handleRunCode = () => {
-    setConsoleOpen(true);
-    setRunning(true);
-    setRunTrigger(prev => prev + 1);
-  };
-
-  const doSubmit = async (questionId: number, code: string): Promise<number> => {
+  const doSubmit = useCallback(async (questionId: number, code: string): Promise<number> => {
     const res = await fetch('/api/exam/submit', {
       method: 'POST',
       headers: {
@@ -742,6 +717,38 @@ export default function WorkspacePage() {
       return data.score ?? 0;
     }
     return 0;
+  }, [language, router]);
+
+  // Bug 1 & 5 fix: wrapped in useCallback with stable codesRef so stale closures
+  // inside timers and integrity handlers always call the latest version.
+  const handleAutoSubmit = useCallback(async () => {
+    isExamSubmittedRef.current = true;
+    proctoringArmedRef.current = false;
+    exitFullscreenSafely();
+
+    const sd = sessionDataRef.current;
+    if (!sd) return;
+    for (const q of sd.questions) {
+      if (!sd.submissions[q.id]) {
+        await doSubmit(q.id, codesRef.current[q.id] || STARTER_CODE);
+      }
+    }
+    exitFullscreenSafely();
+    router.push('/result');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doSubmit, router]);
+
+  // Keep the ref in sync so timers always call the latest handleAutoSubmit
+  useEffect(() => {
+    autoSubmitRef.current = handleAutoSubmit;
+  }, [handleAutoSubmit]);
+
+  const [runTrigger, setRunTrigger] = useState(0);
+
+  const handleRunCode = () => {
+    setConsoleOpen(true);
+    setRunning(true);
+    setRunTrigger(prev => prev + 1);
   };
 
   const handleSubmitQuestion = async (targetQid?: number) => {
@@ -2167,19 +2174,20 @@ function ConsolePanel({
   const currentLineBufferRef = useRef<string>('');
 
   const runningRef = useRef(running);
-  runningRef.current = running;
-
-  // Stable refs for props to eliminate stale closures on question switch (Bug 6 fix)
   const codeRef = useRef(code);
-  codeRef.current = code;
   const languageRef = useRef(language);
-  languageRef.current = language;
   const questionIdRef = useRef(questionId);
-  questionIdRef.current = questionId;
   const exampleInputRef = useRef(exampleInput);
-  exampleInputRef.current = exampleInput;
   const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
+
+  useEffect(() => {
+    runningRef.current = running;
+    codeRef.current = code;
+    languageRef.current = language;
+    questionIdRef.current = questionId;
+    exampleInputRef.current = exampleInput;
+    getTokenRef.current = getToken;
+  }, [running, code, language, questionId, exampleInput, getToken]);
 
   // ── Build the xterm instance once with direct interactive input (VS Code style) ──
   const ensureTerminal = async () => {

@@ -8,8 +8,9 @@ import { exitFullscreenSafely } from '@/lib/inAppClipboard';
 interface ResultData {
   student: { roll_no: string; name: string; division: string; branch: string };
   questions: Array<{ id: string; title: string; order_index: number }>;
-  submissions: Array<{ question_id: string; score: number | null; submitted_at: string }>;
+  submissions: Array<{ question_id: string; score: number | null; submitted_at?: string }>;
   total_score: number | null;
+  total_marks: number;
   submitted_at: string | null;
   marks_published: boolean;
 }
@@ -33,7 +34,7 @@ export default function ResultPage() {
         if (!d.session) { router.push('/'); return; }
 
         const questions = d.questions || [];
-        const submissionMap: Record<string, any> = d.submissions || {};
+        const submissionMap: Record<string, { marks_awarded?: number | null; created_at?: string }> = d.submissions || {};
         const submissions = Object.entries(submissionMap).map(([qid, s]) => ({
           question_id: qid,
           score: s.marks_awarded ?? null,
@@ -41,7 +42,9 @@ export default function ResultPage() {
         }));
 
         const totalScore = d.session?.marks_published 
-          ? submissions.reduce((acc, s) => acc + (s.score || 0), 0)
+          ? (typeof d.session?.total_score === 'number'
+              ? d.session.total_score
+              : submissions.reduce((acc, s) => acc + (s.score || 0), 0))
           : null;
 
         setData({
@@ -49,8 +52,9 @@ export default function ResultPage() {
           questions,
           submissions,
           total_score: totalScore,
+          total_marks: d.session?.total_marks || 30,
           submitted_at: d.session.end_time || new Date().toISOString(),
-          marks_published: d.session?.marks_published || false,
+          marks_published: Boolean(d.session?.marks_published),
         });
         setLoading(false);
       })
@@ -150,7 +154,7 @@ export default function ResultPage() {
                 Your Score
               </p>
               <h2 style={{ fontSize: '42px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Söhne Mono, ui-monospace, monospace', margin: 0 }}>
-                {data.total_score} <span style={{ fontSize: '20px', color: 'var(--text-muted)', fontWeight: 500 }}>/ 30</span>
+                {data.total_score} <span style={{ fontSize: '20px', color: 'var(--text-muted)', fontWeight: 500 }}>/ {data.total_marks}</span>
               </h2>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '8px', marginBottom: 0 }}>
                 Assessment completed and verified.

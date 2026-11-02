@@ -25,28 +25,36 @@ export default function TestsPage() {
     { id: 'java', label: 'Java' },
   ];
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const getToken = () => localStorage.getItem('admin_token') || '';
+  const reload = () => setRefreshTrigger(t => t + 1);
 
-  const fetchData = async () => {
-    const res = await fetch('/api/admin/tests', {
+  useEffect(() => {
+    let active = true;
+    fetch('/api/admin/tests', {
       headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setTests(data.tests || []);
-      setSubjects(data.subjects || []);
-      setDivisions(data.divisions || []);
-      if (data.subjects && data.subjects.length > 0 && !newData.subject_name) {
-        setNewData(prev => ({ ...prev, subject_name: data.subjects[0].name }));
-      }
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchData(); }, []);
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (!active) return;
+        setTests(data.tests || []);
+        setSubjects(data.subjects || []);
+        setDivisions(data.divisions || []);
+        if (data.subjects && data.subjects.length > 0 && !newData.subject_name) {
+          setNewData(prev => ({ ...prev, subject_name: data.subjects[0].name }));
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [refreshTrigger, newData.subject_name]);
 
   const handleCreate = async () => {
-    let payload = { action: 'create_test', ...newData };
+    const payload = { action: 'create_test', ...newData };
     if (payload.start_time) {
       payload.start_time = new Date(payload.start_time).toISOString();
     }
@@ -61,11 +69,11 @@ export default function TestsPage() {
     });
     setIsCreating(false);
     setNewData({ title: '', subject_name: subjects[0]?.name || '', duration_minutes: 60, total_marks: 30, questions_per_student: 3, allowed_languages: ['c', 'cpp', 'python', 'java'], target_division: '', instructions: '', start_time: '', end_time: '' });
-    fetchData();
+    reload();
   };
 
   const handleUpdate = async (id: string) => {
-    let payload = { action: 'update_test', id, ...editData };
+    const payload = { action: 'update_test', id, ...editData };
     if (payload.start_time) {
       payload.start_time = new Date(payload.start_time).toISOString();
     }
@@ -79,7 +87,7 @@ export default function TestsPage() {
       body: JSON.stringify(payload),
     });
     setEditingId(null);
-    fetchData();
+    reload();
   };
 
   if (loading) return <div style={{ padding: '24px', color: 'var(--text-muted)' }}>Loading...</div>;
@@ -266,7 +274,14 @@ export default function TestsPage() {
               {/* Test quick-links */}
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                 {[
-                  { label: `Questions (${test.testQuestions.length})`, href: `/admin/tests/${test.id}/questions` },
+                  { 
+                    label: `Questions (${
+                      (test.test_type === 'QUIZ' || test.test_type === 'PUZZLE')
+                        ? (test.quizQuestions?.length ?? test._count?.quizQuestions ?? 0)
+                        : (test.testQuestions?.length ?? test._count?.testQuestions ?? 0)
+                    })`, 
+                    href: `/admin/tests/${test.id}/questions` 
+                  },
                   { label: 'Requests', href: `/admin/tests/${test.id}/requests` },
                   { label: 'Results', href: `/admin/tests/${test.id}/results` },
                 ].map(({ label, href }) => (
@@ -314,7 +329,7 @@ export default function TestsPage() {
                     body: JSON.stringify({ action: 'delete_test', id }),
                   });
                   setEditingId(null);
-                  fetchData();
+                  reload();
                 }}
                 style={{ padding: '8px 16px', border: 'none', borderRadius: '6px', background: 'var(--error)', color: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
               >

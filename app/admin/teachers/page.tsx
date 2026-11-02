@@ -22,18 +22,26 @@ export default function TeachersPage() {
   const [form, setForm] = useState({ email: '', full_name: '', password: '', department: '', subject: '' });
   const [msg, setMsg] = useState('');
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const getToken = () => localStorage.getItem('admin_token') || '';
+  const reload = () => setRefreshTrigger(t => t + 1);
 
-  const fetch_teachers = async () => {
-    const res = await fetch('/api/admin/teachers', {
+  useEffect(() => {
+    let active = true;
+    fetch('/api/admin/teachers', {
       headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    const data = await res.json();
-    setTeachers(data.teachers || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { fetch_teachers(); }, []);
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (active) {
+          setTeachers(data.teachers || []);
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [refreshTrigger]);
 
   const handleAdd = async () => {
     if (!form.email || !form.full_name || !form.password) return;
@@ -47,7 +55,7 @@ export default function TeachersPage() {
       setMsg('Teacher added successfully!');
       setShowAdd(false);
       setForm({ email: '', full_name: '', password: '', department: '', subject: '' });
-      fetch_teachers();
+      reload();
     } else {
       setMsg(data.error || 'Failed to add teacher.');
     }
@@ -59,7 +67,7 @@ export default function TeachersPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify({ action: 'toggle_status', id }),
     });
-    fetch_teachers();
+    reload();
   };
 
   const handleResetPassword = async (id: string) => {
@@ -135,7 +143,7 @@ export default function TeachersPage() {
             {loading ? (
               <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading...</td></tr>
             ) : teachers.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No teachers added yet. Click "Add Teacher" to get started.</td></tr>
+              <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No teachers added yet. Click &quot;Add Teacher&quot; to get started.</td></tr>
             ) : teachers.map((t, i) => (
               <tr key={t.id} style={{ borderBottom: i < teachers.length - 1 ? '1px solid var(--border-subtle)' : 'none', background: 'var(--surface-1)' }}>
                 <td style={tdStyle}><span style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '13px' }}>{t.full_name}</span></td>

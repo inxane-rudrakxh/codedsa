@@ -131,40 +131,101 @@ export function generateCollegeResultsPDF(
     69
   );
 
-  // Determine question headers
-  const maxQuestions = Math.max(...results.map(r => r.questions?.length || 0), 3);
-  const qCols = Array.from({ length: Math.min(maxQuestions, 3) }, (_, i) => `Q${i + 1}`);
+  // Determine question columns dynamically
+  const rawMaxQ = Math.max(...results.map(r => r.questions?.length || 0), 0);
+  const isDetailedQuiz = rawMaxQ > 5;
+  const showPerQuestionCols = rawMaxQ >= 1 && rawMaxQ <= 5;
+  const qCols = showPerQuestionCols ? Array.from({ length: rawMaxQ }, (_, i) => `Q${i + 1}`) : [];
 
   // Sort students naturally by Roll Number
   const sorted = [...results].sort((a, b) => a.roll_no.localeCompare(b.roll_no, undefined, { numeric: true }));
 
-  // Prepare table data
-  const head = [['Sr.', 'Roll No', 'Student Name', 'Div', ...qCols, 'Total', '%', 'Status']];
+  // Prepare table headers
+  let head: string[][];
+  if (isDetailedQuiz) {
+    head = [['Sr.', 'Roll No', 'Student Name', 'Div', 'Attempted', 'Correct', 'Total', '%', 'Status']];
+  } else if (showPerQuestionCols) {
+    head = [['Sr.', 'Roll No', 'Student Name', 'Div', ...qCols, 'Total', '%', 'Status']];
+  } else {
+    head = [['Sr.', 'Roll No', 'Student Name', 'Div', 'Total', '%', 'Status']];
+  }
+
+  const statusColIndex = head[0].length - 1;
+  const totalColIndex = statusColIndex - 2;
+
+  // Prepare table body
   const body = sorted.map((st, idx) => {
     const isSubmitted = isStudentSubmitted(st);
-    const qMarks = qCols.map((_, qi) => {
-      const q = st.questions?.[qi];
-      if (q && q.marks_awarded !== null && q.marks_awarded !== undefined) {
-        return `${q.marks_awarded}`;
-      }
-      return isSubmitted ? '0' : '—';
-    });
-
-    const totalText = isSubmitted ? `${st.total_score}/${maxMarks}` : '0/' + maxMarks;
+    const totalText = isSubmitted ? `${st.total_score}/${maxMarks}` : `0/${maxMarks}`;
     const percentage = isSubmitted && maxMarks > 0 ? `${((st.total_score / maxMarks) * 100).toFixed(1)}%` : '0.0%';
     const statusText = isSubmitted ? 'SUBMITTED' : 'ABSENT';
+
+    if (isDetailedQuiz) {
+      const qList = st.questions || [];
+      const attempted = qList.filter(q => q.marks_awarded !== null && q.marks_awarded !== undefined).length;
+      const correct = qList.filter(q => (q.marks_awarded || 0) > 0).length;
+      return [
+        String(idx + 1),
+        st.roll_no,
+        st.name,
+        st.division || '—',
+        isSubmitted ? `${attempted}/${rawMaxQ}` : '—',
+        isSubmitted ? `${correct}/${rawMaxQ}` : '—',
+        totalText,
+        percentage,
+        statusText,
+      ];
+    }
+
+    if (showPerQuestionCols) {
+      const qMarks = qCols.map((_, qi) => {
+        const q = st.questions?.[qi];
+        if (q && q.marks_awarded !== null && q.marks_awarded !== undefined) {
+          return `${q.marks_awarded}`;
+        }
+        return isSubmitted ? '0' : '—';
+      });
+
+      return [
+        String(idx + 1),
+        st.roll_no,
+        st.name,
+        st.division || '—',
+        ...qMarks,
+        totalText,
+        percentage,
+        statusText,
+      ];
+    }
 
     return [
       String(idx + 1),
       st.roll_no,
       st.name,
       st.division || '—',
-      ...qMarks,
       totalText,
       percentage,
       statusText,
     ];
   });
+
+  // Dynamic column styles based on column count and roles
+  const columnStyles: Record<number, { halign?: 'left' | 'center' | 'right'; cellWidth?: number; fontStyle?: 'bold' | 'normal' }> = {
+    0: { halign: 'center', cellWidth: 10 },
+    1: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
+    2: { halign: 'left', cellWidth: isDetailedQuiz || showPerQuestionCols ? 46 : 60 },
+    3: { halign: 'center', cellWidth: 14 },
+  };
+
+  // Assign styles for question/summary columns
+  for (let c = 4; c < totalColIndex; c++) {
+    columnStyles[c] = { halign: 'center', cellWidth: isDetailedQuiz ? 18 : 14 };
+  }
+
+  // Total, %, Status
+  columnStyles[totalColIndex] = { halign: 'center', cellWidth: 18, fontStyle: 'bold' };
+  columnStyles[totalColIndex + 1] = { halign: 'center', cellWidth: 14 };
+  columnStyles[statusColIndex] = { halign: 'center', cellWidth: 18 };
 
   // Render Table
   autoTable(doc, {
@@ -191,21 +252,10 @@ export function generateCollegeResultsPDF(
     alternateRowStyles: {
       fillColor: [248, 250, 252],
     },
-    columnStyles: {
-      0: { halign: 'center', cellWidth: 10 },
-      1: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
-      2: { halign: 'left', cellWidth: 48 },
-      3: { halign: 'center', cellWidth: 12 },
-      4: { halign: 'center', cellWidth: 14 },
-      5: { halign: 'center', cellWidth: 14 },
-      6: { halign: 'center', cellWidth: 14 },
-      7: { halign: 'center', cellWidth: 18, fontStyle: 'bold' },
-      8: { halign: 'center', cellWidth: 14 },
-      9: { halign: 'center', cellWidth: 18 },
-    },
+    columnStyles,
     didParseCell: (data) => {
-      // Color status column
-      if (data.section === 'body' && data.column.index === 9) {
+      // Color status column dynamically
+      if (data.section === 'body' && data.column.index === statusColIndex) {
         if (data.cell.raw === 'SUBMITTED') {
           data.cell.styles.textColor = [22, 101, 52]; // Dark green
           data.cell.styles.fontStyle = 'bold';
@@ -241,7 +291,7 @@ export function generateCollegeResultsPDF(
   });
 
   // Signatures on the final page
-  const finalY = (doc as any).lastAutoTable?.finalY || 200;
+  const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 200;
   let sigY = finalY + 18;
 
   // If signatures would overflow page, add new page

@@ -164,6 +164,21 @@ class InAppClipboardService {
 
 export const inAppClipboard = new InAppClipboardService();
 
+interface NavigatorWithKeyboard extends Navigator {
+  keyboard?: {
+    unlock?: () => void;
+  };
+}
+
+interface DocumentWithVendorFullscreen extends Document {
+  webkitFullscreenElement?: Element | null;
+  mozFullScreenElement?: Element | null;
+  msFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+  mozCancelFullScreen?: () => Promise<void> | void;
+  msExitFullscreen?: () => Promise<void> | void;
+}
+
 /**
  * Safely exit fullscreen mode across all browsers and unlock keyboard.
  */
@@ -172,12 +187,13 @@ export function exitFullscreenSafely() {
 
   // Unlock keyboard if supported
   try {
-    if (typeof navigator !== 'undefined' && (navigator as any).keyboard?.unlock) {
-      (navigator as any).keyboard.unlock();
+    if (typeof navigator !== 'undefined') {
+      const nav = navigator as NavigatorWithKeyboard;
+      nav.keyboard?.unlock?.();
     }
   } catch {}
 
-  const doc = document as any;
+  const doc = document as DocumentWithVendorFullscreen;
   if (
     doc.fullscreenElement ||
     doc.webkitFullscreenElement ||

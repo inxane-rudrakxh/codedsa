@@ -43,9 +43,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'approve_all') {
-      const scope = payload.role === 'TEACHER' ? { test: { teacher_id: payload.user_id } } : {};
+      let testIdFilter: any = {};
+      if (payload.role === 'TEACHER') {
+        const teacherTests = await prisma.test.findMany({
+          where: { teacher_id: payload.user_id },
+          select: { id: true }
+        });
+        testIdFilter = { test_id: { in: teacherTests.map(t => t.id) } };
+      }
+
       const res = await prisma.examSession.updateMany({
-        where: { status: 'PENDING_APPROVAL', ...scope },
+        where: { status: 'PENDING_APPROVAL', ...testIdFilter },
         data: { status: 'ACTIVE', start_time: new Date() }
       });
       return NextResponse.json({ success: true, count: res.count });
@@ -69,16 +77,25 @@ export async function POST(request: NextRequest) {
 
     if (action === 'stop_all') {
       const { test_id } = body;
-      const scope = payload.role === 'TEACHER' ? { teacher_id: payload.user_id } : {};
       const whereClause: any = {
         is_submitted: false,
         status: { in: ['ACTIVE', 'PENDING_APPROVAL'] },
       };
+
       if (test_id) {
+        if (payload.role === 'TEACHER') {
+          const test = await prisma.test.findUnique({ where: { id: test_id }, select: { teacher_id: true } });
+          if (!test || test.teacher_id !== payload.user_id) {
+            return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+          }
+        }
         whereClause.test_id = test_id;
-        whereClause.test = scope;
       } else if (payload.role === 'TEACHER') {
-        whereClause.test = scope;
+        const teacherTests = await prisma.test.findMany({
+          where: { teacher_id: payload.user_id },
+          select: { id: true }
+        });
+        whereClause.test_id = { in: teacherTests.map(t => t.id) };
       }
 
       const res = await prisma.examSession.updateMany({

@@ -87,7 +87,7 @@ export default function CreateTestWizard() {
     setLoading(true);
     const token = localStorage.getItem('admin_token');
     
-    let payload = { 
+    const payload = { 
       action: 'create_test', 
       ...formData, 
       test_type: formData.test_mode,
@@ -425,7 +425,7 @@ export default function CreateTestWizard() {
                   <AlertTriangle size={15} color="#f59e0b" /> Strict Alt-Tab Limit: Up to 3 Violations
                 </p>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                  Tab switching, exiting fullscreen, or minimizing the window is recorded. On the <strong>3rd violation</strong>, the student's exam is automatically submitted immediately with their current answers.
+                  Tab switching, exiting fullscreen, or minimizing the window is recorded. On the <strong>3rd violation</strong>, the student&apos;s exam is automatically submitted immediately with their current answers.
                 </p>
               </div>
 

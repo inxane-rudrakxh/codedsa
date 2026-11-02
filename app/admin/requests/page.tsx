@@ -17,23 +17,31 @@ export default function AccessRequestsPage() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
-    const token = localStorage.getItem('admin_token');
-    const res = await fetch('/api/admin/dashboard', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      const d = await res.json();
-      const pending = d.active_sessions?.filter((s: any) => s.status === 'pending_approval') || [];
-      setRequests(pending);
-    }
-    setLoading(false);
-  };
-
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 3000);
-    return () => clearInterval(interval);
+    let active = true;
+    const load = () => {
+      const token = localStorage.getItem('admin_token');
+      fetch('/api/admin/dashboard', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(res => res.json())
+        .then(d => {
+          if (!active) return;
+          const pending = d.active_sessions?.filter((s: RequestRow) => s.status === 'pending_approval') || [];
+          setRequests(pending);
+          setLoading(false);
+        })
+        .catch(() => {
+          if (active) setLoading(false);
+        });
+    };
+
+    load();
+    const interval = setInterval(load, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const handleAction = async (sessionId: string, action: 'approve' | 'reject') => {
@@ -50,15 +58,52 @@ export default function AccessRequestsPage() {
     setRequests(p => p.filter(r => r.session_id !== sessionId));
   };
 
+  const handleApproveAll = async () => {
+    if (requests.length === 0) return;
+    const token = localStorage.getItem('admin_token');
+    await fetch('/api/admin/approve', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ action: 'approve_all' })
+    });
+    setRequests([]);
+  };
+
   return (
     <div>
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
-          LIVE ACCESS REQUESTS
-        </h1>
-        <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-          Review and approve students waiting to enter an assessment.
-        </p>
+      <div style={{ marginBottom: '32px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+            LIVE ACCESS REQUESTS
+          </h1>
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+            Review and approve students waiting to enter an assessment.
+          </p>
+        </div>
+        {requests.length > 0 && (
+          <button
+            onClick={handleApproveAll}
+            style={{
+              padding: '8px 18px',
+              fontSize: '12px',
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              background: 'var(--accent)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            APPROVE ALL ({requests.length})
+          </button>
+        )}
       </div>
 
       <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>

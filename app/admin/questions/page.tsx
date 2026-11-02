@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Sparkles, Plus, Trash2, Edit2, UploadCloud, Rocket, Check, ExternalLink, Code2, BookOpen, Layers, Puzzle, AlertTriangle, Lightbulb } from 'lucide-react';
 
 interface QuestionBank {
@@ -104,32 +104,36 @@ export default function QuestionsPage() {
   // Test creation status
   const [createdTestSlug, setCreatedTestSlug] = useState<string | null>(null);
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : '';
-
-  const fetchData = async () => {
-    try {
-      const res = await fetch('/api/admin/questions', {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      const data = await res.json();
-      setBanks(data.questionBanks || []);
-      setQuizQuestions(data.quizQuestions || []);
-      setCodingQuestions(data.questions || []);
-      setSubjects(data.subjects || []);
-
-      if (data.questionBanks?.length > 0 && !selectedBankId) {
-        setSelectedBankId(data.questionBanks[0].id);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetchData = useCallback(() => setRefreshTrigger(t => t + 1), []);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    let active = true;
+    fetch('/api/admin/questions', {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (!active) return;
+        setBanks(data.questionBanks || []);
+        setQuizQuestions(data.quizQuestions || []);
+        setCodingQuestions(data.questions || []);
+        setSubjects(data.subjects || []);
+
+        if (data.questionBanks?.length > 0 && !selectedBankId) {
+          setSelectedBankId(data.questionBanks[0].id);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [refreshTrigger, selectedBankId]);
 
   // Filtered quiz questions for the selected bank
   const currentBank = banks.find(b => b.id === selectedBankId);

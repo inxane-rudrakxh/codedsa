@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (!sessionData) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
-  let session = sessionData;
+  const session = sessionData;
 
   // Check if session expired
   const durationMinutes = session.test.duration_minutes || 60;
@@ -67,10 +67,16 @@ export async function GET(request: NextRequest) {
           : { OR: [{ category: 'QUIZ' }, { name: { contains: 'Stacks', mode: 'insensitive' } }] }
       });
       if (bank) {
-        const bankQs = await prisma.quizQuestion.findMany({
-          where: { bank_id: bank.id },
+        let bankQs = await prisma.quizQuestion.findMany({
+          where: { bank_id: bank.id, test_id: null },
           orderBy: { order_index: 'asc' }
         });
+        if (bankQs.length === 0) {
+          bankQs = await prisma.quizQuestion.findMany({
+            where: { bank_id: bank.id },
+            orderBy: { order_index: 'asc' }
+          });
+        }
         if (bankQs.length > 0) {
           for (let i = 0; i < bankQs.length; i++) {
             const bq = bankQs[i];
@@ -116,8 +122,8 @@ export async function GET(request: NextRequest) {
       if (a.selected_answer) {
         submissions[a.question_id] = {
           answer: a.selected_answer,
-          marks_awarded: a.marks_awarded,
-          is_correct: a.is_correct,
+          marks_awarded: session.test.marks_published ? a.marks_awarded : undefined,
+          is_correct: session.test.marks_published ? a.is_correct : undefined,
         };
       }
       totalScore += a.marks_awarded || 0;
@@ -187,7 +193,9 @@ export async function GET(request: NextRequest) {
     where: { session_id: session.id }
   });
   const submissions: Record<string, any> = {};
+  let codingTotalScore = 0;
   submissionRows.forEach(s => { 
+    codingTotalScore += s.marks_awarded || 0;
     if (!session.test.marks_published) {
       // Hide marks and AI feedback if not published
       const { marks_awarded, ai_feedback, ...rest } = s;
@@ -243,6 +251,7 @@ export async function GET(request: NextRequest) {
       marks_published: session.test.marks_published,
       allowed_languages: session.test.allowed_languages,
       integrity_warnings: session.integrity_warnings || 0,
+      total_score: session.test.marks_published ? codingTotalScore : null,
     },
     student: {
       roll_no: session.student.roll_number,

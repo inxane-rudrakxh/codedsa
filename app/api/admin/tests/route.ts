@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getAdminUser, teacherScope } from '@/lib/permissions';
+import crypto from 'crypto';
 
 export async function GET(request: NextRequest) {
   const payload = await getAdminUser(request);
@@ -69,7 +70,6 @@ export async function POST(request: NextRequest) {
     }
     if (!subject_id) return NextResponse.json({ error: 'Subject is required' }, { status: 400 });
     
-    const crypto = require('crypto');
     const subjectStr = subject_name || 'test';
     let slugBase = subjectStr.split(/\s+/).map((w: string) => w[0]?.toLowerCase()).join('');
     if (!/^[a-z]+$/.test(slugBase)) {
@@ -119,10 +119,16 @@ export async function POST(request: NextRequest) {
       }
 
       if (targetBankId) {
-        const bankQs = await prisma.quizQuestion.findMany({
-          where: { bank_id: targetBankId },
+        let bankQs = await prisma.quizQuestion.findMany({
+          where: { bank_id: targetBankId, test_id: null },
           orderBy: { order_index: 'asc' }
         });
+        if (bankQs.length === 0) {
+          bankQs = await prisma.quizQuestion.findMany({
+            where: { bank_id: targetBankId },
+            orderBy: { order_index: 'asc' }
+          });
+        }
         for (let i = 0; i < bankQs.length; i++) {
           const bq = bankQs[i];
           await prisma.quizQuestion.create({
@@ -240,10 +246,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const bankQs = await prisma.quizQuestion.findMany({
-      where: { bank_id },
+    let bankQs = await prisma.quizQuestion.findMany({
+      where: { bank_id, test_id: null },
       orderBy: { order_index: 'asc' }
     });
+    if (bankQs.length === 0) {
+      bankQs = await prisma.quizQuestion.findMany({
+        where: { bank_id },
+        orderBy: { order_index: 'asc' }
+      });
+    }
 
     const existingCount = await prisma.quizQuestion.count({ where: { test_id } });
 
@@ -282,13 +294,22 @@ export async function POST(request: NextRequest) {
 
     // Delete all related data properly to prevent orphaned documents in MongoDB
     if (sessionIds.length > 0) {
-      await prisma.submissionResult.deleteMany({ where: { submission: { session_id: { in: sessionIds } } } });
+      const subs = await prisma.submission.findMany({
+        where: { session_id: { in: sessionIds } },
+        select: { id: true }
+      });
+      const subIds = subs.map(s => s.id);
+      if (subIds.length > 0) {
+        await prisma.submissionResult.deleteMany({ where: { submission_id: { in: subIds } } });
+      }
       await prisma.submission.deleteMany({ where: { session_id: { in: sessionIds } } });
       await prisma.codeDraft.deleteMany({ where: { session_id: { in: sessionIds } } });
       await prisma.assignedQuestion.deleteMany({ where: { session_id: { in: sessionIds } } });
+      await prisma.quizAnswer.deleteMany({ where: { session_id: { in: sessionIds } } });
       await prisma.examSession.deleteMany({ where: { test_id: id } });
     }
 
+    await prisma.quizQuestion.deleteMany({ where: { test_id: id } });
     await prisma.testQuestion.deleteMany({ where: { test_id: id } });
     await prisma.marksReport.deleteMany({ where: { test_id: id } });
     await prisma.test.delete({ where: { id } });

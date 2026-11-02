@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Sparkles, Check, Lightbulb, BookOpen } from 'lucide-react';
@@ -28,33 +28,40 @@ export default function TestQuestionsPage() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [newData, setNewData] = useState({ title: '', topic: '', description: '', constraints: '', sample_input: '', sample_output: '', subject_name: '' });
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const getToken = () => localStorage.getItem('admin_token') || '';
+  const fetchData = useCallback(() => setRefreshTrigger(t => t + 1), []);
 
-  const fetchData = async () => {
-    // Fetch test detail (for title/status)
-    const testsRes = await fetch('/api/admin/tests', {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    const testsData = await testsRes.json();
-    const found = (testsData.tests || []).find((t: any) => t.id === testId);
-    setTest(found || null);
-
-    // Fetch all questions + those assigned to this test
-    const qRes = await fetch(`/api/admin/questions?test_id=${testId}`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    const qData = await qRes.json();
-    setAssignedQuestions(qData.assignedQuestions || []);
-    setTestQuizQuestions(qData.testQuizQuestions || []);
-    setBankQuestions(qData.questions || []);
-    setSubjects(qData.subjects || []);
-    if (qData.subjects?.length > 0 && !newData.subject_name) {
-      setNewData(p => ({ ...p, subject_name: qData.subjects[0].name }));
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchData(); }, [testId]);
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      fetch('/api/admin/tests', {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      }).then(r => r.json()),
+      fetch(`/api/admin/questions?test_id=${testId}`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      }).then(r => r.json()),
+    ])
+      .then(([testsData, qData]) => {
+        if (!active) return;
+        const found = (testsData.tests || []).find((t: any) => t.id === testId);
+        setTest(found || null);
+        setAssignedQuestions(qData.assignedQuestions || []);
+        setTestQuizQuestions(qData.testQuizQuestions || []);
+        setBankQuestions(qData.questions || []);
+        setSubjects(qData.subjects || []);
+        if (qData.subjects?.length > 0 && !newData.subject_name) {
+          setNewData(p => ({ ...p, subject_name: qData.subjects[0].name }));
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [testId, refreshTrigger, newData.subject_name]);
 
   const handleAssign = async (questionId: string) => {
     if (!questionId) return;

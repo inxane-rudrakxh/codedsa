@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { createStudentSessionToken, generateSessionId } from '@/lib/auth';
+import { isDivisionMatch } from '@/lib/divisions';
 import bcrypt from 'bcryptjs';
 
 export async function POST(request: NextRequest) {
@@ -16,7 +17,19 @@ export async function POST(request: NextRequest) {
   }
 
   // Lookup test by unique_id
-  const test = await prisma.test.findUnique({ where: { unique_id: test_id } });
+  let test = await prisma.test.findUnique({ where: { unique_id: test_id } });
+  if (!test && test_id.trim().toLowerCase() === 'puzzle') {
+    test = await prisma.test.findFirst({
+      where: {
+        OR: [
+          { unique_id: { equals: 'puzzle', mode: 'insensitive' } },
+          { test_type: 'PUZZLE', status: 'PUBLISHED' },
+          { title: { contains: 'Puzzle', mode: 'insensitive' }, status: 'PUBLISHED' }
+        ]
+      },
+      orderBy: { created_at: 'desc' }
+    });
+  }
   if (!test) {
     return NextResponse.json({ error: 'Invalid Test Link or Code.' }, { status: 404 });
   }
@@ -151,11 +164,9 @@ export async function POST(request: NextRequest) {
       if (test.target_division && test.target_division.trim() !== '') {
         const studentDiv = studentRecord.division?.name || (studentRecord.roll_number.startsWith('AD14') ? 'AIDS B' : 'AIDS A');
         const targetDiv = test.target_division.trim();
-        const isMatch = (targetDiv === studentDiv) ||
-          ((targetDiv === 'A' || targetDiv === 'AIDS A') && (studentDiv === 'A' || studentDiv === 'AIDS A')) ||
-          ((targetDiv === 'B' || targetDiv === 'AIDS B') && (studentDiv === 'B' || studentDiv === 'AIDS B'));
+        const matches = isDivisionMatch(targetDiv, studentDiv, studentRecord.roll_number);
 
-        if (!isMatch) {
+        if (!matches) {
           return NextResponse.json({ 
             error: `This assessment is designated for Division ${targetDiv}. Your roll number (${studentRecord.roll_number}) is registered under Division ${studentDiv}.` 
           }, { status: 403 });
@@ -178,15 +189,15 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      if (test.test_type === 'QUIZ') {
-        // Quiz test: questions are in QuizQuestion table
+      if (test.test_type === 'QUIZ' || test.test_type === 'PUZZLE') {
+        // Quiz / Puzzle test: questions are in QuizQuestion table
         if (isAutoApprove) {
           const token = await createStudentSessionToken(studentRecord.id, studentRecord.roll_number, sessionId);
           return NextResponse.json({
             success: true,
             status: 'ACTIVE',
             session_token: token,
-            test_type: 'QUIZ',
+            test_type: test.test_type,
             student: studentPayload
           });
         }
@@ -194,7 +205,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           status: 'PENDING_APPROVAL',
-          test_type: 'QUIZ'
+          test_type: test.test_type
         });
       }
 
@@ -296,7 +307,7 @@ export async function POST(request: NextRequest) {
             }))
           });
 
-          const CPP_LANG_ID = 1;
+          const CPP_LANG_ID = 2; // 2 corresponds to C++ across executor, save, and submit routes
           const starterCode = `#include <iostream>\nusing namespace std;\n\nint main() {\n    \n    return 0;\n}`;
           await prisma.codeDraft.createMany({
             data: assigned.map(q => ({

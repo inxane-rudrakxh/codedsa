@@ -59,7 +59,6 @@ export default function AdminLoginPage() {
     const cleanUsername = username.trim().toLowerCase();
 
     try {
-      let loginSuccess = false;
       let serverErrorMsg = '';
 
       // Stage 1: Fast-track test admin account
@@ -79,13 +78,11 @@ export default function AdminLoginPage() {
 
       // Stage 2: Attempt Firebase Client Authentication
       let firebaseToken = '';
-      let isVerified = false;
       try {
         const { auth } = await import('@/lib/firebase');
         const { signInWithEmailAndPassword } = await import('firebase/auth');
 
         const userCredential = await signInWithEmailAndPassword(auth, cleanUsername, password);
-        isVerified = !!userCredential.user.emailVerified;
         firebaseToken = await userCredential.user.getIdToken();
       } catch (fbErr: any) {
         // Firebase client sign-in failed (e.g. user was created in DB directly by admin, or network issue)

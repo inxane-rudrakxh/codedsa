@@ -13,18 +13,29 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
-    if (pathname === '/admin/login' || pathname === '/admin/signup') { setChecking(false); return; }
+    if (pathname === '/admin/login' || pathname === '/admin/signup') {
+      setTimeout(() => setChecking(false), 0);
+      return;
+    }
     const token = localStorage.getItem('admin_token');
-    if (!token) { router.push('/admin/login'); return; }
+    if (!token) {
+      router.push('/admin/login');
+      return;
+    }
     
+    let user: { name: string; role: string } | null = null;
     try {
       const parts = token.split('.');
       if (parts.length === 3) {
         const decoded = JSON.parse(atob(parts[1]));
-        setUserInfo({ name: decoded.email || 'User', role: decoded.role || 'ADMIN' });
+        user = { name: decoded.email || 'User', role: decoded.role || 'ADMIN' };
       }
     } catch {}
-    setChecking(false);
+
+    setTimeout(() => {
+      if (user) setUserInfo(user);
+      setChecking(false);
+    }, 0);
   }, [pathname, router]);
 
   if (pathname === '/admin/login' || pathname === '/admin/signup') return <>{children}</>;
@@ -36,11 +47,16 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   const isResultsPage = pathname.includes('/results');
 
+  const isAdmin = userInfo?.role === 'ADMIN';
+
   const nav = [
     { href: '/admin/dashboard', label: 'Overview' },
     { href: '/admin/tests', label: 'Exam Tests' },
+    { href: '/admin/results', label: 'Evaluation' },
     { href: '/admin/questions', label: 'Question Bank' },
     { href: '/admin/requests', label: 'Requests' },
+    { href: '/admin/students', label: 'Students' },
+    ...(isAdmin ? [{ href: '/admin/teachers', label: 'Faculty' }] : []),
     { href: '/admin/settings', label: 'Settings' },
   ];
 

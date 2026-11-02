@@ -1,25 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getAdminUser, teacherScope } from '@/lib/permissions';
-
-function resolveTargetDivisionNames(target: string | null | undefined): string[] {
-  if (!target) return [];
-  const t = target.trim().toUpperCase();
-  const matched = new Set<string>();
-  matched.add(target.trim());
-
-  if (t === 'C' || t.includes('DIV - C') || t.includes('DIV-C') || t.includes('DIV C') || t === 'AIDS A' || t === 'A') {
-    matched.add('AIDS A');
-    matched.add('C');
-    matched.add('A');
-  }
-  if (t === 'D' || t.includes('DIV - D') || t.includes('DIV-D') || t.includes('DIV D') || t === 'AIDS B' || t === 'B') {
-    matched.add('AIDS B');
-    matched.add('D');
-    matched.add('B');
-  }
-  return Array.from(matched);
-}
+import { resolveTargetDivisionNames } from '@/lib/divisions';
 
 export async function GET(request: NextRequest) {
   const payload = await getAdminUser(request);
@@ -102,7 +84,7 @@ export async function GET(request: NextRequest) {
       (a.roll_number || '').localeCompare(b.roll_number || '')
     );
 
-    const isQuiz = test.test_type === 'QUIZ';
+    const isQuiz = test.test_type === 'QUIZ' || test.test_type === 'PUZZLE';
 
     const results = finalStudents.map(student => {
       const session = sessions.find(s => s.student_id === student.id);
@@ -245,23 +227,48 @@ export async function POST(request: NextRequest) {
     let targetSessionId = session_id;
 
     if (submission_id) {
+      // First check if this is a coding submission
       const submission = await prisma.submission.findUnique({
         where: { id: submission_id },
         include: { session: { include: { test: true } } }
       });
-      if (!submission || (payload.role !== 'ADMIN' && submission.session.test.teacher_id !== payload.user_id)) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-      }
 
-      targetSessionId = submission.session_id;
-
-      await prisma.submission.update({
-        where: { id: submission_id },
-        data: {
-          marks_awarded: parsedMarks,
-          status: 'MANUALLY_GRADED'
+      if (submission) {
+        if (payload.role !== 'ADMIN' && submission.session.test.teacher_id !== payload.user_id) {
+          return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
-      });
+        targetSessionId = submission.session_id;
+        await prisma.submission.update({
+          where: { id: submission_id },
+          data: {
+            marks_awarded: parsedMarks,
+            status: 'MANUALLY_GRADED'
+          }
+        });
+      } else {
+        // Check if this submission_id is actually a quizAnswer id
+        const quizAns = await prisma.quizAnswer.findUnique({
+          where: { id: submission_id },
+          include: { session: { include: { test: true } } }
+        });
+
+        if (quizAns) {
+          if (payload.role !== 'ADMIN' && quizAns.session.test.teacher_id !== payload.user_id) {
+            return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+          }
+          targetSessionId = quizAns.session_id;
+          await prisma.quizAnswer.update({
+            where: { id: submission_id },
+            data: {
+              marks_awarded: parsedMarks,
+              is_correct: parsedMarks > 0,
+              updated_at: new Date()
+            }
+          });
+        } else {
+          return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+        }
+      }
     } else if (session_id && question_id) {
       const session = await prisma.examSession.findUnique({
         where: { id: session_id },
@@ -272,38 +279,57 @@ export async function POST(request: NextRequest) {
       }
 
       targetSessionId = session_id;
+      const isQuizTest = session.test.test_type === 'QUIZ' || session.test.test_type === 'PUZZLE';
 
-      // Check if submission already exists for this session & question
-      const existingSub = await prisma.submission.findFirst({
-        where: { session_id, question_id },
-        orderBy: { created_at: 'desc' }
-      });
-
-      if (existingSub) {
-        await prisma.submission.update({
-          where: { id: existingSub.id },
-          data: {
+      if (isQuizTest) {
+        await prisma.quizAnswer.upsert({
+          where: {
+            session_id_question_id: { session_id, question_id }
+          },
+          update: {
             marks_awarded: parsedMarks,
-            status: 'MANUALLY_GRADED'
+            is_correct: parsedMarks > 0,
+            updated_at: new Date()
+          },
+          create: {
+            session_id,
+            question_id,
+            marks_awarded: parsedMarks,
+            is_correct: parsedMarks > 0,
           }
         });
       } else {
-        // Find draft if any
-        const draft = await prisma.codeDraft.findUnique({
-          where: { session_id_question_id: { session_id, question_id } }
+        // Coding test submission
+        const existingSub = await prisma.submission.findFirst({
+          where: { session_id, question_id },
+          orderBy: { created_at: 'desc' }
         });
-        await prisma.submission.create({
-          data: {
-            session_id,
-            question_id,
-            language_id: draft?.language_id || 1,
-            source_code: draft?.source_code || '',
-            status: 'MANUALLY_GRADED',
-            marks_awarded: parsedMarks,
-            total_test_cases: 0,
-            passed_test_cases: 0
-          }
-        });
+
+        if (existingSub) {
+          await prisma.submission.update({
+            where: { id: existingSub.id },
+            data: {
+              marks_awarded: parsedMarks,
+              status: 'MANUALLY_GRADED'
+            }
+          });
+        } else {
+          const draft = await prisma.codeDraft.findUnique({
+            where: { session_id_question_id: { session_id, question_id } }
+          });
+          await prisma.submission.create({
+            data: {
+              session_id,
+              question_id,
+              language_id: draft?.language_id || 1,
+              source_code: draft?.source_code || '',
+              status: 'MANUALLY_GRADED',
+              marks_awarded: parsedMarks,
+              total_test_cases: 0,
+              passed_test_cases: 0
+            }
+          });
+        }
       }
     } else if (student_id && test_id && question_id) {
       const test = await prisma.test.findUnique({ where: { id: test_id } });
@@ -311,7 +337,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
 
-      // Check or create ExamSession for this student
       let session = await prisma.examSession.findFirst({
         where: { student_id, test_id }
       });
@@ -327,56 +352,76 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        // Assign questions
-        const testQuestions = await prisma.testQuestion.findMany({
-          where: { test_id },
-          orderBy: { order_index: 'asc' },
-          take: test.questions_per_student || 3
-        });
-        if (testQuestions.length > 0) {
-          await prisma.assignedQuestion.createMany({
-            data: testQuestions.map((tq, idx) => ({
-              session_id: session!.id,
-              question_id: tq.question_id,
-              order_index: idx + 1
-            }))
+        if (test.test_type === 'CODING') {
+          const testQuestions = await prisma.testQuestion.findMany({
+            where: { test_id },
+            orderBy: { order_index: 'asc' },
+            take: test.questions_per_student || 3
           });
+          if (testQuestions.length > 0) {
+            await prisma.assignedQuestion.createMany({
+              data: testQuestions.map((tq, idx) => ({
+                session_id: session!.id,
+                question_id: tq.question_id,
+                order_index: idx + 1
+              }))
+            });
+          }
         }
       }
 
       targetSessionId = session.id;
+      const isQuizTest = test.test_type === 'QUIZ' || test.test_type === 'PUZZLE';
 
-      const existingSub = await prisma.submission.findFirst({
-        where: { session_id: session.id, question_id },
-        orderBy: { created_at: 'desc' }
-      });
-
-      if (existingSub) {
-        await prisma.submission.update({
-          where: { id: existingSub.id },
-          data: {
+      if (isQuizTest) {
+        await prisma.quizAnswer.upsert({
+          where: {
+            session_id_question_id: { session_id: session.id, question_id }
+          },
+          update: {
             marks_awarded: parsedMarks,
-            status: 'MANUALLY_GRADED'
+            is_correct: parsedMarks > 0,
+            updated_at: new Date()
+          },
+          create: {
+            session_id: session.id,
+            question_id,
+            marks_awarded: parsedMarks,
+            is_correct: parsedMarks > 0,
           }
         });
       } else {
-        await prisma.submission.create({
-          data: {
-            session_id: session.id,
-            question_id,
-            language_id: 1,
-            source_code: '',
-            status: 'MANUALLY_GRADED',
-            marks_awarded: parsedMarks,
-            total_test_cases: 0,
-            passed_test_cases: 0
-          }
+        const existingSub = await prisma.submission.findFirst({
+          where: { session_id: session.id, question_id },
+          orderBy: { created_at: 'desc' }
         });
+
+        if (existingSub) {
+          await prisma.submission.update({
+            where: { id: existingSub.id },
+            data: {
+              marks_awarded: parsedMarks,
+              status: 'MANUALLY_GRADED'
+            }
+          });
+        } else {
+          await prisma.submission.create({
+            data: {
+              session_id: session.id,
+              question_id,
+              language_id: 1,
+              source_code: '',
+              status: 'MANUALLY_GRADED',
+              marks_awarded: parsedMarks,
+              total_test_cases: 0,
+              passed_test_cases: 0
+            }
+          });
+        }
       }
     } else {
       return NextResponse.json({ error: 'Missing identifiers' }, { status: 400 });
-    }
-    
+    }    
     // Automatically change paper status to Submitted!
     if (targetSessionId) {
       await prisma.examSession.update({
@@ -417,7 +462,7 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    const isQuiz = test.test_type === 'QUIZ';
+    const isQuiz = test.test_type === 'QUIZ' || test.test_type === 'PUZZLE';
     const targetDivision = test.target_division || test.title.match(/Div\s*-\s*([A-Za-z0-9]+)/i)?.[1]?.toUpperCase() || null;
     const possibleDivNames = resolveTargetDivisionNames(targetDivision);
     const sessionDivNames = Array.from(new Set(sessions.map(s => s.student?.division?.name).filter(Boolean))) as string[];
@@ -599,16 +644,23 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Access denied. You can only reset sessions for tests you created.' }, { status: 403 });
       }
 
-      await prisma.$transaction([
-        // Delete submission results
-        prisma.submissionResult.deleteMany({
-          where: { submission: { session_id } }
-        }),
-        prisma.submission.deleteMany({ where: { session_id } }),
-        prisma.codeDraft.deleteMany({ where: { session_id } }),
-        prisma.assignedQuestion.deleteMany({ where: { session_id } }),
-        prisma.examSession.delete({ where: { id: session_id } })
-      ]);
+      const subs = await prisma.submission.findMany({
+        where: { session_id },
+        select: { id: true }
+      });
+      const subIds = subs.map(s => s.id);
+
+      if (subIds.length > 0) {
+        await prisma.submissionResult.deleteMany({
+          where: { submission_id: { in: subIds } }
+        });
+      }
+      await prisma.submission.deleteMany({ where: { session_id } });
+      await prisma.codeDraft.deleteMany({ where: { session_id } });
+      await prisma.assignedQuestion.deleteMany({ where: { session_id } });
+      await prisma.quizAnswer.deleteMany({ where: { session_id } });
+      await prisma.examSession.delete({ where: { id: session_id } });
+
       return NextResponse.json({ success: true });
     } catch (err: any) {
       return NextResponse.json({ error: err.message }, { status: 500 });

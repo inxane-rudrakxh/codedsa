@@ -19,6 +19,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   }
 
+  if (session.status === 'STOPPED') {
+    return NextResponse.json({ error: 'Your assessment session was concluded by the instructor.' }, { status: 403 });
+  }
+
   // If already submitted, return existing results
   if (session.is_submitted || session.status === 'COMPLETED') {
     const existingAnswers = await prisma.quizAnswer.findMany({

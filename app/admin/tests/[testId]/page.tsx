@@ -24,35 +24,53 @@ export default function TestDetailPage() {
     { id: 'java', label: 'Java' },
   ];
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const getToken = () => localStorage.getItem('admin_token') || '';
+  const reload = () => setRefreshTrigger(t => t + 1);
 
-  const fetchTest = async () => {
-    const res = await fetch('/api/admin/tests', {
+  useEffect(() => {
+    let active = true;
+    fetch('/api/admin/tests', {
       headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    if (!res.ok) { router.push('/admin/tests'); return; }
-    const data = await res.json();
-    const found = (data.tests || []).find((t: any) => t.id === testId);
-    if (!found) { router.push('/admin/tests'); return; }
-    setTest(found);
-    setEditData(found);
-    setDivisions(data.divisions || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchTest(); }, [testId]);
+    })
+      .then(res => {
+        if (!res.ok) {
+          router.push('/admin/tests');
+          return null;
+        }
+        return res.json();
+      })
+      .then(data => {
+        if (!data || !active) return;
+        const found = (data.tests || []).find((t: any) => t.id === testId);
+        if (!found) {
+          router.push('/admin/tests');
+          return;
+        }
+        setTest(found);
+        setEditData(found);
+        setDivisions(data.divisions || []);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [testId, refreshTrigger, router]);
 
   const handleUpdate = async () => {
-    let payload: any = { action: 'update_test', id: testId, ...editData };
-    if (payload.start_time) payload.start_time = new Date(payload.start_time).toISOString();
-    if (payload.end_time) payload.end_time = new Date(payload.end_time).toISOString();
+    const payload: Record<string, unknown> = { action: 'update_test', id: testId, ...editData };
+    if (payload.start_time) payload.start_time = new Date(payload.start_time as string).toISOString();
+    if (payload.end_time) payload.end_time = new Date(payload.end_time as string).toISOString();
     await fetch('/api/admin/tests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(payload),
     });
     setEditing(false);
-    fetchTest();
+    reload();
   };
 
   const handleDelete = async () => {

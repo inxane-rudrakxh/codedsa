@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Square } from 'lucide-react';
@@ -36,33 +36,44 @@ export default function TestRequestsPage() {
   } | null>(null);
   const [stopping, setStopping] = useState(false);
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const getToken = () => localStorage.getItem('admin_token') || '';
-
-  const fetchData = async () => {
-    const res = await fetch('/api/admin/dashboard', {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    if (!res.ok) { setLoading(false); return; }
-    const d = await res.json();
-
-    // Find test title
-    const testSummary = (d.tests_summary || []).find((t: any) => t.id === testId);
-    setTestTitle(testSummary?.title || testId);
-
-    // Filter sessions for this test only
-    const sessions: any[] = d.active_sessions || [];
-    const forThisTest = sessions.filter((s: any) => s.test_id === testId);
-
-    setAllSessions(forThisTest);
-    setRequests(forThisTest.filter((s: any) => s.status === 'pending_approval'));
-    setLoading(false);
-  };
+  const fetchData = useCallback(() => setRefreshTrigger(t => t + 1), []);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 3000);
-    return () => clearInterval(interval);
-  }, [testId]);
+    let active = true;
+    const load = () => {
+      fetch('/api/admin/dashboard', {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      })
+        .then(res => (res.ok ? res.json() : null))
+        .then(d => {
+          if (!active || !d) {
+            if (active) setLoading(false);
+            return;
+          }
+          const testSummary = (d.tests_summary || []).find((t: any) => t.id === testId);
+          setTestTitle(testSummary?.title || testId);
+
+          const sessions: any[] = d.active_sessions || [];
+          const forThisTest = sessions.filter((s: any) => s.test_id === testId);
+
+          setAllSessions(forThisTest);
+          setRequests(forThisTest.filter((s: any) => s.status === 'pending_approval'));
+          setLoading(false);
+        })
+        .catch(() => {
+          if (active) setLoading(false);
+        });
+    };
+
+    load();
+    const interval = setInterval(load, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [testId, refreshTrigger]);
 
   const handleAction = async (sessionId: string, action: 'approve' | 'reject') => {
     await fetch('/api/admin/approve', {

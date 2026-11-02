@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { prisma } from '@/lib/db';
 import { getAdminUser, teacherScope } from '@/lib/permissions';
 import { parseQuizText } from '@/lib/quizParser';
@@ -23,13 +24,22 @@ export async function GET(request: NextRequest) {
 
   const questionBanks = await prisma.questionBank.findMany({
     include: {
-      _count: { select: { quizQuestions: true } }
+      _count: {
+        select: {
+          quizQuestions: {
+            where: { test_id: null }
+          }
+        }
+      }
     },
     orderBy: { created_at: 'desc' }
   });
 
   const quizQuestions = await prisma.quizQuestion.findMany({
-    where: bank_id ? { bank_id } : {},
+    where: {
+      test_id: null,
+      ...(bank_id ? { bank_id } : {})
+    },
     orderBy: { order_index: 'asc' }
   });
 
@@ -269,10 +279,16 @@ export async function POST(request: NextRequest) {
     const { bank_id, title, duration_minutes, target_division, auto_approve } = body;
     if (!bank_id) return NextResponse.json({ error: 'bank_id is required' }, { status: 400 });
 
-    const bank = await prisma.questionBank.findUnique({
+    let bank = await prisma.questionBank.findUnique({
       where: { id: bank_id },
-      include: { quizQuestions: { orderBy: { order_index: 'asc' } } }
+      include: { quizQuestions: { where: { test_id: null }, orderBy: { order_index: 'asc' } } }
     });
+    if (!bank || bank.quizQuestions.length === 0) {
+      bank = await prisma.questionBank.findUnique({
+        where: { id: bank_id },
+        include: { quizQuestions: { orderBy: { order_index: 'asc' } } }
+      });
+    }
     if (!bank) return NextResponse.json({ error: 'Question bank not found' }, { status: 404 });
 
     const subject = await prisma.subject.findFirst({
@@ -281,7 +297,6 @@ export async function POST(request: NextRequest) {
 
     if (!subject) return NextResponse.json({ error: 'No subject found' }, { status: 400 });
 
-    const crypto = require('crypto');
     const slugBase = bank.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').substring(0, 16).replace(/-+$/, '');
     const randomHex = crypto.randomBytes(3).toString('hex');
     const uniqueId = `${slugBase}-${randomHex}`;

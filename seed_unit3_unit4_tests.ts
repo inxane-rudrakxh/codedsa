@@ -44,7 +44,7 @@ async function main() {
       data: {
         name: bank1Name,
         description: 'DSA Unit III — Linked List Puzzle Challenge. Traversal outputs, pointer connections, insertion, deletion, and reverse operations.',
-        category: 'Linked Lists',
+        category: 'PUZZLE',
         subject_code: subject.code,
         total_marks: 30,
         duration_minutes: 30,
@@ -68,7 +68,7 @@ async function main() {
     duration_minutes: 30,
     total_marks: 30,
     questions_per_student: 15,
-    test_type: 'QUIZ',
+    test_type: 'PUZZLE',
     auto_approve: false,
     marks_published: true,
     randomize_questions: false,
@@ -240,12 +240,31 @@ async function main() {
     },
   ];
 
-  // Clean old questions for test1 and bank1
+  // Clean old master questions for bank1 and test1
   await prisma.quizQuestion.deleteMany({
-    where: { OR: [{ test_id: test1.id }, { bank_id: bank1.id }] }
+    where: { OR: [{ test_id: test1.id }, { bank_id: bank1.id, test_id: null }] }
   });
 
-  // Insert questions into both Bank and Test
+  // Insert master questions for Bank (test_id: null so they are never cascade-deleted)
+  for (const q of unit3Questions) {
+    await prisma.quizQuestion.create({
+      data: {
+        test_id: null,
+        bank_id: bank1.id,
+        bank_name: bank1Name,
+        type: q.type,
+        question_text: q.question_text,
+        code_snippet: q.code_snippet,
+        correct_answer: q.correct_answer,
+        alternate_answers: q.alternate_answers,
+        explanation: q.explanation,
+        marks: q.marks,
+        order_index: q.order_index,
+      }
+    });
+  }
+
+  // Insert test question copies for test1
   for (const q of unit3Questions) {
     await prisma.quizQuestion.create({
       data: {
@@ -263,7 +282,37 @@ async function main() {
       }
     });
   }
-  console.log(`Successfully added 15 questions to ${bank1Name} and Test 1!`);
+
+  // Also ensure /puzzle test exists with these questions
+  let puzzleTest = await prisma.test.findUnique({ where: { unique_id: 'puzzle' } });
+  const puzzleData = {
+    ...test1Data,
+    unique_id: 'puzzle',
+  };
+  if (!puzzleTest) {
+    puzzleTest = await prisma.test.create({ data: puzzleData });
+  } else {
+    puzzleTest = await prisma.test.update({ where: { id: puzzleTest.id }, data: puzzleData });
+  }
+  await prisma.quizQuestion.deleteMany({ where: { test_id: puzzleTest.id } });
+  for (const q of unit3Questions) {
+    await prisma.quizQuestion.create({
+      data: {
+        test_id: puzzleTest.id,
+        bank_id: bank1.id,
+        bank_name: bank1Name,
+        type: q.type,
+        question_text: q.question_text,
+        code_snippet: q.code_snippet,
+        correct_answer: q.correct_answer,
+        alternate_answers: q.alternate_answers,
+        explanation: q.explanation,
+        marks: q.marks,
+        order_index: q.order_index,
+      }
+    });
+  }
+  console.log(`Successfully added 15 master questions to ${bank1Name}, Test 1, and /puzzle!`);
 
   // =========================================================================
   // BANK 2: Unit IV – Stacks (Quiz Test)
@@ -548,12 +597,31 @@ async function main() {
     },
   ];
 
-  // Clean old questions for test2 and bank2
+  // Clean old master questions for bank2 and test2
   await prisma.quizQuestion.deleteMany({
-    where: { OR: [{ test_id: test2.id }, { bank_id: bank2.id }] }
+    where: { OR: [{ test_id: test2.id }, { bank_id: bank2.id, test_id: null }] }
   });
 
-  // Insert questions into both Bank and Test
+  // Insert master questions for Bank (test_id: null)
+  for (const q of unit4Questions) {
+    await prisma.quizQuestion.create({
+      data: {
+        test_id: null,
+        bank_id: bank2.id,
+        bank_name: bank2Name,
+        type: q.type,
+        question_text: q.question_text,
+        code_snippet: q.code_snippet,
+        correct_answer: q.correct_answer,
+        alternate_answers: q.alternate_answers,
+        explanation: q.explanation,
+        marks: q.marks,
+        order_index: q.order_index,
+      }
+    });
+  }
+
+  // Insert test copies for test2
   for (const q of unit4Questions) {
     await prisma.quizQuestion.create({
       data: {
@@ -571,7 +639,7 @@ async function main() {
       }
     });
   }
-  console.log(`Successfully added 20 questions to ${bank2Name} and Test 2!`);
+  console.log(`Successfully added 20 master questions to ${bank2Name} and Test 2!`);
 
   console.log('Seeding completed successfully!');
 }

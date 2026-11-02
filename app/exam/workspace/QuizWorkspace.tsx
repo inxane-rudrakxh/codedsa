@@ -94,6 +94,8 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
   // Proctoring armed ref
   const proctoringArmedRef = useRef(false);
   const isSubmittedRef = useRef(false);
+  const hasAutoSubmittedRef = useRef(false);
+  const autoSubmitRef = useRef<() => void>(() => {});
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('session_token') || '' : '';
@@ -274,10 +276,17 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
     };
   }, [reportIntegrity]);
 
-  // Timer countdown
+  useEffect(() => {
+    autoSubmitRef.current = handleSubmitExam;
+  }, [handleSubmitExam]);
+
+  // Timer countdown — reads from autoSubmitRef and only submits once
   useEffect(() => {
     if (timeRemaining <= 0) {
-      handleSubmitExam();
+      if (!hasAutoSubmittedRef.current) {
+        hasAutoSubmittedRef.current = true;
+        autoSubmitRef.current?.();
+      }
       return;
     }
 
@@ -285,7 +294,10 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
       setTimeRemaining(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleSubmitExam();
+          if (!hasAutoSubmittedRef.current) {
+            hasAutoSubmittedRef.current = true;
+            autoSubmitRef.current?.();
+          }
           return 0;
         }
         return prev - 1;
@@ -293,7 +305,7 @@ export default function QuizWorkspace({ session, student, questions, initialAnsw
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeRemaining, handleSubmitExam]);
+  }, [session.id]);
 
   // Format time display
   const minutes = Math.floor(timeRemaining / 60);
