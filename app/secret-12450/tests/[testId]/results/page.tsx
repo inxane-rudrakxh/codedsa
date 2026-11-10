@@ -64,6 +64,7 @@ export default function TestResultsPage() {
   } | null>(null);
   const [stopping, setStopping] = useState(false);
   const [stopSuccessMsg, setStopSuccessMsg] = useState<string | null>(null);
+  const isQuizTest = test?.test_type === 'QUIZ' || test?.test_type === 'PUZZLE';
 
   const getToken = () => localStorage.getItem('admin_token') || '';
 
@@ -310,9 +311,9 @@ export default function TestResultsPage() {
     <div>
       {/* Breadcrumb */}
       <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
-        <Link href="/admin/tests" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Tests</Link>
+        <Link href="/secret-12450/tests" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Tests</Link>
         <span>›</span>
-        <Link href={`/admin/tests/${testId}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{test?.title || testId}</Link>
+        <Link href={`/secret-12450/tests/${testId}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{test?.title || testId}</Link>
         <span>›</span>
         <span style={{ color: 'var(--text-primary)' }}>Results</span>
       </div>
@@ -581,7 +582,7 @@ export default function TestResultsPage() {
                               color: q.marks_awarded === null ? 'var(--text-muted)' : q.marks_awarded >= q.max_marks * 0.7 ? 'var(--success)' : q.marks_awarded >= q.max_marks * 0.4 ? 'var(--warning, #f0a500)' : 'var(--error)',
                               whiteSpace: 'nowrap'
                             }}
-                            title="Click to view code and assign marks"
+                            title={isQuizTest ? 'Click to view submitted answer and assign marks' : 'Click to view submitted code and assign marks'}
                           >
                             {q.marks_awarded !== null ? `${q.marks_awarded}/${q.max_marks}` : `?/${q.max_marks}`}
                           </button>
@@ -656,7 +657,7 @@ export default function TestResultsPage() {
         </table>
       </div>
 
-      {/* Code viewer modal */}
+      {/* Submission viewer modal */}
       {selectedCode && (
         <div className="modal-overlay">
           <div className="modal-content animate-fade-up" style={{ maxWidth: '860px' }}>
@@ -687,9 +688,9 @@ export default function TestResultsPage() {
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ background: 'var(--surface-1)', padding: '16px', borderRadius: '6px', border: '1px solid var(--border)' }}>
-                <p className="text-label" style={{ marginBottom: '8px' }}>Submitted Code</p>
+                <p className="text-label" style={{ marginBottom: '8px' }}>{isQuizTest ? 'Submitted Answer' : 'Submitted Code'}</p>
                 <pre style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', fontSize: '13px', color: 'var(--text-primary)', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  {selectedCode.q.source_code || '// No code submitted'}
+                  {selectedCode.q.source_code || (isQuizTest ? 'No answer submitted' : '// No code submitted')}
                 </pre>
               </div>
               {selectedCode.q.ai_feedback && (

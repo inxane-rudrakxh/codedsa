@@ -71,7 +71,7 @@ export default function AdminLoginPage() {
         const data = await res.json();
         if (res.ok && data.token) {
           localStorage.setItem('admin_token', data.token);
-          router.push('/admin/dashboard');
+          router.push('/secret-12450/dashboard');
           return;
         }
       }
@@ -104,7 +104,7 @@ export default function AdminLoginPage() {
         const data = await res.json();
         if (res.ok && data.token) {
           localStorage.setItem('admin_token', data.token);
-          router.push('/admin/dashboard');
+          router.push('/secret-12450/dashboard');
           return;
         } else {
           serverErrorMsg = data.error || '';
@@ -127,7 +127,7 @@ export default function AdminLoginPage() {
       const directData = await directRes.json();
       if (directRes.ok && directData.token) {
         localStorage.setItem('admin_token', directData.token);
-        router.push('/admin/dashboard');
+        router.push('/secret-12450/dashboard');
         return;
       }
 
@@ -287,7 +287,7 @@ export default function AdminLoginPage() {
         <div style={{ marginTop: '24px', textAlign: 'center' }}>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
             New faculty member?{' '}
-            <Link href="/admin/signup" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+            <Link href="/secret-12450/signup" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
               Create Account
             </Link>
           </p>

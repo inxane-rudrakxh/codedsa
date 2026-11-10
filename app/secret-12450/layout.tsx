@@ -13,13 +13,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
-    if (pathname === '/admin/login' || pathname === '/admin/signup') {
+    if (pathname === '/secret-12450/login' || pathname === '/secret-12450/signup') {
       setTimeout(() => setChecking(false), 0);
       return;
     }
     const token = localStorage.getItem('admin_token');
     if (!token) {
-      router.push('/admin/login');
+      router.push('/secret-12450/login');
       return;
     }
     
@@ -38,7 +38,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     }, 0);
   }, [pathname, router]);
 
-  if (pathname === '/admin/login' || pathname === '/admin/signup') return <>{children}</>;
+  if (pathname === '/secret-12450/login' || pathname === '/secret-12450/signup') return <>{children}</>;
   if (checking) return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <p style={{ fontFamily: 'Söhne Mono, ui-monospace, monospace', color: 'var(--text-muted)', fontSize: '13px' }}>Verifying...</p>
@@ -50,14 +50,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const isAdmin = userInfo?.role === 'ADMIN';
 
   const nav = [
-    { href: '/admin/dashboard', label: 'Overview' },
-    { href: '/admin/tests', label: 'Exam Tests' },
-    { href: '/admin/results', label: 'Evaluation' },
-    { href: '/admin/questions', label: 'Question Bank' },
-    { href: '/admin/requests', label: 'Requests' },
-    { href: '/admin/students', label: 'Students' },
-    ...(isAdmin ? [{ href: '/admin/teachers', label: 'Faculty' }] : []),
-    { href: '/admin/settings', label: 'Settings' },
+    { href: '/secret-12450/dashboard', label: 'Overview' },
+    { href: '/secret-12450/tests', label: 'Exam Tests' },
+    { href: '/secret-12450/results', label: 'Evaluation' },
+    { href: '/secret-12450/questions', label: 'Question Bank' },
+    { href: '/secret-12450/requests', label: 'Requests' },
+    { href: '/secret-12450/students', label: 'Students' },
+    ...(isAdmin ? [{ href: '/secret-12450/teachers', label: 'Faculty' }] : []),
+    { href: '/secret-12450/settings', label: 'Settings' },
   ];
 
   return (
@@ -131,7 +131,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <button 
               onClick={() => {
                 localStorage.removeItem('admin_token');
-                router.push('/admin/login');
+                router.push('/secret-12450/login');
               }}
               style={{
                 marginLeft: '12px', padding: '4px 8px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase',

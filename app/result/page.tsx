@@ -8,7 +8,7 @@ import { exitFullscreenSafely } from '@/lib/inAppClipboard';
 interface ResultData {
   student: { roll_no: string; name: string; division: string; branch: string };
   questions: Array<{ id: string; title: string; order_index: number }>;
-  submissions: Array<{ question_id: string; score: number | null; submitted_at?: string }>;
+  submissions: Array<{ question_id: string; answer?: string | null; score: number | null; submitted_at?: string }>;
   total_score: number | null;
   total_marks: number;
   submitted_at: string | null;
@@ -34,12 +34,22 @@ export default function ResultPage() {
         if (!d.session) { router.push('/'); return; }
 
         const questions = d.questions || [];
-        const submissionMap: Record<string, { marks_awarded?: number | null; created_at?: string }> = d.submissions || {};
-        const submissions = Object.entries(submissionMap).map(([qid, s]) => ({
-          question_id: qid,
-          score: s.marks_awarded ?? null,
-          submitted_at: s.created_at,
-        }));
+        const submissionMap: Record<string, { answer?: string | null; marks_awarded?: number | null; created_at?: string }> = d.submissions || {};
+        const quizAnswerMap: Record<string, { selected_answer?: string | null; marks_awarded?: number | null }> = d.quiz_answers || {};
+        const questionIds = new Set(questions.map((q: { id: string }) => q.id));
+        const submissionIds = new Set(Object.keys(submissionMap));
+        const submissions = Array.from(new Set([...submissionIds, ...Object.keys(quizAnswerMap)]))
+          .filter(qid => questionIds.has(qid))
+          .map(qid => {
+            const s = submissionMap[qid] || {};
+            const quizAnswer = quizAnswerMap[qid];
+            return {
+              question_id: qid,
+              answer: s.answer ?? quizAnswer?.selected_answer ?? null,
+              score: s.marks_awarded ?? quizAnswer?.marks_awarded ?? null,
+              submitted_at: s.created_at,
+            };
+          });
 
         const totalScore = d.session?.marks_published 
           ? (typeof d.session?.total_score === 'number'
@@ -208,7 +218,8 @@ export default function ResultPage() {
 
           <div style={{ marginBottom: '28px', borderTop: '1px solid var(--border)' }}>
             {data.questions.map((q, i) => {
-              const hasSubmission = data.submissions.some(s => s.question_id === q.id);
+              const submission = data.submissions.find(s => s.question_id === q.id);
+              const hasSubmission = Boolean(submission);
               return (
                 <div key={q.id} style={{
                   display: 'flex',
@@ -229,6 +240,11 @@ export default function ResultPage() {
                     <p style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: 500, margin: 0 }}>
                       {q.title}
                     </p>
+                    {submission?.answer != null && submission.answer !== '' && (
+                      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '6px 0 0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                        Your answer: {submission.answer}
+                      </p>
+                    )}
                   </div>
                   <span style={{
                     fontSize: '11px',

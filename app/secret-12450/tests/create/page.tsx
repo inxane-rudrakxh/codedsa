@@ -494,7 +494,7 @@ export default function CreateTestWizard() {
           <button 
             onClick={() => {
               if (step > 1) setStep(step - 1);
-              else router.push('/admin/tests');
+              else router.push('/secret-12450/tests');
             }} 
             style={{ padding: '12px 24px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }}
           >
@@ -546,7 +546,7 @@ export default function CreateTestWizard() {
                 COPY LINK
               </button>
               <button 
-                onClick={() => router.push(`/admin/tests`)}
+                onClick={() => router.push(`/secret-12450/tests`)}
                 style={{ padding: '12px', background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
               >
                 GO TO TESTS

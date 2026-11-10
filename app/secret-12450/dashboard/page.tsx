@@ -63,7 +63,7 @@ export default function AdminDashboard() {
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button
-            onClick={() => router.push('/admin/tests/create')}
+            onClick={() => router.push('/secret-12450/tests/create')}
             style={{
               background: 'var(--surface-2)',
               color: 'var(--text-primary)',
@@ -86,7 +86,7 @@ export default function AdminDashboard() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', marginBottom: '48px' }}>
         <div 
-          onClick={() => router.push('/admin/tests')}
+          onClick={() => router.push('/secret-12450/tests')}
           style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px', cursor: 'pointer' }}
         >
           <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>ACTIVE TESTS</p>
@@ -94,7 +94,7 @@ export default function AdminDashboard() {
         </div>
         
         <div 
-          onClick={() => router.push('/admin/requests')}
+          onClick={() => router.push('/secret-12450/requests')}
           style={{
             background: pendingRequests > 0 ? 'var(--warning-dim)' : 'var(--surface-1)',
             border: `1.5px solid ${pendingRequests > 0 ? 'var(--warning)' : 'var(--border)'}`,
@@ -178,14 +178,14 @@ export default function AdminDashboard() {
                   <div style={{ marginTop: 'auto', display: 'flex', gap: '8px' }}>
                     {waitingCount > 0 && (
                       <button 
-                        onClick={() => router.push(`/admin/tests/${t.id}/requests`)}
+                        onClick={() => router.push(`/secret-12450/tests/${t.id}/requests`)}
                         style={{ flex: 1, padding: '10px', background: 'var(--warning)', color: '#000', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
                       >
                         APPROVE ({waitingCount})
                       </button>
                     )}
                     <button 
-                      onClick={() => router.push(`/admin/tests/${t.id}`)}
+                      onClick={() => router.push(`/secret-12450/tests/${t.id}`)}
                       style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
                     >
                       OPEN TEST

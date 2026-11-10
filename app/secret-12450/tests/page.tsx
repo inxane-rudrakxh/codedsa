@@ -100,7 +100,7 @@ export default function TestsPage() {
           <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Exam Tests</h1>
         </div>
         <button 
-          onClick={() => router.push('/admin/tests/create')} 
+          onClick={() => router.push('/secret-12450/tests/create')} 
           style={{ 
             background: 'var(--accent)', color: '#fff', border: 'none', 
             padding: '12px 24px', borderRadius: '6px', fontSize: '14px', 
@@ -120,7 +120,7 @@ export default function TestsPage() {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                     <h2
-                      onClick={() => router.push(`/admin/tests/${test.id}`)}
+                      onClick={() => router.push(`/secret-12450/tests/${test.id}`)}
                       style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', margin: 0 }}
                     >
                       {test.title}
@@ -280,10 +280,10 @@ export default function TestsPage() {
                         ? (test.quizQuestions?.length ?? test._count?.quizQuestions ?? 0)
                         : (test.testQuestions?.length ?? test._count?.testQuestions ?? 0)
                     })`, 
-                    href: `/admin/tests/${test.id}/questions` 
+                    href: `/secret-12450/tests/${test.id}/questions` 
                   },
-                  { label: 'Requests', href: `/admin/tests/${test.id}/requests` },
-                  { label: 'Results', href: `/admin/tests/${test.id}/results` },
+                  { label: 'Requests', href: `/secret-12450/tests/${test.id}/requests` },
+                  { label: 'Results', href: `/secret-12450/tests/${test.id}/results` },
                 ].map(({ label, href }) => (
                   <button
                     key={href}

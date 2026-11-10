@@ -158,9 +158,9 @@ export default function TestRequestsPage() {
     <div>
       {/* Breadcrumb */}
       <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
-        <Link href="/admin/tests" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Tests</Link>
+        <Link href="/secret-12450/tests" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Tests</Link>
         <span>›</span>
-        <Link href={`/admin/tests/${testId}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{testTitle || testId}</Link>
+        <Link href={`/secret-12450/tests/${testId}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{testTitle || testId}</Link>
         <span>›</span>
         <span style={{ color: 'var(--text-primary)' }}>Requests</span>
       </div>

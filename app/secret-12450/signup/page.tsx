@@ -169,7 +169,7 @@ export default function SignupPage() {
               Your faculty account has been registered for <strong style={{ color: 'var(--text-primary)' }}>{formData.email}</strong>. If a verification link was sent, please check your inbox (and spam folder) before logging in.
             </p>
             <button
-              onClick={() => router.push('/admin/login')}
+              onClick={() => router.push('/secret-12450/login')}
               style={{
                 width: '100%',
                 padding: '12px',
@@ -368,7 +368,7 @@ export default function SignupPage() {
             <div style={{ marginTop: '24px', textAlign: 'center' }}>
               <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
                 Already have an account?{' '}
-                <Link href="/admin/login" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                <Link href="/secret-12450/login" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
                   Sign In
                 </Link>
               </p>

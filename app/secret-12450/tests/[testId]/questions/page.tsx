@@ -173,9 +173,9 @@ export default function TestQuestionsPage() {
       <div>
         {/* Breadcrumb */}
         <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
-          <Link href="/admin/tests" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Tests</Link>
+          <Link href="/secret-12450/tests" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Tests</Link>
           <span>›</span>
-          <Link href={`/admin/tests/${testId}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{test?.title || testId}</Link>
+          <Link href={`/secret-12450/tests/${testId}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{test?.title || testId}</Link>
           <span>›</span>
           <span style={{ color: 'var(--text-primary)' }}>Questions</span>
         </div>
@@ -204,7 +204,7 @@ export default function TestQuestionsPage() {
           </div>
           <div>
             <Link
-              href="/admin/questions"
+              href="/secret-12450/questions"
               style={{
                 ...primaryBtn,
                 textDecoration: 'none',
@@ -229,7 +229,7 @@ export default function TestQuestionsPage() {
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '420px', margin: '0 auto 20px', lineHeight: 1.5 }}>
                 Configure questions or assign from existing question banks.
               </p>
-              <Link href="/admin/questions" style={{ ...primaryBtn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <Link href="/secret-12450/questions" style={{ ...primaryBtn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                 <BookOpen size={14} /> Open Question Banks & Tests
               </Link>
             </div>
@@ -298,9 +298,9 @@ export default function TestQuestionsPage() {
     <div>
       {/* Breadcrumb */}
       <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
-        <Link href="/admin/tests" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Tests</Link>
+        <Link href="/secret-12450/tests" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Tests</Link>
         <span>›</span>
-        <Link href={`/admin/tests/${testId}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{test?.title || testId}</Link>
+        <Link href={`/secret-12450/tests/${testId}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{test?.title || testId}</Link>
         <span>›</span>
         <span style={{ color: 'var(--text-primary)' }}>Questions</span>
       </div>

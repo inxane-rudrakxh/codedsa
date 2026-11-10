@@ -35,7 +35,7 @@ export default function TestDetailPage() {
     })
       .then(res => {
         if (!res.ok) {
-          router.push('/admin/tests');
+          router.push('/secret-12450/tests');
           return null;
         }
         return res.json();
@@ -44,7 +44,7 @@ export default function TestDetailPage() {
         if (!data || !active) return;
         const found = (data.tests || []).find((t: any) => t.id === testId);
         if (!found) {
-          router.push('/admin/tests');
+          router.push('/secret-12450/tests');
           return;
         }
         setTest(found);
@@ -79,23 +79,23 @@ export default function TestDetailPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify({ action: 'delete_test', id: testId }),
     });
-    router.push('/admin/tests');
+    router.push('/secret-12450/tests');
   };
 
   if (loading) return <div style={{ padding: '24px', color: 'var(--text-muted)' }}>Loading...</div>;
   if (!test) return null;
 
   const sections = [
-    { href: `/admin/tests/${testId}/questions`, label: 'Questions', desc: `${test.testQuestions?.length || 0} assigned`, icon: HelpCircle },
-    { href: `/admin/tests/${testId}/requests`, label: 'Requests', desc: 'Pending approvals', icon: Clock },
-    { href: `/admin/tests/${testId}/results`, label: 'Results', desc: 'Student submissions', icon: BarChart3 },
+    { href: `/secret-12450/tests/${testId}/questions`, label: 'Questions', desc: `${test.testQuestions?.length || 0} assigned`, icon: HelpCircle },
+    { href: `/secret-12450/tests/${testId}/requests`, label: 'Requests', desc: 'Pending approvals', icon: Clock },
+    { href: `/secret-12450/tests/${testId}/results`, label: 'Results', desc: 'Student submissions', icon: BarChart3 },
   ];
 
   return (
     <div>
       {/* Breadcrumb */}
       <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
-        <Link href="/admin/tests" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Tests</Link>
+        <Link href="/secret-12450/tests" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Tests</Link>
         <span>›</span>
         <span style={{ color: 'var(--text-primary)' }}>{test.title}</span>
       </div>
