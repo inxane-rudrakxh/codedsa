@@ -29,10 +29,12 @@ export function generateCollegeResultsPDF(
   metadata: PDFTestMetadata,
   results: PDFStudentResult[]
 ) {
+  const rawMaxQ = Math.max(...results.map(r => r.questions?.length || 0), 0);
+  const isDetailedQuiz = rawMaxQ > 5;
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: isDetailedQuiz ? 'landscape' : 'portrait',
     unit: 'mm',
-    format: 'a4',
+    format: isDetailedQuiz ? 'a3' : 'a4',
   });
 
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -131,10 +133,8 @@ export function generateCollegeResultsPDF(
     69
   );
 
-  // Determine question columns dynamically
-  const rawMaxQ = Math.max(...results.map(r => r.questions?.length || 0), 0);
-  const isDetailedQuiz = rawMaxQ > 5;
-  const showPerQuestionCols = rawMaxQ >= 1 && rawMaxQ <= 5;
+  // Keep every question visible in the report, including long quiz banks.
+  const showPerQuestionCols = rawMaxQ >= 1;
   const qCols = showPerQuestionCols ? Array.from({ length: rawMaxQ }, (_, i) => `Q${i + 1}`) : [];
 
   // Sort students naturally by Roll Number
@@ -142,9 +142,7 @@ export function generateCollegeResultsPDF(
 
   // Prepare table headers
   let head: string[][];
-  if (isDetailedQuiz) {
-    head = [['Sr.', 'Roll No', 'Student Name', 'Div', 'Attempted', 'Correct', 'Total', '%', 'Status']];
-  } else if (showPerQuestionCols) {
+  if (showPerQuestionCols) {
     head = [['Sr.', 'Roll No', 'Student Name', 'Div', ...qCols, 'Total', '%', 'Status']];
   } else {
     head = [['Sr.', 'Roll No', 'Student Name', 'Div', 'Total', '%', 'Status']];
@@ -159,23 +157,6 @@ export function generateCollegeResultsPDF(
     const totalText = isSubmitted ? `${st.total_score}/${maxMarks}` : `0/${maxMarks}`;
     const percentage = isSubmitted && maxMarks > 0 ? `${((st.total_score / maxMarks) * 100).toFixed(1)}%` : '0.0%';
     const statusText = isSubmitted ? 'SUBMITTED' : 'ABSENT';
-
-    if (isDetailedQuiz) {
-      const qList = st.questions || [];
-      const attempted = qList.filter(q => q.marks_awarded !== null && q.marks_awarded !== undefined).length;
-      const correct = qList.filter(q => (q.marks_awarded || 0) > 0).length;
-      return [
-        String(idx + 1),
-        st.roll_no,
-        st.name,
-        st.division || '—',
-        isSubmitted ? `${attempted}/${rawMaxQ}` : '—',
-        isSubmitted ? `${correct}/${rawMaxQ}` : '—',
-        totalText,
-        percentage,
-        statusText,
-      ];
-    }
 
     if (showPerQuestionCols) {
       const qMarks = qCols.map((_, qi) => {
@@ -213,13 +194,13 @@ export function generateCollegeResultsPDF(
   const columnStyles: Record<number, { halign?: 'left' | 'center' | 'right'; cellWidth?: number; fontStyle?: 'bold' | 'normal' }> = {
     0: { halign: 'center', cellWidth: 10 },
     1: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
-    2: { halign: 'left', cellWidth: isDetailedQuiz || showPerQuestionCols ? 46 : 60 },
+    2: { halign: 'left', cellWidth: showPerQuestionCols ? (isDetailedQuiz ? 38 : 46) : 60 },
     3: { halign: 'center', cellWidth: 14 },
   };
 
   // Assign styles for question/summary columns
   for (let c = 4; c < totalColIndex; c++) {
-    columnStyles[c] = { halign: 'center', cellWidth: isDetailedQuiz ? 18 : 14 };
+    columnStyles[c] = { halign: 'center', cellWidth: isDetailedQuiz ? 8 : 14 };
   }
 
   // Total, %, Status
@@ -236,8 +217,8 @@ export function generateCollegeResultsPDF(
     theme: 'grid',
     styles: {
       font: 'helvetica',
-      fontSize: 7.5,
-      cellPadding: 2,
+      fontSize: isDetailedQuiz ? 6 : 7.5,
+      cellPadding: isDetailedQuiz ? 1 : 2,
       textColor: [30, 41, 59],
       lineColor: [203, 213, 225],
       lineWidth: 0.15,

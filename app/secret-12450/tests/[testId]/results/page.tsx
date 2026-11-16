@@ -203,7 +203,7 @@ export default function TestResultsPage() {
     }
 
     const maxQ = Math.max(...listToExport.map(r => r.questions?.length || 0), 3);
-    const qHeaders = Array.from({ length: Math.min(maxQ, 9) }, (_, i) => `Q${i + 1} Marks`);
+    const qHeaders = Array.from({ length: maxQ }, (_, i) => `Q${i + 1} Marks`);
 
     const headers = [
       'Sr No',
