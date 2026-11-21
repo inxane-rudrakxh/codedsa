@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "seed:unit5": "node seed_unit5_queue_test.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {
