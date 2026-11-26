@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -13,6 +13,11 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [showResend, setShowResend] = useState(false);
+
+  // Clear any existing stale or expired admin token when landing on the login page
+  useEffect(() => {
+    localStorage.removeItem('admin_token');
+  }, []);
 
   const formatAuthError = (err: any): string => {
     const code = err?.code || '';

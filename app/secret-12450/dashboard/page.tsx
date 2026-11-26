@@ -14,12 +14,28 @@ export default function AdminDashboard() {
     let active = true;
     const load = () => {
       const token = localStorage.getItem('admin_token');
+      if (!token) {
+        router.push('/secret-12450/login');
+        return;
+      }
       fetch('/api/admin/dashboard', {
         headers: { Authorization: `Bearer ${token}` },
       })
-        .then(res => res.json())
+        .then(res => {
+          if (res.status === 401) {
+            localStorage.removeItem('admin_token');
+            router.push('/secret-12450/login');
+            return null;
+          }
+          return res.json();
+        })
         .then(d => {
-          if (!active) return;
+          if (!active || !d) return;
+          if (d.error === 'Unauthorized' || d.error === 'Invalid token') {
+            localStorage.removeItem('admin_token');
+            router.push('/secret-12450/login');
+            return;
+          }
           setData(d);
           setLoading(false);
         })
@@ -34,7 +50,7 @@ export default function AdminDashboard() {
       active = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (

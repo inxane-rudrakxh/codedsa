@@ -12,6 +12,26 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [userInfo, setUserInfo] = useState<{ name: string; role: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // Intercept 401 responses globally across all admin API requests
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (response.status === 401) {
+        const url = typeof args[0] === 'string' ? args[0] : args[0] instanceof Request ? args[0].url : '';
+        if (url.includes('/api/admin')) {
+          localStorage.removeItem('admin_token');
+          router.push('/secret-12450/login');
+        }
+      }
+      return response;
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, [router]);
+
   useEffect(() => {
     if (pathname === '/secret-12450/login' || pathname === '/secret-12450/signup') {
       setTimeout(() => setChecking(false), 0);
@@ -28,9 +48,23 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       const parts = token.split('.');
       if (parts.length === 3) {
         const decoded = JSON.parse(atob(parts[1]));
+        // Check if token has expired
+        if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+          localStorage.removeItem('admin_token');
+          router.push('/secret-12450/login');
+          return;
+        }
         user = { name: decoded.email || 'User', role: decoded.role || 'ADMIN' };
+      } else {
+        localStorage.removeItem('admin_token');
+        router.push('/secret-12450/login');
+        return;
       }
-    } catch {}
+    } catch {
+      localStorage.removeItem('admin_token');
+      router.push('/secret-12450/login');
+      return;
+    }
 
     setTimeout(() => {
       if (user) setUserInfo(user);
